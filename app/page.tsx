@@ -13,6 +13,8 @@ import { listWorkflows, WorkflowRecord } from "@/lib/api";
 import StatCard from "@/components/ui/StatCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import PageHeader from "@/components/ui/PageHeader";
+import { AreaTrend } from "@/components/ui/charts";
+import { monthlyVolume } from "@/lib/analytics";
 
 export default function HomePage() {
   const [workflows, setWorkflows] = useState<WorkflowRecord[] | null>(null);
@@ -92,6 +94,14 @@ export default function HomePage() {
 
         {/* Pipeline + automation */}
         <div className="flex flex-col gap-5">
+          <div className="glass rounded-2xl p-5">
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-sm font-semibold" style={{ color: "var(--fg)" }}>Booked volume</h3>
+              <Link href="/insights" className="text-xs font-medium" style={{ color: "var(--accent)" }}>Insights →</Link>
+            </div>
+            <AreaTrend data={monthlyVolume()} money />
+          </div>
+
           <div className="glass rounded-2xl p-5">
             <h3 className="mb-3 text-sm font-semibold" style={{ color: "var(--fg)" }}>Pipeline</h3>
             <div className="flex flex-col gap-2.5">

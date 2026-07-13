@@ -10,6 +10,7 @@ export interface NavItem {
 
 export const NAV: NavItem[] = [
   { href: "/", label: "Home", icon: "🏠" },
+  { href: "/insights", label: "Insights", icon: "📊" },
   { href: "/requests", label: "Requests", icon: "📥" },
   { href: "/customers", label: "Customers", icon: "👥" },
   { href: "/offers", label: "Offers", icon: "✉️" },

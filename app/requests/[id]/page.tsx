@@ -7,6 +7,12 @@ export function generateStaticParams() {
   return REQUESTS.map((r) => ({ id: r.id }));
 }
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const request = getRequest(id);
+  return { title: request ? `${request.name} (${request.id})` : "Request not found" };
+}
+
 export default async function RequestDetailPage({
   params,
 }: {

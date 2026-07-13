@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { NAV, activeHref } from "./nav";
 import ThemeToggle from "../ThemeToggle";
 import CommandPalette from "./CommandPalette";
+import DemoTour from "../DemoTour";
 
 /**
  * Landjourney-style application shell: fixed left icon+label rail, a top bar
@@ -17,6 +18,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const active = activeHref(pathname);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
   const current = NAV.find((n) => n.href === active);
 
   // Global Cmd/Ctrl-K to open the command palette.
@@ -88,6 +90,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
+      <a href="#main-content" className="skip-link">Skip to content</a>
+
       {/* Desktop sidebar */}
       <aside
         className="glass fixed inset-y-0 left-0 z-30 hidden w-[240px] flex-col lg:flex"
@@ -154,12 +158,23 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="animate-rise mx-auto w-full max-w-[1200px] flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        <main id="main-content" className="animate-rise mx-auto w-full max-w-[1200px] flex-1 px-4 py-6 sm:px-6 lg:px-8">
           {children}
         </main>
       </div>
 
+      {/* Floating "Take the tour" launcher */}
+      <button
+        type="button"
+        onClick={() => setTourOpen(true)}
+        className="ring-accent glass fixed bottom-5 left-5 z-30 hidden items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold shadow-lg transition-transform hover:scale-105 lg:flex"
+        style={{ color: "var(--fg)" }}
+      >
+        <span aria-hidden>✨</span> Take the tour
+      </button>
+
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <DemoTour open={tourOpen} onClose={() => setTourOpen(false)} />
     </div>
   );
 }

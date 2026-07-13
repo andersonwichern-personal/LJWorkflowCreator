@@ -14,7 +14,7 @@ import {
   formatCurrency,
 } from "@/lib/analytics";
 
-export const metadata = { title: "Insights · Landjourney" };
+export const metadata = { title: "Insights" };
 
 function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (

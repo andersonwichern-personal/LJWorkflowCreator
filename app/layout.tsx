@@ -1,11 +1,30 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import AppShell from "@/components/shell/AppShell";
 
 export const metadata: Metadata = {
-  title: "Landjourney Admin Console",
+  title: {
+    default: "Landjourney Admin Console",
+    template: "%s · Landjourney",
+  },
   description:
     "Loan-origination admin console with a plain-English Workflow Creator — WHEN an event happens, IF conditions hold, THEN take action.",
+  applicationName: "Landjourney",
+  authors: [{ name: "Landjourney" }],
+  keywords: ["loan origination", "workflow", "automation", "underwriting", "banking"],
+  openGraph: {
+    title: "Landjourney Admin Console",
+    description: "Automate loan origination in plain English with the Workflow Creator.",
+    type: "website",
+    siteName: "Landjourney",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f4f6fb" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0f1a" },
+  ],
 };
 
 /**

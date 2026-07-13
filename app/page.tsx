@@ -69,7 +69,7 @@ export default function HomePage() {
             {myTasks.map((r) => (
               <Link
                 key={r.id}
-                href="/underwriting"
+                href={`/requests/${r.id}`}
                 className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 transition-colors hover:bg-[var(--accent-soft)]"
                 style={{ borderColor: "var(--panel-border)" }}
               >

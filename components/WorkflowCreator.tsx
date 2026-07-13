@@ -23,6 +23,7 @@ import {
 import RuleSentence from "@/components/RuleSentence";
 import ChatBox from "@/components/ChatBox";
 import WorkflowSidebar from "@/components/WorkflowSidebar";
+import SimulationPanel from "@/components/SimulationPanel";
 import PageHeader from "@/components/ui/PageHeader";
 
 type Toast = { id: number; kind: "ok" | "err"; text: string };
@@ -297,6 +298,8 @@ export default function WorkflowCreator() {
               </div>
             )}
           </div>
+
+          <SimulationPanel rule={rule} />
 
           <ChatBox onDraft={onDraftFromChat} />
 

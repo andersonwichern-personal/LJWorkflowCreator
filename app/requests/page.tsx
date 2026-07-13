@@ -1,27 +1,36 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { REQUESTS, formatCurrency, PlatformRequest } from "@/lib/platformData";
 import PageHeader from "@/components/ui/PageHeader";
 import QueueTabs from "@/components/ui/QueueTabs";
 import DataTable, { Column } from "@/components/ui/DataTable";
 import StatusBadge from "@/components/ui/StatusBadge";
+import CreateRequestWizard from "@/components/CreateRequestWizard";
 
 const STAGES = ["All", "Initiated", "Processing", "Approved", "Closed"];
 
 export default function RequestsPage() {
   const [stage, setStage] = useState("All");
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const rows = REQUESTS.filter((r) => stage === "All" || r.stage === stage);
+
+  function onComplete(summary: string) {
+    setToast(summary);
+    setTimeout(() => setToast(null), 3600);
+  }
 
   const columns: Column<PlatformRequest>[] = [
     {
       key: "name",
       header: "Request",
       render: (r) => (
-        <div>
-          <div className="font-medium" style={{ color: "var(--fg)" }}>{r.name}</div>
+        <Link href={`/requests/${r.id}`} className="block">
+          <div className="font-medium hover:underline" style={{ color: "var(--fg)" }}>{r.name}</div>
           <div className="text-xs" style={{ color: "var(--fg-subtle)" }}>{r.id} · {r.customerType}</div>
-        </div>
+        </Link>
       ),
     },
     { key: "stage", header: "Stage", render: (r) => <StatusBadge status={r.stage} /> },
@@ -50,6 +59,7 @@ export default function RequestsPage() {
         actions={
           <button
             type="button"
+            onClick={() => setWizardOpen(true)}
             className="ring-accent rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-md transition-all hover:brightness-110"
             style={{ background: "var(--accent)" }}
           >
@@ -65,6 +75,14 @@ export default function RequestsPage() {
         />
       </div>
       <DataTable columns={columns} rows={rows} empty="No requests at this stage." />
+
+      <CreateRequestWizard open={wizardOpen} onClose={() => setWizardOpen(false)} onComplete={onComplete} />
+
+      {toast && (
+        <div className="animate-popin glass fixed bottom-5 right-5 z-[80] rounded-xl px-4 py-2.5 text-sm shadow-lg" style={{ color: "var(--fg)", borderLeft: "3px solid var(--accent)" }}>
+          {toast} <span style={{ color: "var(--fg-subtle)" }}>(demo — not persisted)</span>
+        </div>
+      )}
     </div>
   );
 }

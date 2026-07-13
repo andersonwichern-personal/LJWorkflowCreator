@@ -353,6 +353,54 @@ export function formatCurrency(n: number): string {
   return "$" + n.toLocaleString("en-US");
 }
 
+export function getRequest(id: string): PlatformRequest | undefined {
+  return REQUESTS.find((r) => r.id === id);
+}
+
+/** Derived Booking Events "Data Status" dimension. */
+export function deriveDataStatus(r: PlatformRequest): string {
+  if (r.bookStatus === "Error") return "Error";
+  if (r.bookStatus === "Not Sent" || r.bookStatus === "In Flight") return "Incomplete";
+  return "Complete";
+}
+
+/** Derived Booking Events "Processing Status" dimension. */
+export function deriveProcessingStatus(r: PlatformRequest): string {
+  if (r.bookStatus === "Error") return "Error";
+  if (r.bookStatus === "In Flight") return "Processing";
+  if (r.bookStatus === "Sent") return "Queued";
+  if (r.bookStatus === "Not Sent") return "Queued";
+  return "Done";
+}
+
+export interface DocItem {
+  name: string;
+  status: "Approved" | "Rejected" | "Skipped" | "To-Do" | "Submitted";
+}
+
+export interface ExtractedField {
+  label: string;
+  value: string;
+}
+
+/** Deterministic mock of the Documents Review workspace for a request. */
+export function documentsFor(r: PlatformRequest): { docs: DocItem[]; extracted: ExtractedField[] } {
+  const base: DocItem[] = [
+    { name: "Balance Sheet", status: "Approved" },
+    { name: "Income Statement", status: r.stage === "Initiated" ? "To-Do" : "Approved" },
+    { name: "Tax Returns (2 yr)", status: r.uwStatus === "Pending" ? "Submitted" : "Approved" },
+    { name: "Bank Statements", status: r.stage === "Initiated" ? "To-Do" : "Submitted" },
+    { name: "Collateral Appraisal", status: r.loanAmount > 400000 ? "Approved" : "Skipped" },
+  ];
+  const extracted: ExtractedField[] = [
+    { label: "Company Name", value: r.mainBorrower },
+    { label: "Requested Amount", value: formatCurrency(r.loanAmount) },
+    { label: "Total Current Assets", value: formatCurrency(Math.round(r.loanAmount * 1.8)) },
+    { label: "Program", value: r.program },
+  ];
+  return { docs: base, extracted };
+}
+
 /** Loans (Service stage): confirmed/partially-confirmed bookings. */
 export function bookedLoans(): PlatformRequest[] {
   return REQUESTS.filter(

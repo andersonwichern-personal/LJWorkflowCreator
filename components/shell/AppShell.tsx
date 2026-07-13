@@ -1,10 +1,11 @@
 "use client";
 
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV, activeHref } from "./nav";
 import ThemeToggle from "../ThemeToggle";
+import CommandPalette from "./CommandPalette";
 
 /**
  * Landjourney-style application shell: fixed left icon+label rail, a top bar
@@ -15,7 +16,20 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const active = activeHref(pathname);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const current = NAV.find((n) => n.href === active);
+
+  // Global Cmd/Ctrl-K to open the command palette.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const navList = (
     <nav className="flex flex-1 flex-col gap-0.5 px-2.5">
@@ -120,12 +134,15 @@ export default function AppShell({ children }: { children: ReactNode }) {
             </span>
           </div>
           <div className="flex items-center gap-2.5">
-            <span
-              className="hidden rounded-full px-2.5 py-1 text-xs font-medium sm:inline-flex"
+            <button
+              type="button"
+              onClick={() => setPaletteOpen(true)}
+              className="ring-accent hidden items-center gap-2 rounded-full px-2.5 py-1 text-xs font-medium sm:inline-flex"
               style={{ background: "var(--panel-solid)", border: "1px solid var(--panel-border)", color: "var(--fg-muted)" }}
             >
               🔍 Quick search
-            </span>
+              <kbd className="rounded px-1 py-0.5 text-[10px]" style={{ background: "var(--tok-op-bg)" }}>⌘K</kbd>
+            </button>
             <ThemeToggle />
             <span
               className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold text-white"
@@ -141,6 +158,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
+
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );
 }

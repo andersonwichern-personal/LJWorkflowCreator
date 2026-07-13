@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { REQUESTS, formatCurrency, PlatformRequest } from "@/lib/platformData";
 import PageHeader from "@/components/ui/PageHeader";
 import QueueTabs from "@/components/ui/QueueTabs";
@@ -35,10 +36,10 @@ export default function UnderwritingPage() {
       key: "name",
       header: "Request",
       render: (r) => (
-        <div>
-          <div className="font-medium" style={{ color: "var(--fg)" }}>{r.name}</div>
+        <Link href={`/requests/${r.id}`} className="block">
+          <div className="font-medium hover:underline" style={{ color: "var(--fg)" }}>{r.name}</div>
           <div className="text-xs" style={{ color: "var(--fg-subtle)" }}>{r.id}</div>
-        </div>
+        </Link>
       ),
     },
     { key: "date", header: "Submitted", align: "left", hideOnMobile: true, render: (r) => <span style={{ color: "var(--fg-muted)" }}>{r.dateSubmitted}</span> },

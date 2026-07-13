@@ -18,6 +18,7 @@ export const NAV: NavItem[] = [
   { href: "/booking-events", label: "Booking Events", icon: "🏦" },
   { href: "/system-events", label: "System Events", icon: "📡" },
   { href: "/workflows", label: "Workflows", icon: "⚡", isNew: true },
+  { href: "/intake-links", label: "Intake Links", icon: "🔗" },
   { href: "/templates", label: "Templates", icon: "🧩" },
   { href: "/settings", label: "Settings", icon: "⚙️" },
 ];

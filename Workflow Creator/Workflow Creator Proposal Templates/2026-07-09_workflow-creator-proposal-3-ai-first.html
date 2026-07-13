@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Landjourney Workflows — Proposal 3: AI-First Rule Builder</title>
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1c2530;background:#eef1f5;}
+  header{background:#0f2942;color:#fff;padding:10px 18px;display:flex;align-items:center;gap:14px;}
+  header h1{font-size:15px;margin:0;font-weight:600;}
+  header .tag{font-size:11px;background:#1d4e79;padding:2px 8px;border-radius:10px;}
+  .muted{color:#9db4ca;font-size:12px;}
+  .tabs{display:flex;gap:4px;background:#0f2942;padding:0 12px;}
+  .tab{color:#b9c7d6;padding:9px 16px;cursor:pointer;font-size:13px;border-bottom:3px solid transparent;}
+  .tab.active{color:#fff;border-bottom-color:#4a9de0;background:#14324f;}
+  .view{display:none;} .view.active{display:block;}
+  #existing{padding:16px;}
+  .wf-row{background:#fff;border:1px solid #d9e0e8;border-radius:8px;padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:14px;}
+  .wf-row .name{font-weight:600;font-size:14px;} .wf-row .desc{font-size:12px;color:#5a6b7b;margin-top:3px;}
+  .pill{font-size:11px;padding:2px 8px;border-radius:10px;background:#eaf1f8;color:#2c5d8f;}
+  .switch{margin-left:auto;} .switch input{transform:scale(1.3);cursor:pointer;}
+
+  #creator{display:grid;grid-template-columns:380px 1fr;height:calc(100vh - 84px);}
+  .chatpane{background:#faf7ff;border-right:1px solid #e3d8f0;display:flex;flex-direction:column;padding:12px;}
+  .chatpane h3{font-size:12px;color:#6b3fa0;margin:0 0 8px;text-transform:uppercase;letter-spacing:.5px;}
+  .chatlog{flex:1;overflow:auto;padding:4px;}
+  .msg{margin:8px 0;font-size:13px;line-height:1.45;}
+  .msg.u{text-align:right;}
+  .msg .b{display:inline-block;padding:8px 11px;border-radius:11px;max-width:88%;}
+  .msg.u .b{background:#6b3fa0;color:#fff;}
+  .msg.a .b{background:#efe7fb;color:#33254a;}
+  .suggest{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0;}
+  .suggest button{font-size:11px;padding:4px 8px;border-radius:12px;border:1px solid #d3c4ea;background:#fff;color:#6b3fa0;cursor:pointer;text-align:left;}
+  .chatin{display:flex;gap:6px;margin-top:8px;}
+  .chatin input{flex:1;padding:8px 10px;border:1px solid #cdd6df;border-radius:7px;font-size:13px;}
+  .btn{background:#6b3fa0;color:#fff;border:none;padding:8px 12px;border-radius:7px;cursor:pointer;font-size:13px;}
+  .btn.ghost{background:#fff;color:#2c5d8f;border:1px solid #b9cde0;}
+  .btn.blue{background:#2c5d8f;}
+  .btn.danger{background:#fff;color:#a0491f;border:1px solid #e0b39d;}
+
+  .rulepane{padding:22px;overflow:auto;}
+  .rulepane h3{font-size:12px;color:#2c5d8f;margin:0 0 4px;text-transform:uppercase;letter-spacing:.5px;}
+  .rulepane .sub{font-size:12px;color:#8494a3;margin-bottom:16px;}
+  .rulecard{background:#fff;border:1px solid #d9e0e8;border-radius:12px;padding:22px;max-width:760px;line-height:2.4;font-size:16px;}
+  .kw{font-weight:800;letter-spacing:.5px;padding:0 4px;}
+  .kw.when{color:#2f9e6b;} .kw.if{color:#e0932f;} .kw.then{color:#2c5d8f;}
+  .token{display:inline-flex;align-items:center;gap:4px;background:#eef4fa;border:1px solid #c9d8e8;border-radius:8px;padding:3px 9px;margin:2px 2px;cursor:pointer;font-size:14px;position:relative;}
+  .token.event{background:#e7f5ee;border-color:#a9dcc4;}
+  .token.cond{background:#fbf0dd;border-color:#eecfa0;}
+  .token.out{background:#e7f0fa;border-color:#aecbe8;}
+  .token:hover{filter:brightness(.97);}
+  .token .x{color:#a0491f;font-weight:700;margin-left:2px;}
+  .token select,.token input{border:none;background:transparent;font-size:14px;color:inherit;cursor:pointer;max-width:170px;}
+  .token input{border-bottom:1px dashed #9bb0c4;cursor:text;width:80px;}
+  .addbtn{font-size:12px;padding:3px 9px;border-radius:12px;border:1px dashed #b9cde0;background:#fff;color:#2c5d8f;cursor:pointer;margin-left:6px;}
+  .empty{color:#8494a3;font-size:14px;}
+  .actions{margin-top:18px;display:flex;gap:8px;}
+  .catlabel{font-size:10px;text-transform:uppercase;color:#8494a3;margin:8px 0 3px;letter-spacing:.5px;}
+  .picker{position:absolute;top:100%;left:0;z-index:20;background:#fff;border:1px solid #cdd6df;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.15);padding:6px;width:240px;max-height:260px;overflow:auto;margin-top:4px;}
+  .picker input.f{width:100%;padding:5px 7px;border:1px solid #cdd6df;border-radius:5px;font-size:12px;margin-bottom:5px;}
+  .picker .item{padding:5px 7px;border-radius:5px;font-size:12.5px;cursor:pointer;}
+  .picker .item:hover{background:#f0f6fc;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Landjourney</h1><span class="tag">Workflows</span>
+  <span class="muted" style="margin-left:auto">Proposal 3 · AI-first, editable rule sentence</span>
+</header>
+<div class="tabs">
+  <div class="tab active" data-view="existing">Existing Workflows</div>
+  <div class="tab" data-view="creator">＋ Workflow Creator</div>
+</div>
+
+<div id="existing" class="view active"></div>
+
+<div id="creator" class="view">
+  <div class="chatpane">
+    <h3>🤖 Describe your automation</h3>
+    <div class="chatlog" id="chatlog"></div>
+    <div class="suggest" id="suggest"></div>
+    <div class="chatin"><input id="chatinput" placeholder="Type an automation in plain English…"><button class="btn" id="chatsend">Send</button></div>
+  </div>
+  <div class="rulepane">
+    <h3>Workflow rule</h3>
+    <div class="sub">Click any highlighted token to change it. The AI edits this same rule as you chat.</div>
+    <div class="rulecard" id="rulecard"></div>
+    <div class="actions">
+      <button class="btn ghost" id="addCondBtn">＋ Add condition</button>
+      <button class="btn ghost" id="addOutBtn">＋ Add output</button>
+      <button class="btn blue" id="saveBtn">Save workflow</button>
+      <button class="btn danger" id="resetBtn">Reset</button>
+    </div>
+  </div>
+</div>
+<script>
+/* Shared Landjourney workflow vocabulary.
+   Inlined into each proposal HTML so files stay standalone, but kept here as
+   the single source of truth for events / conditions / outputs. */
+window.LJ = (function () {
+
+  // ---- EVENTS (triggers / inputs) --------------------------------------
+  // Each event declares which CONDITION groups are relevant to it.
+  const EVENTS = [
+    // Request templates & intake
+    { id:"req_created",      cat:"Requests",        label:"Request created",              icon:"📥", conds:["template","stage","amount","role","time"] },
+    { id:"req_submitted",    cat:"Requests",        label:"Request submitted (customer)", icon:"📤", conds:["template","stage","amount","role"] },
+    { id:"stage_changed",    cat:"Requests",        label:"Request stage changed",        icon:"🔀", conds:["stage","amount","role","time"] },
+    { id:"intake_submitted", cat:"Intake Links",    label:"Intake link submitted",        icon:"🔗", conds:["template","retailer","role"] },
+    { id:"tmpl_form",        cat:"Templates",       label:"Dynamic form field changed",   icon:"🧾", conds:["field","template","amount"] },
+    { id:"checklist_done",   cat:"Templates",       label:"Document checklist complete",  icon:"✅", conds:["template","role"] },
+    // Documents & review
+    { id:"doc_uploaded",     cat:"Documents",       label:"Document uploaded",            icon:"📎", conds:["doctype","role"] },
+    { id:"doc_approved",     cat:"Documents",       label:"Document approved / rejected", icon:"🗂️", conds:["doctype","role","stage"] },
+    { id:"ai_extract",       cat:"Documents",       label:"AI data extraction complete",  icon:"🤖", conds:["field","doctype"] },
+    // Signatures
+    { id:"sig_signed",       cat:"Signatures",      label:"Signature signed",             icon:"✍️", conds:["role","sigstatus","time"] },
+    { id:"sig_status",       cat:"Signatures",      label:"Signature status changed",     icon:"🖊️", conds:["sigstatus","role"] },
+    // Customers / co-applicants
+    { id:"coapp_added",      cat:"Customers",       label:"Co-applicant / guarantor added", icon:"👥", conds:["role","custtype","count"] },
+    { id:"role_assigned",    cat:"Customers",       label:"Role assigned on request",     icon:"🧑‍💼", conds:["role","custtype"] },
+    // Scorecards & credit
+    { id:"scorecard_done",   cat:"Scorecards",      label:"Scorecard completed",          icon:"📊", conds:["score","amount"] },
+    { id:"credit_pull",      cat:"Credit",          label:"Credit pull returned",         icon:"💳", conds:["credit","role"] },
+    // Time / calendar
+    { id:"time_relative",    cat:"Calendar",        label:"Relative to a date",           icon:"⏱️", conds:["time"] },
+    { id:"time_recurring",   cat:"Calendar",        label:"Recurring schedule",           icon:"🔁", conds:["recurring"] },
+    // Offers
+    { id:"offer_made",       cat:"Offers",          label:"Offer made",                   icon:"📨", conds:["product","amount","queue"] },
+    { id:"offer_accepted",   cat:"Offers",          label:"Offer accepted / rejected",    icon:"🤝", conds:["offerstatus","amount"] },
+    // Underwriting
+    { id:"uw_entered",       cat:"Underwriting",    label:"Entered underwriting queue",   icon:"🏦", conds:["queue","amount","product"] },
+    { id:"uw_decision",      cat:"Underwriting",    label:"Underwriting decision",        icon:"⚖️", conds:["uwstatus","amount"] },
+    // Booking / core
+    { id:"booking_created",  cat:"Booking Events",  label:"Booking event created",        icon:"📡", conds:["core","amount"] },
+    { id:"booking_status",   cat:"Booking Events",  label:"Booking status changed",       icon:"🛰️", conds:["bookstatus","core"] },
+    // Loans / servicing
+    { id:"loan_booked",      cat:"Loans",           label:"Loan booked",                  icon:"🏷️", conds:["loantype","amount"] },
+    { id:"loan_maturing",    cat:"Loans",           label:"Loan maturity approaching",    icon:"📅", conds:["time","loantype"] },
+    // System
+    { id:"system_event",     cat:"System Events",   label:"System event logged",          icon:"🧭", conds:["systype"] },
+  ];
+
+  // ---- CONDITION GROUPS -------------------------------------------------
+  // Rendered dynamically based on the chosen event's `conds` list.
+  const CONDITIONS = {
+    time:      { label:"Timing", fields:[
+                 { key:"offset", type:"number", label:"Offset", default:30 },
+                 { key:"unit",   type:"select", label:"Unit", options:["days","hours","business days","weeks"] },
+                 { key:"dir",    type:"select", label:"Direction", options:["before","after","on"] },
+                 { key:"anchor", type:"select", label:"Anchor date", options:["Application date","Closing date","Maturity date","Offer date","Last activity","Custom date"] } ] },
+    recurring: { label:"Recurrence", fields:[
+                 { key:"freq", type:"select", label:"Frequency", options:["Daily","Weekly","Monthly","Quarterly"] },
+                 { key:"at",   type:"text",   label:"At time / day", default:"09:00" } ] },
+    template:  { label:"Template", fields:[
+                 { key:"tmpl", type:"select", label:"Template type", options:["Loan Application","Origination","Covenant","Blank Request","Any"] },
+                 { key:"named",type:"text",   label:"Named template (optional)", default:"" } ] },
+    field:     { label:"Form field", fields:[
+                 { key:"field", type:"select", label:"Field", options:["Loan amount","Total Current Assets","Company Name","DSCR","Requested term","Purpose","Collateral value"] },
+                 { key:"op",    type:"select", label:"Operator", options:["equals","not equals","greater than","less than","between","is blank","is filled"] },
+                 { key:"val",   type:"text",   label:"Value", default:"" } ] },
+    amount:    { label:"Loan amount", fields:[
+                 { key:"op",  type:"select", label:"Operator", options:["greater than","less than","between","equals"] },
+                 { key:"val", type:"text",   label:"Amount (USD)", default:"250000" } ] },
+    role:      { label:"Customer role", fields:[
+                 { key:"role", type:"select", label:"Role", options:["Borrower","Co-borrower","Guarantor","Business contact","Any"] } ] },
+    custtype:  { label:"Customer type", fields:[
+                 { key:"type", type:"select", label:"Type", options:["Business","Individual"] } ] },
+    count:     { label:"Count", fields:[
+                 { key:"op",  type:"select", label:"Operator", options:["equals","at least","at most"] },
+                 { key:"n",   type:"number", label:"Number", default:1 } ] },
+    stage:     { label:"Request stage", fields:[
+                 { key:"stage", type:"select", label:"Stage is", options:["Initiated","Processing","Approved","Closed"] } ] },
+    doctype:   { label:"Document type", fields:[
+                 { key:"doc", type:"select", label:"Document", options:["Balance Sheet","Income Statement","Tax Return","Bank Statement","Appraisal","Any supporting doc"] },
+                 { key:"state", type:"select", label:"State", options:["uploaded","approved","rejected","skipped"] } ] },
+    sigstatus: { label:"Signature status", fields:[
+                 { key:"s", type:"select", label:"Status", options:["signed","declined","pending","all signers complete"] } ] },
+    score:     { label:"Scorecard result", fields:[
+                 { key:"op",  type:"select", label:"Operator", options:["greater than or equal","less than","between","band equals"] },
+                 { key:"val", type:"text",   label:"Score / band", default:"70" } ] },
+    credit:    { label:"Credit result", fields:[
+                 { key:"metric", type:"select", label:"Metric", options:["FICO","Business credit score","Bankruptcy flag"] },
+                 { key:"op",  type:"select", label:"Operator", options:["greater than or equal","less than","equals"] },
+                 { key:"val", type:"text",   label:"Value", default:"680" } ] },
+    product:   { label:"Product", fields:[
+                 { key:"prod", type:"select", label:"Product / program", options:["Term Loan","Line of Credit","Ag Operating Loan","Equipment Finance","Any"] } ] },
+    retailer:  { label:"Retailer", fields:[
+                 { key:"ret", type:"text", label:"Retailer / dealer", default:"Any" } ] },
+    queue:     { label:"Queue", fields:[
+                 { key:"q", type:"select", label:"Queue", options:["My","Unassigned","Assigned","Auto Approved","Approved","Rejected","All"] } ] },
+    offerstatus:{ label:"Offer status", fields:[
+                 { key:"s", type:"select", label:"Status", options:["accepted","rejected","assigned","unassigned"] } ] },
+    uwstatus:  { label:"Underwriting result", fields:[
+                 { key:"s", type:"select", label:"Result", options:["Auto Approved","Approved","Rejected"] } ] },
+    core:      { label:"Core system", fields:[
+                 { key:"sys", type:"select", label:"Core", options:["Fiserv","FMAC","Any"] } ] },
+    bookstatus:{ label:"Booking status", fields:[
+                 { key:"s", type:"select", label:"Status", options:["Not Sent","In Flight","Sent","Confirmed","Partially Confirmed","Unconfirmed","Error"] } ] },
+    loantype:  { label:"Loan type", fields:[
+                 { key:"t", type:"select", label:"Type", options:["Term Loan","Line of Credit"] } ] },
+    systype:   { label:"System event type", fields:[
+                 { key:"e", type:"select", label:"Event", options:["OFFER ACCEPTED","LOAN REJECTED","FISERV LOAN","FMAC LOAN"] } ] },
+  };
+
+  // ---- OUTPUTS (actions) ------------------------------------------------
+  const OUTPUTS = [
+    { id:"assign_authority", cat:"Routing",      label:"Assign to approval authority", icon:"🧑‍⚖️",
+      params:[ { key:"target", type:"select", label:"Authority level", options:["Loan Officer","Credit Analyst","Underwriter I","Underwriter II","Senior Credit Officer","Loan Committee"] } ] },
+    { id:"assign_user",   cat:"Routing",  label:"Assign to user / team", icon:"👤",
+      params:[ { key:"who", type:"text", label:"User or team", default:"" } ] },
+    { id:"route_queue",   cat:"Routing",  label:"Route to queue", icon:"📂",
+      params:[ { key:"q", type:"select", label:"Queue", options:["Underwriting · Unassigned","Offers · Unassigned","Review Needed","Follow-Up Needed"] } ] },
+    { id:"change_stage",  cat:"Requests", label:"Change request stage", icon:"🔀",
+      params:[ { key:"stage", type:"select", label:"To stage", options:["Initiated","Processing","Approved","Closed"] } ] },
+    { id:"auto_decision", cat:"Underwriting", label:"Auto approve / reject", icon:"⚖️",
+      params:[ { key:"d", type:"select", label:"Decision", options:["Auto Approve","Auto Reject","Refer to human"] } ] },
+    { id:"make_offer",    cat:"Offers",   label:"Generate / make offer", icon:"📨",
+      params:[ { key:"prod", type:"select", label:"Product", options:["Best eligible","Term Loan","Line of Credit","Ag Operating Loan"] } ] },
+    { id:"send_letter",   cat:"Comms",    label:"Send letter", icon:"📜",
+      params:[ { key:"tmpl", type:"select", label:"Letter template", options:["Approval","Adverse Action","Conditional Approval","Welcome","Custom"] } ] },
+    { id:"send_notify",   cat:"Comms",    label:"Send notification / email", icon:"🔔",
+      params:[ { key:"to", type:"select", label:"Recipient", options:["Borrower","Request owner","Team","Manager"] },
+               { key:"msg", type:"text", label:"Message", default:"" } ] },
+    { id:"request_doc",   cat:"Collect",  label:"Request a document", icon:"📎",
+      params:[ { key:"doc", type:"text", label:"Document name", default:"" } ] },
+    { id:"request_sig",   cat:"Collect",  label:"Request signature", icon:"✍️",
+      params:[ { key:"role", type:"select", label:"From role", options:["Borrower","Guarantor","All signers"] } ] },
+    { id:"create_task",   cat:"Collect",  label:"Create task", icon:"🗒️",
+      params:[ { key:"title", type:"text", label:"Task title", default:"" } ] },
+    { id:"create_request",cat:"Requests", label:"Create follow-on request", icon:"➕",
+      params:[ { key:"tmpl", type:"select", label:"From template", options:["Covenant","Origination","Renewal"] } ] },
+    { id:"trigger_booking",cat:"Booking", label:"Trigger / resend booking event", icon:"📡",
+      params:[ { key:"core", type:"select", label:"Core", options:["Fiserv","FMAC"] } ] },
+    { id:"flag_followup", cat:"Ops",      label:"Flag Follow-Up / escalate", icon:"🚩",
+      params:[ { key:"lvl", type:"select", label:"Escalate to", options:["Request owner","Manager","Senior Credit Officer"] } ] },
+    { id:"add_note",      cat:"Ops",      label:"Post discussion note", icon:"💬",
+      params:[ { key:"chan", type:"select", label:"Channel", options:["Request-wide","Customer task","Internal task"] },
+               { key:"text", type:"text", label:"Note", default:"" } ] },
+    { id:"update_field",  cat:"Data",     label:"Update / prefill field", icon:"✏️",
+      params:[ { key:"field", type:"text", label:"Field", default:"" }, { key:"val", type:"text", label:"Value", default:"" } ] },
+    { id:"schedule_rem",  cat:"Data",     label:"Schedule reminder", icon:"⏰",
+      params:[ { key:"when", type:"text", label:"When", default:"in 7 days" } ] },
+    { id:"webhook",       cat:"Data",     label:"Call webhook / API", icon:"🔌",
+      params:[ { key:"url", type:"text", label:"Endpoint", default:"https://" } ] },
+  ];
+
+  return { EVENTS, CONDITIONS, OUTPUTS };
+})();
+</script>
+<script>
+const { EVENTS, CONDITIONS, OUTPUTS } = window.LJ;
+
+let rule = { event:null, conds:[], outputs:[] };
+let saved=[
+  {name:"Committee routing", desc:"WHEN Request created IF amount > $500k THEN assign to Loan Committee", on:true, tags:["Requests"]},
+  {name:"Adverse action letter", desc:"WHEN Underwriting decision IF result = Rejected THEN send Adverse Action letter", on:true, tags:["Underwriting"]},
+];
+
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active'); document.getElementById(t.dataset.view).classList.add('active');
+});
+function renderExisting(){
+  document.getElementById('existing').innerHTML =
+   '<div style="font-size:12px;color:#5a6b7b;margin-bottom:10px">'+saved.length+' workflows</div>'+
+   saved.map((w,i)=>`<div class="wf-row"><div><div class="name">${w.name}</div><div class="desc">${w.desc}</div></div>
+     ${w.tags.map(t=>`<span class="pill">${t}</span>`).join('')}
+     <label class="switch"><input type="checkbox" ${w.on?'checked':''} onchange="saved[${i}].on=this.checked"></label></div>`).join('');
+}
+window.saved=saved;
+
+function seedC(def){const v={};def.fields.forEach(f=>v[f.key]=f.default!==undefined?f.default:(f.type==='select'?f.options[0]:''));return v;}
+function seedO(o){const v={};o.params.forEach(p=>v[p.key]=p.default!==undefined?p.default:(p.type==='select'?p.options[0]:''));return v;}
+
+// ---- render rule sentence ----
+function render(){
+  const c=document.getElementById('rulecard');
+  if(!rule.event){ c.innerHTML='<span class="empty">No rule yet. Describe one in the chat on the left, or click “Add condition/output”. Start by telling the AI what should trigger it.</span>'; return; }
+  let h=`<span class="kw when">WHEN</span> `+eventToken();
+  rule.conds.forEach((cd,i)=>{
+    h+= (i===0? ` <span class="kw if">IF</span> ` : ` <span class="kw if">${cd.join}</span> `) + condToken(cd,i);
+  });
+  rule.outputs.forEach((o,i)=>{
+    h+= (i===0? ` <span class="kw then">THEN</span> ` : ` <span class="kw then">AND</span> `) + outToken(o,i);
+  });
+  c.innerHTML=h;
+}
+
+function eventToken(){
+  const e=EVENTS.find(x=>x.id===rule.event);
+  return `<span class="token event" onclick="openEventPicker(this)">${e.icon} ${e.label} ▾</span>`;
+}
+function condToken(cd,i){
+  const def=CONDITIONS[cd.type];
+  let inner=`<b>${def.label}</b> `;
+  inner += def.fields.map(f=>{
+    if(f.type==='select'){
+      return `<select onchange="rule.conds[${i}].vals['${f.key}']=this.value;render()" onclick="event.stopPropagation()">`+
+        f.options.map(o=>`<option ${cd.vals[f.key]===o?'selected':''}>${o}</option>`).join('')+`</select>`;
+    }
+    return `<input value="${cd.vals[f.key]??''}" oninput="rule.conds[${i}].vals['${f.key}']=this.value" onclick="event.stopPropagation()">`;
+  }).join(' ');
+  return `<span class="token cond">${inner}<span class="x" onclick="rmCond(${i});event.stopPropagation()">✕</span></span>`;
+}
+function outToken(o,i){
+  const od=OUTPUTS.find(x=>x.id===o.id);
+  let inner=`${od.icon} <b>${od.label}</b> `;
+  inner += od.params.map(p=>{
+    if(p.type==='select'){
+      return `<select onchange="rule.outputs[${i}].vals['${p.key}']=this.value;render()" onclick="event.stopPropagation()">`+
+        p.options.map(op=>`<option ${o.vals[p.key]===op?'selected':''}>${op}</option>`).join('')+`</select>`;
+    }
+    return `<input value="${o.vals[p.key]??''}" oninput="rule.outputs[${i}].vals['${p.key}']=this.value" onclick="event.stopPropagation()">`;
+  }).join(' ');
+  return `<span class="token out">${inner}<span class="x" onclick="rmOut(${i});event.stopPropagation()">✕</span></span>`;
+}
+
+// ---- pickers ----
+function closePickers(){ document.querySelectorAll('.picker').forEach(p=>p.remove()); }
+document.addEventListener('click',e=>{ if(!e.target.closest('.picker')&&!e.target.closest('.token')&&!e.target.closest('.addbtn')) closePickers(); });
+
+window.openEventPicker=(anchor)=>{
+  closePickers();
+  const p=document.createElement('div'); p.className='picker';
+  p.innerHTML=`<input class="f" placeholder="Search events…">`;
+  const listWrap=document.createElement('div'); p.appendChild(listWrap);
+  function fill(f=''){ const cats={}; listWrap.innerHTML='';
+    EVENTS.filter(e=>(e.label+e.cat).toLowerCase().includes(f.toLowerCase())).forEach(e=>(cats[e.cat]=cats[e.cat]||[]).push(e));
+    for(const c in cats){ listWrap.insertAdjacentHTML('beforeend',`<div class="catlabel">${c}</div>`);
+      cats[c].forEach(e=>{ const d=document.createElement('div'); d.className='item'; d.textContent=e.icon+' '+e.label;
+        d.onclick=()=>{ rule.event=e.id; rule.conds=rule.conds.filter(c=>e.conds.includes(c.type)); closePickers(); render(); }; listWrap.appendChild(d); }); }
+  }
+  fill(); p.querySelector('.f').oninput=ev=>fill(ev.target.value);
+  anchor.appendChild(p); p.querySelector('.f').focus();
+};
+
+window.rmCond=(i)=>{ rule.conds.splice(i,1); render(); };
+window.rmOut=(i)=>{ rule.outputs.splice(i,1); render(); };
+
+document.getElementById('addCondBtn').onclick=(e)=>{
+  if(!rule.event) return alert('Pick a trigger event first (via chat or by adding one).');
+  openListPicker(e.target, 'cond');
+};
+document.getElementById('addOutBtn').onclick=(e)=> openListPicker(e.target,'out');
+
+function openListPicker(anchor,kind){
+  closePickers();
+  const p=document.createElement('div'); p.className='picker'; p.style.position='absolute';
+  const r=anchor.getBoundingClientRect();
+  p.style.left=r.left+'px'; p.style.top=(r.bottom+window.scrollY+4)+'px'; p.style.zIndex=50;
+  p.innerHTML=`<input class="f" placeholder="Search…">`; const lw=document.createElement('div'); p.appendChild(lw);
+  function fill(f=''){
+    lw.innerHTML='';
+    if(kind==='cond'){
+      const allowed=EVENTS.find(e=>e.id===rule.event).conds;
+      allowed.filter(k=>CONDITIONS[k].label.toLowerCase().includes(f.toLowerCase())).forEach(k=>{
+        const d=document.createElement('div'); d.className='item'; d.textContent=CONDITIONS[k].label;
+        d.onclick=()=>{ rule.conds.push({type:k,join:'AND',vals:seedC(CONDITIONS[k])}); closePickers(); render(); }; lw.appendChild(d);
+      });
+    } else {
+      const cats={};
+      OUTPUTS.filter(o=>(o.label+o.cat).toLowerCase().includes(f.toLowerCase())).forEach(o=>(cats[o.cat]=cats[o.cat]||[]).push(o));
+      for(const c in cats){ lw.insertAdjacentHTML('beforeend',`<div class="catlabel">${c}</div>`);
+        cats[c].forEach(o=>{ const d=document.createElement('div'); d.className='item'; d.textContent=o.icon+' '+o.label;
+          d.onclick=()=>{ rule.outputs.push({id:o.id,vals:seedO(o)}); closePickers(); render(); }; lw.appendChild(d); }); }
+    }
+  }
+  fill(); p.querySelector('.f').oninput=ev=>fill(ev.target.value);
+  document.body.appendChild(p); p.querySelector('.f').focus();
+}
+
+document.getElementById('saveBtn').onclick=()=>{
+  if(!rule.event) return alert('Nothing to save yet.');
+  saved.unshift({name:EVENTS.find(e=>e.id===rule.event).label+' rule', desc:document.getElementById('rulecard').innerText.replace(/✕/g,'').replace(/▾/g,'').replace(/\s+/g,' ').trim(), on:true, tags:[EVENTS.find(e=>e.id===rule.event).cat]});
+  renderExisting(); alert('Saved to Existing Workflows.');
+};
+document.getElementById('resetBtn').onclick=()=>{ rule={event:null,conds:[],outputs:[]}; render(); };
+
+// ---- AI chat ----
+const SUGGEST=[
+  "When a request is created and the loan amount is over $500k, assign it to the Loan Committee",
+  "30 days before a loan matures, notify the request owner",
+  "If a booking event to Fiserv errors, escalate to a manager",
+  "Auto-approve when FICO is at least 720 and the amount is under $100k",
+  "When all signers complete, move the request stage to Approved",
+];
+function build(t){
+  t=t.toLowerCase(); let ev,conds=[],outs=[];
+  if(/signer|signature|signed/.test(t)){ ev='sig_status'; conds=[{type:'sigstatus',join:'AND',vals:{s:'all signers complete'}}]; outs=[{id:'change_stage',vals:{stage:'Approved'}}]; }
+  else if(/book|error|fiserv|fmac/.test(t)){ ev='booking_status'; conds=[{type:'bookstatus',join:'AND',vals:{s:'Error'}},{type:'core',join:'AND',vals:{sys:'Fiserv'}}]; outs=[{id:'flag_followup',vals:{lvl:'Manager'}}]; }
+  else if(/maturit|matures|renew|remind|days before/.test(t)){ ev='loan_maturing'; conds=[{type:'time',join:'AND',vals:{offset:(t.match(/(\d+)/)||[])[1]||30,unit:'days',dir:'before',anchor:'Maturity date'}}]; outs=[{id:'send_notify',vals:{to:'Request owner',msg:'Maturity approaching'}}]; }
+  else if(/fico|credit|auto.?approve/.test(t)){ ev='credit_pull'; const fico=(t.match(/(\d{3})/)||[])[1]||720; conds=[{type:'credit',join:'AND',vals:{metric:'FICO',op:'greater than or equal',val:fico}}]; if(/under|less/.test(t)) conds.push({type:'amount',join:'AND',vals:{op:'less than',val:'100000'}}); outs=[{id:'auto_decision',vals:{d:'Auto Approve'}}]; }
+  else { ev='req_created'; const amt=(t.match(/\$?\s?([\d,]+)\s*k?/)||[])[1]; conds=[{type:'amount',join:'AND',vals:{op:'greater than',val:amt?amt.replace(/,/g,'')+(/k/.test(t)?'000':''):'500000'}}]; outs=[{id:'assign_authority',vals:{target:/committee/.test(t)?'Loan Committee':'Senior Credit Officer'}}]; }
+  rule={event:ev,conds,outs}; rule.outputs=outs; render();
+  const e=EVENTS.find(x=>x.id===ev);
+  return `Here's the rule: WHEN ${e.label}${conds.length?' IF '+conds.map(c=>CONDITIONS[c.type].label).join(' + '):''} THEN ${outs.map(o=>OUTPUTS.find(x=>x.id===o.id).label).join(', ')}. Click any token on the right to fine-tune it, or tell me what to change.`;
+}
+function addMsg(who,txt){ const l=document.getElementById('chatlog'); l.insertAdjacentHTML('beforeend',`<div class="msg ${who}"><span class="b">${txt}</span></div>`); l.scrollTop=l.scrollHeight; }
+function send(){ const i=document.getElementById('chatinput'), v=i.value.trim(); if(!v)return; addMsg('u',v); i.value=''; document.querySelector('.tab[data-view="creator"]').click(); setTimeout(()=>addMsg('a',build(v)),250); }
+document.getElementById('chatsend').onclick=send;
+document.getElementById('chatinput').addEventListener('keydown',e=>{if(e.key==='Enter')send();});
+document.getElementById('suggest').innerHTML=SUGGEST.map(s=>`<button onclick="document.getElementById('chatinput').value=this.textContent">${s}</button>`).join('');
+
+window.rule=rule; window.render=render;
+renderExisting(); render();
+addMsg('a','Describe the automation you want and I’ll turn it into an editable rule. Try a suggestion below.');
+</script>
+</body></html>

@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Landjourney Workflows — Proposal 1: Sectioned Builder</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:#1c2530; background:#eef1f5; }
+  header { background:#0f2942; color:#fff; padding:10px 18px; display:flex; align-items:center; gap:14px; }
+  header h1 { font-size:15px; margin:0; font-weight:600; }
+  header .tag { font-size:11px; background:#1d4e79; padding:2px 8px; border-radius:10px; }
+  .tabs { display:flex; gap:4px; background:#0f2942; padding:0 12px; }
+  .tab { color:#b9c7d6; padding:9px 16px; cursor:pointer; font-size:13px; border-bottom:3px solid transparent; }
+  .tab.active { color:#fff; border-bottom-color:#4a9de0; background:#14324f; }
+  .view { display:none; }
+  .view.active { display:block; }
+
+  /* Existing workflows */
+  #existing { padding:16px; }
+  .wf-row { background:#fff; border:1px solid #d9e0e8; border-radius:8px; padding:12px 14px; margin-bottom:10px; display:flex; align-items:center; gap:14px; }
+  .wf-row .name { font-weight:600; font-size:14px; }
+  .wf-row .desc { font-size:12px; color:#5a6b7b; margin-top:3px; }
+  .pill { font-size:11px; padding:2px 8px; border-radius:10px; background:#eaf1f8; color:#2c5d8f; }
+  .switch { margin-left:auto; }
+  .switch input { transform:scale(1.3); cursor:pointer; }
+
+  /* Creator layout */
+  #creator { display:grid; grid-template-columns: 1fr 1fr 1fr 320px; gap:12px; padding:14px; align-items:start; }
+  .col { background:#fff; border:1px solid #d9e0e8; border-radius:8px; padding:12px; min-height:420px; }
+  .col h2 { font-size:12px; text-transform:uppercase; letter-spacing:.5px; margin:0 0 10px; color:#2c5d8f; display:flex; align-items:center; gap:6px; }
+  .col .num { background:#2c5d8f; color:#fff; width:18px; height:18px; border-radius:50%; font-size:11px; display:inline-flex; align-items:center; justify-content:center; }
+  .search { width:100%; padding:6px 8px; margin-bottom:8px; border:1px solid #cdd6df; border-radius:6px; font-size:12px; }
+  .list { max-height:340px; overflow:auto; }
+  .catlabel { font-size:10px; text-transform:uppercase; color:#8494a3; margin:8px 0 3px; letter-spacing:.5px; }
+  .item { display:flex; align-items:center; gap:7px; padding:6px 7px; border-radius:6px; cursor:pointer; font-size:12.5px; border:1px solid transparent; }
+  .item:hover { background:#f0f6fc; }
+  .item.sel { background:#e3f0fb; border-color:#9cc7ec; }
+  .item .ic { width:18px; text-align:center; }
+  .chip { display:inline-flex; align-items:center; gap:6px; background:#eef4fa; border:1px solid #cddcec; border-radius:6px; padding:6px 8px; margin:4px 0; font-size:12.5px; }
+  .chip button { border:none; background:transparent; cursor:pointer; color:#a0491f; font-weight:700; }
+  .cond-card, .out-card { border:1px solid #d9e0e8; border-radius:7px; padding:8px; margin-bottom:8px; background:#fbfcfe; }
+  .cond-card .t, .out-card .t { font-size:12.5px; font-weight:600; margin-bottom:6px; display:flex; align-items:center; gap:6px; }
+  .cond-card .t button, .out-card .t button { margin-left:auto; border:none; background:transparent; cursor:pointer; color:#a0491f; font-weight:700; }
+  .fld { display:flex; align-items:center; gap:6px; margin:4px 0; font-size:12px; }
+  .fld label { width:92px; color:#5a6b7b; flex:none; }
+  .fld select, .fld input { flex:1; padding:4px 6px; border:1px solid #cdd6df; border-radius:5px; font-size:12px; }
+  .muted { color:#8494a3; font-size:12px; }
+  .joinrow { text-align:center; margin:2px 0; }
+  .joinrow select { font-size:11px; padding:2px 4px; border-radius:5px; border:1px solid #cdd6df; }
+
+  /* AI chat */
+  .chat { display:flex; flex-direction:column; height:520px; }
+  .chat h2 { color:#6b3fa0; }
+  .chatlog { flex:1; overflow:auto; border:1px solid #e3d8f0; border-radius:7px; padding:8px; background:#faf7ff; }
+  .msg { margin:6px 0; font-size:12.5px; line-height:1.4; }
+  .msg.u { text-align:right; }
+  .msg .b { display:inline-block; padding:7px 10px; border-radius:10px; max-width:88%; }
+  .msg.u .b { background:#6b3fa0; color:#fff; }
+  .msg.a .b { background:#efe7fb; color:#33254a; }
+  .chatin { display:flex; gap:6px; margin-top:8px; }
+  .chatin input { flex:1; padding:7px 9px; border:1px solid #cdd6df; border-radius:6px; font-size:12.5px; }
+  .btn { background:#2c5d8f; color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-size:12.5px; }
+  .btn.purple { background:#6b3fa0; }
+  .btn.ghost { background:#fff; color:#2c5d8f; border:1px solid #b9cde0; }
+  .suggest { display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; }
+  .suggest button { font-size:11px; padding:4px 7px; border-radius:12px; border:1px solid #d3c4ea; background:#fff; color:#6b3fa0; cursor:pointer; }
+
+  /* Summary bar */
+  #summary { position:sticky; bottom:0; background:#0f2942; color:#fff; padding:10px 16px; display:flex; align-items:center; gap:12px; font-size:13px; }
+  #summary .sent { flex:1; line-height:1.4; }
+  #summary b { color:#8fd0ff; }
+  .empty { color:#8494a3; font-size:12px; padding:20px 6px; text-align:center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Landjourney</h1><span class="tag">Workflows</span>
+  <span class="muted" style="color:#9db4ca;font-size:12px;margin-left:auto">Proposal 1 · Sectioned builder (Inputs → Conditions → Outputs)</span>
+</header>
+<div class="tabs">
+  <div class="tab active" data-view="existing">Existing Workflows</div>
+  <div class="tab" data-view="creator">＋ Workflow Creator</div>
+</div>
+
+<div id="existing" class="view active"></div>
+
+<div id="creator" class="view">
+  <div class="col">
+    <h2><span class="num">1</span> Trigger event</h2>
+    <input class="search" id="evSearch" placeholder="Search 25+ events…">
+    <div class="list" id="evList"></div>
+  </div>
+  <div class="col">
+    <h2><span class="num">2</span> Conditions</h2>
+    <div id="condArea"><div class="empty">Pick a trigger event first — its relevant conditions appear here.</div></div>
+  </div>
+  <div class="col">
+    <h2><span class="num">3</span> Outputs</h2>
+    <input class="search" id="outSearch" placeholder="Search actions…">
+    <div class="list" id="outList" style="max-height:150px"></div>
+    <div style="margin-top:8px;border-top:1px dashed #dbe3ec;padding-top:8px">
+      <div class="catlabel">Selected actions</div>
+      <div id="outSel"><div class="empty">No actions yet.</div></div>
+    </div>
+  </div>
+  <div class="col chat">
+    <h2>🤖 AI Workflow Assistant</h2>
+    <div class="chatlog" id="chatlog"></div>
+    <div class="suggest" id="suggest"></div>
+    <div class="chatin">
+      <input id="chatinput" placeholder="Describe a workflow…">
+      <button class="btn purple" id="chatsend">Send</button>
+    </div>
+  </div>
+</div>
+
+<div id="summary" style="display:none">
+  <div class="sent" id="summarySent"></div>
+  <button class="btn ghost" id="clearBtn">Clear</button>
+  <button class="btn" id="saveBtn">Save workflow</button>
+</div>
+<script>
+/* Shared Landjourney workflow vocabulary.
+   Inlined into each proposal HTML so files stay standalone, but kept here as
+   the single source of truth for events / conditions / outputs. */
+window.LJ = (function () {
+
+  // ---- EVENTS (triggers / inputs) --------------------------------------
+  // Each event declares which CONDITION groups are relevant to it.
+  const EVENTS = [
+    // Request templates & intake
+    { id:"req_created",      cat:"Requests",        label:"Request created",              icon:"📥", conds:["template","stage","amount","role","time"] },
+    { id:"req_submitted",    cat:"Requests",        label:"Request submitted (customer)", icon:"📤", conds:["template","stage","amount","role"] },
+    { id:"stage_changed",    cat:"Requests",        label:"Request stage changed",        icon:"🔀", conds:["stage","amount","role","time"] },
+    { id:"intake_submitted", cat:"Intake Links",    label:"Intake link submitted",        icon:"🔗", conds:["template","retailer","role"] },
+    { id:"tmpl_form",        cat:"Templates",       label:"Dynamic form field changed",   icon:"🧾", conds:["field","template","amount"] },
+    { id:"checklist_done",   cat:"Templates",       label:"Document checklist complete",  icon:"✅", conds:["template","role"] },
+    // Documents & review
+    { id:"doc_uploaded",     cat:"Documents",       label:"Document uploaded",            icon:"📎", conds:["doctype","role"] },
+    { id:"doc_approved",     cat:"Documents",       label:"Document approved / rejected", icon:"🗂️", conds:["doctype","role","stage"] },
+    { id:"ai_extract",       cat:"Documents",       label:"AI data extraction complete",  icon:"🤖", conds:["field","doctype"] },
+    // Signatures
+    { id:"sig_signed",       cat:"Signatures",      label:"Signature signed",             icon:"✍️", conds:["role","sigstatus","time"] },
+    { id:"sig_status",       cat:"Signatures",      label:"Signature status changed",     icon:"🖊️", conds:["sigstatus","role"] },
+    // Customers / co-applicants
+    { id:"coapp_added",      cat:"Customers",       label:"Co-applicant / guarantor added", icon:"👥", conds:["role","custtype","count"] },
+    { id:"role_assigned",    cat:"Customers",       label:"Role assigned on request",     icon:"🧑‍💼", conds:["role","custtype"] },
+    // Scorecards & credit
+    { id:"scorecard_done",   cat:"Scorecards",      label:"Scorecard completed",          icon:"📊", conds:["score","amount"] },
+    { id:"credit_pull",      cat:"Credit",          label:"Credit pull returned",         icon:"💳", conds:["credit","role"] },
+    // Time / calendar
+    { id:"time_relative",    cat:"Calendar",        label:"Relative to a date",           icon:"⏱️", conds:["time"] },
+    { id:"time_recurring",   cat:"Calendar",        label:"Recurring schedule",           icon:"🔁", conds:["recurring"] },
+    // Offers
+    { id:"offer_made",       cat:"Offers",          label:"Offer made",                   icon:"📨", conds:["product","amount","queue"] },
+    { id:"offer_accepted",   cat:"Offers",          label:"Offer accepted / rejected",    icon:"🤝", conds:["offerstatus","amount"] },
+    // Underwriting
+    { id:"uw_entered",       cat:"Underwriting",    label:"Entered underwriting queue",   icon:"🏦", conds:["queue","amount","product"] },
+    { id:"uw_decision",      cat:"Underwriting",    label:"Underwriting decision",        icon:"⚖️", conds:["uwstatus","amount"] },
+    // Booking / core
+    { id:"booking_created",  cat:"Booking Events",  label:"Booking event created",        icon:"📡", conds:["core","amount"] },
+    { id:"booking_status",   cat:"Booking Events",  label:"Booking status changed",       icon:"🛰️", conds:["bookstatus","core"] },
+    // Loans / servicing
+    { id:"loan_booked",      cat:"Loans",           label:"Loan booked",                  icon:"🏷️", conds:["loantype","amount"] },
+    { id:"loan_maturing",    cat:"Loans",           label:"Loan maturity approaching",    icon:"📅", conds:["time","loantype"] },
+    // System
+    { id:"system_event",     cat:"System Events",   label:"System event logged",          icon:"🧭", conds:["systype"] },
+  ];
+
+  // ---- CONDITION GROUPS -------------------------------------------------
+  // Rendered dynamically based on the chosen event's `conds` list.
+  const CONDITIONS = {
+    time:      { label:"Timing", fields:[
+                 { key:"offset", type:"number", label:"Offset", default:30 },
+                 { key:"unit",   type:"select", label:"Unit", options:["days","hours","business days","weeks"] },
+                 { key:"dir",    type:"select", label:"Direction", options:["before","after","on"] },
+                 { key:"anchor", type:"select", label:"Anchor date", options:["Application date","Closing date","Maturity date","Offer date","Last activity","Custom date"] } ] },
+    recurring: { label:"Recurrence", fields:[
+                 { key:"freq", type:"select", label:"Frequency", options:["Daily","Weekly","Monthly","Quarterly"] },
+                 { key:"at",   type:"text",   label:"At time / day", default:"09:00" } ] },
+    template:  { label:"Template", fields:[
+                 { key:"tmpl", type:"select", label:"Template type", options:["Loan Application","Origination","Covenant","Blank Request","Any"] },
+                 { key:"named",type:"text",   label:"Named template (optional)", default:"" } ] },
+    field:     { label:"Form field", fields:[
+                 { key:"field", type:"select", label:"Field", options:["Loan amount","Total Current Assets","Company Name","DSCR","Requested term","Purpose","Collateral value"] },
+                 { key:"op",    type:"select", label:"Operator", options:["equals","not equals","greater than","less than","between","is blank","is filled"] },
+                 { key:"val",   type:"text",   label:"Value", default:"" } ] },
+    amount:    { label:"Loan amount", fields:[
+                 { key:"op",  type:"select", label:"Operator", options:["greater than","less than","between","equals"] },
+                 { key:"val", type:"text",   label:"Amount (USD)", default:"250000" } ] },
+    role:      { label:"Customer role", fields:[
+                 { key:"role", type:"select", label:"Role", options:["Borrower","Co-borrower","Guarantor","Business contact","Any"] } ] },
+    custtype:  { label:"Customer type", fields:[
+                 { key:"type", type:"select", label:"Type", options:["Business","Individual"] } ] },
+    count:     { label:"Count", fields:[
+                 { key:"op",  type:"select", label:"Operator", options:["equals","at least","at most"] },
+                 { key:"n",   type:"number", label:"Number", default:1 } ] },
+    stage:     { label:"Request stage", fields:[
+                 { key:"stage", type:"select", label:"Stage is", options:["Initiated","Processing","Approved","Closed"] } ] },
+    doctype:   { label:"Document type", fields:[
+                 { key:"doc", type:"select", label:"Document", options:["Balance Sheet","Income Statement","Tax Return","Bank Statement","Appraisal","Any supporting doc"] },
+                 { key:"state", type:"select", label:"State", options:["uploaded","approved","rejected","skipped"] } ] },
+    sigstatus: { label:"Signature status", fields:[
+                 { key:"s", type:"select", label:"Status", options:["signed","declined","pending","all signers complete"] } ] },
+    score:     { label:"Scorecard result", fields:[
+                 { key:"op",  type:"select", label:"Operator", options:["greater than or equal","less than","between","band equals"] },
+                 { key:"val", type:"text",   label:"Score / band", default:"70" } ] },
+    credit:    { label:"Credit result", fields:[
+                 { key:"metric", type:"select", label:"Metric", options:["FICO","Business credit score","Bankruptcy flag"] },
+                 { key:"op",  type:"select", label:"Operator", options:["greater than or equal","less than","equals"] },
+                 { key:"val", type:"text",   label:"Value", default:"680" } ] },
+    product:   { label:"Product", fields:[
+                 { key:"prod", type:"select", label:"Product / program", options:["Term Loan","Line of Credit","Ag Operating Loan","Equipment Finance","Any"] } ] },
+    retailer:  { label:"Retailer", fields:[
+                 { key:"ret", type:"text", label:"Retailer / dealer", default:"Any" } ] },
+    queue:     { label:"Queue", fields:[
+                 { key:"q", type:"select", label:"Queue", options:["My","Unassigned","Assigned","Auto Approved","Approved","Rejected","All"] } ] },
+    offerstatus:{ label:"Offer status", fields:[
+                 { key:"s", type:"select", label:"Status", options:["accepted","rejected","assigned","unassigned"] } ] },
+    uwstatus:  { label:"Underwriting result", fields:[
+                 { key:"s", type:"select", label:"Result", options:["Auto Approved","Approved","Rejected"] } ] },
+    core:      { label:"Core system", fields:[
+                 { key:"sys", type:"select", label:"Core", options:["Fiserv","FMAC","Any"] } ] },
+    bookstatus:{ label:"Booking status", fields:[
+                 { key:"s", type:"select", label:"Status", options:["Not Sent","In Flight","Sent","Confirmed","Partially Confirmed","Unconfirmed","Error"] } ] },
+    loantype:  { label:"Loan type", fields:[
+                 { key:"t", type:"select", label:"Type", options:["Term Loan","Line of Credit"] } ] },
+    systype:   { label:"System event type", fields:[
+                 { key:"e", type:"select", label:"Event", options:["OFFER ACCEPTED","LOAN REJECTED","FISERV LOAN","FMAC LOAN"] } ] },
+  };
+
+  // ---- OUTPUTS (actions) ------------------------------------------------
+  const OUTPUTS = [
+    { id:"assign_authority", cat:"Routing",      label:"Assign to approval authority", icon:"🧑‍⚖️",
+      params:[ { key:"target", type:"select", label:"Authority level", options:["Loan Officer","Credit Analyst","Underwriter I","Underwriter II","Senior Credit Officer","Loan Committee"] } ] },
+    { id:"assign_user",   cat:"Routing",  label:"Assign to user / team", icon:"👤",
+      params:[ { key:"who", type:"text", label:"User or team", default:"" } ] },
+    { id:"route_queue",   cat:"Routing",  label:"Route to queue", icon:"📂",
+      params:[ { key:"q", type:"select", label:"Queue", options:["Underwriting · Unassigned","Offers · Unassigned","Review Needed","Follow-Up Needed"] } ] },
+    { id:"change_stage",  cat:"Requests", label:"Change request stage", icon:"🔀",
+      params:[ { key:"stage", type:"select", label:"To stage", options:["Initiated","Processing","Approved","Closed"] } ] },
+    { id:"auto_decision", cat:"Underwriting", label:"Auto approve / reject", icon:"⚖️",
+      params:[ { key:"d", type:"select", label:"Decision", options:["Auto Approve","Auto Reject","Refer to human"] } ] },
+    { id:"make_offer",    cat:"Offers",   label:"Generate / make offer", icon:"📨",
+      params:[ { key:"prod", type:"select", label:"Product", options:["Best eligible","Term Loan","Line of Credit","Ag Operating Loan"] } ] },
+    { id:"send_letter",   cat:"Comms",    label:"Send letter", icon:"📜",
+      params:[ { key:"tmpl", type:"select", label:"Letter template", options:["Approval","Adverse Action","Conditional Approval","Welcome","Custom"] } ] },
+    { id:"send_notify",   cat:"Comms",    label:"Send notification / email", icon:"🔔",
+      params:[ { key:"to", type:"select", label:"Recipient", options:["Borrower","Request owner","Team","Manager"] },
+               { key:"msg", type:"text", label:"Message", default:"" } ] },
+    { id:"request_doc",   cat:"Collect",  label:"Request a document", icon:"📎",
+      params:[ { key:"doc", type:"text", label:"Document name", default:"" } ] },
+    { id:"request_sig",   cat:"Collect",  label:"Request signature", icon:"✍️",
+      params:[ { key:"role", type:"select", label:"From role", options:["Borrower","Guarantor","All signers"] } ] },
+    { id:"create_task",   cat:"Collect",  label:"Create task", icon:"🗒️",
+      params:[ { key:"title", type:"text", label:"Task title", default:"" } ] },
+    { id:"create_request",cat:"Requests", label:"Create follow-on request", icon:"➕",
+      params:[ { key:"tmpl", type:"select", label:"From template", options:["Covenant","Origination","Renewal"] } ] },
+    { id:"trigger_booking",cat:"Booking", label:"Trigger / resend booking event", icon:"📡",
+      params:[ { key:"core", type:"select", label:"Core", options:["Fiserv","FMAC"] } ] },
+    { id:"flag_followup", cat:"Ops",      label:"Flag Follow-Up / escalate", icon:"🚩",
+      params:[ { key:"lvl", type:"select", label:"Escalate to", options:["Request owner","Manager","Senior Credit Officer"] } ] },
+    { id:"add_note",      cat:"Ops",      label:"Post discussion note", icon:"💬",
+      params:[ { key:"chan", type:"select", label:"Channel", options:["Request-wide","Customer task","Internal task"] },
+               { key:"text", type:"text", label:"Note", default:"" } ] },
+    { id:"update_field",  cat:"Data",     label:"Update / prefill field", icon:"✏️",
+      params:[ { key:"field", type:"text", label:"Field", default:"" }, { key:"val", type:"text", label:"Value", default:"" } ] },
+    { id:"schedule_rem",  cat:"Data",     label:"Schedule reminder", icon:"⏰",
+      params:[ { key:"when", type:"text", label:"When", default:"in 7 days" } ] },
+    { id:"webhook",       cat:"Data",     label:"Call webhook / API", icon:"🔌",
+      params:[ { key:"url", type:"text", label:"Endpoint", default:"https://" } ] },
+  ];
+
+  return { EVENTS, CONDITIONS, OUTPUTS };
+})();
+</script>
+<script>
+const { EVENTS, CONDITIONS, OUTPUTS } = window.LJ;
+
+// ---- state ----
+let state = { event:null, conds:[], outputs:[] };
+let saved = [
+  { name:"Auto-route large ag loans", desc:"When request created & amount > $500k → assign to Senior Credit Officer", on:true, tags:["Requests","Routing"] },
+  { name:"Covenant reminder", desc:"30 days before maturity date → send notification to request owner", on:true, tags:["Calendar","Comms"] },
+  { name:"Booking error escalation", desc:"Booking status = Error (Fiserv) → flag Follow-Up to Manager", on:false, tags:["Booking Events","Ops"] },
+];
+
+// ---- tabs ----
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById(t.dataset.view).classList.add('active');
+  document.getElementById('summary').style.display = (t.dataset.view==='creator') ? 'flex' : 'none';
+});
+
+// ---- existing workflows ----
+function renderExisting(){
+  const el = document.getElementById('existing');
+  el.innerHTML = '<div style="font-size:12px;color:#5a6b7b;margin-bottom:10px">'+saved.length+' workflows · toggle to enable/disable</div>' +
+   saved.map((w,i)=>`<div class="wf-row">
+      <div><div class="name">${w.name}</div><div class="desc">${w.desc}</div></div>
+      ${w.tags.map(t=>`<span class="pill">${t}</span>`).join('')}
+      <label class="switch"><input type="checkbox" ${w.on?'checked':''} onchange="saved[${i}].on=this.checked"></label>
+    </div>`).join('');
+}
+window.saved = saved;
+
+// ---- event list ----
+function renderEvents(filter=''){
+  const el = document.getElementById('evList'); el.innerHTML='';
+  const cats = {};
+  EVENTS.filter(e=> (e.label+e.cat).toLowerCase().includes(filter.toLowerCase()))
+        .forEach(e=> (cats[e.cat]=cats[e.cat]||[]).push(e));
+  for(const c in cats){
+    el.insertAdjacentHTML('beforeend', `<div class="catlabel">${c}</div>`);
+    cats[c].forEach(e=>{
+      const d=document.createElement('div');
+      d.className='item'+(state.event&&state.event.id===e.id?' sel':'');
+      d.innerHTML=`<span class="ic">${e.icon}</span> ${e.label}`;
+      d.onclick=()=>selectEvent(e);
+      el.appendChild(d);
+    });
+  }
+}
+function selectEvent(e){
+  state.event = e;
+  // seed one condition card of each relevant type? No — start empty, offer add buttons.
+  state.conds = [];
+  renderEvents(document.getElementById('evSearch').value);
+  renderConds(); renderSummary();
+}
+
+// ---- conditions (dynamic per event) ----
+function renderConds(){
+  const area=document.getElementById('condArea');
+  if(!state.event){ area.innerHTML='<div class="empty">Pick a trigger event first.</div>'; return; }
+  const avail = state.event.conds;
+  let html = `<div class="muted" style="margin-bottom:8px">Conditions available for <b>${state.event.label}</b>:</div>`;
+  html += '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">' +
+    avail.map(k=>`<button class="btn ghost" style="font-size:11px;padding:4px 8px" onclick="addCond('${k}')">+ ${CONDITIONS[k].label}</button>`).join('') + '</div>';
+  if(state.conds.length===0){ html+='<div class="empty">No conditions = fires on every occurrence of the event.</div>'; }
+  state.conds.forEach((c,idx)=>{
+    const def=CONDITIONS[c.type];
+    if(idx>0) html+=`<div class="joinrow"><select onchange="state.conds[${idx}].join=this.value;renderSummary()">
+        <option ${c.join==='AND'?'selected':''}>AND</option><option ${c.join==='OR'?'selected':''}>OR</option></select></div>`;
+    html+=`<div class="cond-card"><div class="t">${def.label}<button onclick="removeCond(${idx})">✕</button></div>`;
+    def.fields.forEach(f=>{
+      html+=`<div class="fld"><label>${f.label}</label>`;
+      if(f.type==='select'){
+        html+=`<select onchange="state.conds[${idx}].vals['${f.key}']=this.value;renderSummary()">`+
+          f.options.map(o=>`<option ${c.vals[f.key]===o?'selected':''}>${o}</option>`).join('')+`</select>`;
+      } else {
+        html+=`<input type="${f.type}" value="${c.vals[f.key]??''}" oninput="state.conds[${idx}].vals['${f.key}']=this.value;renderSummary()">`;
+      }
+      html+=`</div>`;
+    });
+    html+=`</div>`;
+  });
+  area.innerHTML=html;
+}
+window.addCond=(k)=>{
+  const def=CONDITIONS[k]; const vals={};
+  def.fields.forEach(f=> vals[f.key]= f.default!==undefined?f.default:(f.type==='select'?f.options[0]:''));
+  state.conds.push({type:k, join:'AND', vals});
+  renderConds(); renderSummary();
+};
+window.removeCond=(i)=>{ state.conds.splice(i,1); renderConds(); renderSummary(); };
+
+// ---- outputs ----
+function renderOutputs(filter=''){
+  const el=document.getElementById('outList'); el.innerHTML='';
+  const cats={};
+  OUTPUTS.filter(o=>(o.label+o.cat).toLowerCase().includes(filter.toLowerCase()))
+         .forEach(o=>(cats[o.cat]=cats[o.cat]||[]).push(o));
+  for(const c in cats){
+    el.insertAdjacentHTML('beforeend',`<div class="catlabel">${c}</div>`);
+    cats[c].forEach(o=>{
+      const d=document.createElement('div'); d.className='item';
+      d.innerHTML=`<span class="ic">${o.icon}</span> ${o.label}`;
+      d.onclick=()=>addOutput(o.id); el.appendChild(d);
+    });
+  }
+}
+window.addOutput=(id)=>{
+  const o=OUTPUTS.find(x=>x.id===id); const vals={};
+  o.params.forEach(p=> vals[p.key]= p.default!==undefined?p.default:(p.type==='select'?p.options[0]:''));
+  state.outputs.push({id, vals}); renderOutSel(); renderSummary();
+};
+function renderOutSel(){
+  const el=document.getElementById('outSel');
+  if(state.outputs.length===0){ el.innerHTML='<div class="empty">No actions yet.</div>'; return; }
+  el.innerHTML = state.outputs.map((s,idx)=>{
+    const o=OUTPUTS.find(x=>x.id===s.id);
+    let h=`<div class="out-card"><div class="t">${o.icon} ${o.label}<button onclick="removeOut(${idx})">✕</button></div>`;
+    o.params.forEach(p=>{
+      h+=`<div class="fld"><label>${p.label}</label>`;
+      if(p.type==='select'){ h+=`<select onchange="state.outputs[${idx}].vals['${p.key}']=this.value;renderSummary()">`+
+        p.options.map(op=>`<option ${s.vals[p.key]===op?'selected':''}>${op}</option>`).join('')+`</select>`; }
+      else { h+=`<input value="${s.vals[p.key]??''}" oninput="state.outputs[${idx}].vals['${p.key}']=this.value;renderSummary()">`; }
+      h+=`</div>`;
+    });
+    return h+`</div>`;
+  }).join('');
+}
+window.removeOut=(i)=>{ state.outputs.splice(i,1); renderOutSel(); renderSummary(); };
+
+// ---- summary sentence ----
+function condText(c){
+  const def=CONDITIONS[c.type];
+  return def.label+' ('+def.fields.map(f=>c.vals[f.key]).filter(v=>v!=='' && v!=null).join(' ')+')';
+}
+function renderSummary(){
+  const s=document.getElementById('summarySent');
+  if(!state.event){ s.innerHTML='<span class="muted">Build a rule: choose a trigger, add conditions, add outputs.</span>'; return; }
+  let txt=`<b>WHEN</b> ${state.event.label}`;
+  if(state.conds.length){ txt+=' <b>IF</b> '+state.conds.map((c,i)=>(i?` ${c.join} `:'')+condText(c)).join(''); }
+  if(state.outputs.length){ txt+=' <b>THEN</b> '+state.outputs.map(o=>{
+    const od=OUTPUTS.find(x=>x.id===o.id);
+    return od.label+(Object.values(o.vals).some(v=>v)? ' → '+Object.values(o.vals).filter(v=>v).join(', '):'');
+  }).join('; '); }
+  s.innerHTML=txt;
+}
+window.state=state; window.renderSummary=renderSummary; window.renderConds=renderConds;
+
+// ---- save / clear ----
+document.getElementById('saveBtn').onclick=()=>{
+  if(!state.event) return alert('Pick a trigger first.');
+  saved.unshift({ name: state.event.label+' automation', desc: document.getElementById('summarySent').innerText, on:true,
+    tags:[state.event.cat, ...(state.outputs[0]?[OUTPUTS.find(x=>x.id===state.outputs[0].id).cat]:[])] });
+  renderExisting(); alert('Saved! See Existing Workflows tab.');
+};
+document.getElementById('clearBtn').onclick=()=>{ state.event=null; state.conds=[]; state.outputs=[]; renderEvents(); renderConds(); renderOutSel(); renderSummary(); };
+
+// ---- AI chat (heuristic mock) ----
+const SUGGEST=[ "Route loans over $500k to Loan Committee",
+  "Remind owner 30 days before maturity",
+  "Escalate booking errors to a manager",
+  "Auto-approve if FICO >= 720 and amount < 100k" ];
+function botReply(text){
+  const t=text.toLowerCase(); let ev, conds=[], outs=[];
+  if(/maturit|renew|days before|remind/.test(t)){ ev=EVENTS.find(e=>e.id==='time_relative');
+    conds=[{type:'time',join:'AND',vals:{offset:(t.match(/(\d+)\s*day/)||[])[1]||30,unit:'days',dir:'before',anchor:'Maturity date'}}];
+    outs=[{id:'send_notify',vals:{to:'Request owner',msg:'Upcoming maturity'}}]; }
+  else if(/book|fiserv|fmac|error/.test(t)){ ev=EVENTS.find(e=>e.id==='booking_status');
+    conds=[{type:'bookstatus',join:'AND',vals:{s:'Error'}}]; outs=[{id:'flag_followup',vals:{lvl:'Manager'}}]; }
+  else if(/fico|credit|auto.?approve/.test(t)){ ev=EVENTS.find(e=>e.id==='credit_pull');
+    conds=[{type:'credit',join:'AND',vals:{metric:'FICO',op:'greater than or equal',val:(t.match(/(\d{3})/)||[])[1]||720}}];
+    outs=[{id:'auto_decision',vals:{d:'Auto Approve'}}]; }
+  else { ev=EVENTS.find(e=>e.id==='req_created');
+    const amt=(t.match(/\$?\s?([\d,]+k?)/)||[])[1];
+    conds=[{type:'amount',join:'AND',vals:{op:'greater than',val:amt?amt.replace('k','000').replace(/,/g,''):'500000'}}];
+    outs=[{id:'assign_authority',vals:{target:/committee/.test(t)?'Loan Committee':'Senior Credit Officer'}}]; }
+  state.event=ev; state.conds=conds; state.outputs=outs;
+  renderEvents(); renderConds(); renderOutSel(); renderSummary();
+  // ensure creator tab visible
+  document.querySelector('.tab[data-view="creator"]').click();
+  return `Drafted a workflow for you: I set the trigger to “${ev.label}”, added ${conds.length} condition(s) and ${outs.length} output(s). Review the columns and tweak anything — the sentence at the bottom updates live.`;
+}
+function addMsg(who,text){ const l=document.getElementById('chatlog');
+  l.insertAdjacentHTML('beforeend',`<div class="msg ${who}"><span class="b">${text}</span></div>`); l.scrollTop=l.scrollHeight; }
+function send(){ const i=document.getElementById('chatinput'); const v=i.value.trim(); if(!v)return;
+  addMsg('u',v); i.value=''; setTimeout(()=>addMsg('a',botReply(v)),250); }
+document.getElementById('chatsend').onclick=send;
+document.getElementById('chatinput').addEventListener('keydown',e=>{if(e.key==='Enter')send();});
+document.getElementById('suggest').innerHTML=SUGGEST.map(s=>`<button onclick="document.getElementById('chatinput').value=this.textContent;">${s}</button>`).join('');
+
+// ---- wire search ----
+document.getElementById('evSearch').oninput=e=>renderEvents(e.target.value);
+document.getElementById('outSearch').oninput=e=>renderOutputs(e.target.value);
+
+// ---- init ----
+renderExisting(); renderEvents(); renderConds(); renderOutputs(); renderOutSel(); renderSummary();
+addMsg('a','Hi! Describe an automation in plain English and I’ll draft it in the builder. Or use the columns directly.');
+</script>
+</body></html>

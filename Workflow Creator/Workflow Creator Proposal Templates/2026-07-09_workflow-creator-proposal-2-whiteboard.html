@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Landjourney Workflows — Proposal 2: Whiteboard Canvas</title>
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1c2530;background:#eef1f5;}
+  header{background:#0f2942;color:#fff;padding:10px 18px;display:flex;align-items:center;gap:14px;}
+  header h1{font-size:15px;margin:0;font-weight:600;}
+  header .tag{font-size:11px;background:#1d4e79;padding:2px 8px;border-radius:10px;}
+  .muted{color:#9db4ca;font-size:12px;}
+  .tabs{display:flex;gap:4px;background:#0f2942;padding:0 12px;}
+  .tab{color:#b9c7d6;padding:9px 16px;cursor:pointer;font-size:13px;border-bottom:3px solid transparent;}
+  .tab.active{color:#fff;border-bottom-color:#4a9de0;background:#14324f;}
+  .view{display:none;} .view.active{display:block;}
+  #existing{padding:16px;}
+  .wf-row{background:#fff;border:1px solid #d9e0e8;border-radius:8px;padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:14px;}
+  .wf-row .name{font-weight:600;font-size:14px;} .wf-row .desc{font-size:12px;color:#5a6b7b;margin-top:3px;}
+  .pill{font-size:11px;padding:2px 8px;border-radius:10px;background:#eaf1f8;color:#2c5d8f;}
+  .switch{margin-left:auto;} .switch input{transform:scale(1.3);cursor:pointer;}
+
+  #creator{display:grid;grid-template-columns:150px 1fr 300px;height:calc(100vh - 84px);}
+  .palette{background:#fff;border-right:1px solid #d9e0e8;padding:12px;}
+  .palette h3{font-size:11px;text-transform:uppercase;color:#2c5d8f;letter-spacing:.5px;margin:0 0 8px;}
+  .palnode{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px;margin-bottom:10px;border:1px dashed #c2ccd6;border-radius:8px;cursor:grab;background:#fbfcfe;font-size:11px;text-align:center;user-select:none;}
+  .palnode:active{cursor:grabbing;}
+  .glyph{width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;}
+  .g-event{border-radius:50%;background:#2f9e6b;}
+  .g-cond{background:#e0932f;width:40px;height:40px;transform:rotate(45deg);}
+  .g-cond span{transform:rotate(-45deg);}
+  .g-out{border-radius:50%;background:#2c5d8f;}
+  .hint{font-size:10.5px;color:#8494a3;margin-top:6px;line-height:1.4;}
+
+  .canvaswrap{position:relative;overflow:hidden;background:
+     linear-gradient(#e5eaf0 1px,transparent 1px) 0 0/22px 22px,
+     linear-gradient(90deg,#e5eaf0 1px,transparent 1px) 0 0/22px 22px,#f6f8fb;}
+  #svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
+  .node{position:absolute;transform:translate(-50%,-50%);cursor:move;user-select:none;text-align:center;}
+  .node .shape{display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;line-height:1.15;padding:4px;box-shadow:0 2px 6px rgba(0,0,0,.15);}
+  .node.event .shape{width:96px;height:96px;border-radius:50%;background:#2f9e6b;}
+  .node.output .shape{width:96px;height:96px;border-radius:50%;background:#2c5d8f;}
+  .node.condition .shape{width:86px;height:86px;background:#e0932f;transform:rotate(45deg);}
+  .node.condition .shape span{transform:rotate(-45deg);display:block;}
+  .node.sel .shape{outline:3px solid #6b3fa0;outline-offset:2px;}
+  .node .cap{margin-top:4px;font-size:10.5px;color:#33414f;max-width:120px;}
+  .node .port{position:absolute;right:-7px;top:50%;width:14px;height:14px;border-radius:50%;background:#6b3fa0;transform:translateY(-50%);cursor:crosshair;border:2px solid #fff;}
+  .toolbar{position:absolute;top:8px;left:8px;display:flex;gap:6px;z-index:5;}
+  .toolbar button{font-size:11px;padding:5px 9px;border-radius:6px;border:1px solid #c2ccd6;background:#fff;cursor:pointer;}
+  .toolbar button.on{background:#6b3fa0;color:#fff;border-color:#6b3fa0;}
+  .canvashint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#a7b4c1;font-size:13px;text-align:center;pointer-events:none;}
+
+  .inspector{background:#fff;border-left:1px solid #d9e0e8;padding:12px;overflow:auto;display:flex;flex-direction:column;}
+  .inspector h3{font-size:11px;text-transform:uppercase;color:#2c5d8f;letter-spacing:.5px;margin:0 0 8px;}
+  .fld{display:flex;align-items:center;gap:6px;margin:5px 0;font-size:12px;}
+  .fld label{width:90px;color:#5a6b7b;flex:none;}
+  .fld select,.fld input{flex:1;padding:4px 6px;border:1px solid #cdd6df;border-radius:5px;font-size:12px;}
+  .catlabel{font-size:10px;text-transform:uppercase;color:#8494a3;margin:8px 0 3px;letter-spacing:.5px;}
+  .item{padding:5px 7px;border-radius:6px;cursor:pointer;font-size:12px;}
+  .item:hover{background:#f0f6fc;}
+  .empty{color:#8494a3;font-size:12px;padding:16px 4px;text-align:center;}
+  .btn{background:#2c5d8f;color:#fff;border:none;padding:7px 11px;border-radius:6px;cursor:pointer;font-size:12px;}
+  .btn.purple{background:#6b3fa0;} .btn.ghost{background:#fff;color:#2c5d8f;border:1px solid #b9cde0;}
+  .btn.danger{background:#fff;color:#a0491f;border:1px solid #e0b39d;}
+
+  /* AI chat drawer */
+  .chatbox{margin-top:auto;border-top:1px solid #e3d8f0;padding-top:8px;}
+  .chatbox h3{color:#6b3fa0;}
+  .chatlog{max-height:150px;overflow:auto;background:#faf7ff;border:1px solid #e3d8f0;border-radius:6px;padding:6px;font-size:12px;}
+  .msg{margin:4px 0;} .msg.u{text-align:right;}
+  .msg .b{display:inline-block;padding:5px 8px;border-radius:9px;max-width:90%;}
+  .msg.u .b{background:#6b3fa0;color:#fff;} .msg.a .b{background:#efe7fb;color:#33254a;}
+  .chatin{display:flex;gap:6px;margin-top:6px;}
+  .chatin input{flex:1;padding:6px 8px;border:1px solid #cdd6df;border-radius:6px;font-size:12px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Landjourney</h1><span class="tag">Workflows</span>
+  <span class="muted" style="margin-left:auto">Proposal 2 · Drag-and-drop whiteboard</span>
+</header>
+<div class="tabs">
+  <div class="tab active" data-view="existing">Existing Workflows</div>
+  <div class="tab" data-view="creator">＋ Workflow Creator</div>
+</div>
+
+<div id="existing" class="view active"></div>
+
+<div id="creator" class="view">
+  <div class="palette">
+    <h3>Drag onto canvas</h3>
+    <div class="palnode" draggable="true" data-type="event"><div class="glyph g-event">▲</div>Event<br>(circle)</div>
+    <div class="palnode" draggable="true" data-type="condition"><div class="glyph g-cond"><span>◆</span></div>Condition<br>(diamond)</div>
+    <div class="palnode" draggable="true" data-type="output"><div class="glyph g-out">■</div>Output<br>(circle)</div>
+    <div class="hint">Drag a shape onto the board, or click to drop at center. Drag the purple dot from one node to another to connect them.</div>
+  </div>
+
+  <div class="canvaswrap" id="canvas">
+    <div class="toolbar">
+      <button id="connectBtn">🔗 Connect mode</button>
+      <button id="clearCanvas" class="danger" style="border:1px solid #e0b39d">Clear board</button>
+    </div>
+    <svg id="svg"></svg>
+    <div class="canvashint" id="canvashint">Drag an Event, Condition or Output here to start building</div>
+  </div>
+
+  <div class="inspector">
+    <h3 id="inspTitle">Inspector</h3>
+    <div id="inspBody"><div class="empty">Select a node to configure it.</div></div>
+    <div style="display:flex;gap:6px;margin-top:10px">
+      <button class="btn ghost" id="saveWf">Save workflow</button>
+    </div>
+    <div class="chatbox">
+      <h3>🤖 AI Assistant</h3>
+      <div class="chatlog" id="chatlog"></div>
+      <div class="chatin"><input id="chatinput" placeholder="e.g. escalate booking errors"><button class="btn purple" id="chatsend">↑</button></div>
+    </div>
+  </div>
+</div>
+<script>
+/* Shared Landjourney workflow vocabulary.
+   Inlined into each proposal HTML so files stay standalone, but kept here as
+   the single source of truth for events / conditions / outputs. */
+window.LJ = (function () {
+
+  // ---- EVENTS (triggers / inputs) --------------------------------------
+  // Each event declares which CONDITION groups are relevant to it.
+  const EVENTS = [
+    // Request templates & intake
+    { id:"req_created",      cat:"Requests",        label:"Request created",              icon:"📥", conds:["template","stage","amount","role","time"] },
+    { id:"req_submitted",    cat:"Requests",        label:"Request submitted (customer)", icon:"📤", conds:["template","stage","amount","role"] },
+    { id:"stage_changed",    cat:"Requests",        label:"Request stage changed",        icon:"🔀", conds:["stage","amount","role","time"] },
+    { id:"intake_submitted", cat:"Intake Links",    label:"Intake link submitted",        icon:"🔗", conds:["template","retailer","role"] },
+    { id:"tmpl_form",        cat:"Templates",       label:"Dynamic form field changed",   icon:"🧾", conds:["field","template","amount"] },
+    { id:"checklist_done",   cat:"Templates",       label:"Document checklist complete",  icon:"✅", conds:["template","role"] },
+    // Documents & review
+    { id:"doc_uploaded",     cat:"Documents",       label:"Document uploaded",            icon:"📎", conds:["doctype","role"] },
+    { id:"doc_approved",     cat:"Documents",       label:"Document approved / rejected", icon:"🗂️", conds:["doctype","role","stage"] },
+    { id:"ai_extract",       cat:"Documents",       label:"AI data extraction complete",  icon:"🤖", conds:["field","doctype"] },
+    // Signatures
+    { id:"sig_signed",       cat:"Signatures",      label:"Signature signed",             icon:"✍️", conds:["role","sigstatus","time"] },
+    { id:"sig_status",       cat:"Signatures",      label:"Signature status changed",     icon:"🖊️", conds:["sigstatus","role"] },
+    // Customers / co-applicants
+    { id:"coapp_added",      cat:"Customers",       label:"Co-applicant / guarantor added", icon:"👥", conds:["role","custtype","count"] },
+    { id:"role_assigned",    cat:"Customers",       label:"Role assigned on request",     icon:"🧑‍💼", conds:["role","custtype"] },
+    // Scorecards & credit
+    { id:"scorecard_done",   cat:"Scorecards",      label:"Scorecard completed",          icon:"📊", conds:["score","amount"] },
+    { id:"credit_pull",      cat:"Credit",          label:"Credit pull returned",         icon:"💳", conds:["credit","role"] },
+    // Time / calendar
+    { id:"time_relative",    cat:"Calendar",        label:"Relative to a date",           icon:"⏱️", conds:["time"] },
+    { id:"time_recurring",   cat:"Calendar",        label:"Recurring schedule",           icon:"🔁", conds:["recurring"] },
+    // Offers
+    { id:"offer_made",       cat:"Offers",          label:"Offer made",                   icon:"📨", conds:["product","amount","queue"] },
+    { id:"offer_accepted",   cat:"Offers",          label:"Offer accepted / rejected",    icon:"🤝", conds:["offerstatus","amount"] },
+    // Underwriting
+    { id:"uw_entered",       cat:"Underwriting",    label:"Entered underwriting queue",   icon:"🏦", conds:["queue","amount","product"] },
+    { id:"uw_decision",      cat:"Underwriting",    label:"Underwriting decision",        icon:"⚖️", conds:["uwstatus","amount"] },
+    // Booking / core
+    { id:"booking_created",  cat:"Booking Events",  label:"Booking event created",        icon:"📡", conds:["core","amount"] },
+    { id:"booking_status",   cat:"Booking Events",  label:"Booking status changed",       icon:"🛰️", conds:["bookstatus","core"] },
+    // Loans / servicing
+    { id:"loan_booked",      cat:"Loans",           label:"Loan booked",                  icon:"🏷️", conds:["loantype","amount"] },
+    { id:"loan_maturing",    cat:"Loans",           label:"Loan maturity approaching",    icon:"📅", conds:["time","loantype"] },
+    // System
+    { id:"system_event",     cat:"System Events",   label:"System event logged",          icon:"🧭", conds:["systype"] },
+  ];
+
+  // ---- CONDITION GROUPS -------------------------------------------------
+  // Rendered dynamically based on the chosen event's `conds` list.
+  const CONDITIONS = {
+    time:      { label:"Timing", fields:[
+                 { key:"offset", type:"number", label:"Offset", default:30 },
+                 { key:"unit",   type:"select", label:"Unit", options:["days","hours","business days","weeks"] },
+                 { key:"dir",    type:"select", label:"Direction", options:["before","after","on"] },
+                 { key:"anchor", type:"select", label:"Anchor date", options:["Application date","Closing date","Maturity date","Offer date","Last activity","Custom date"] } ] },
+    recurring: { label:"Recurrence", fields:[
+                 { key:"freq", type:"select", label:"Frequency", options:["Daily","Weekly","Monthly","Quarterly"] },
+                 { key:"at",   type:"text",   label:"At time / day", default:"09:00" } ] },
+    template:  { label:"Template", fields:[
+                 { key:"tmpl", type:"select", label:"Template type", options:["Loan Application","Origination","Covenant","Blank Request","Any"] },
+                 { key:"named",type:"text",   label:"Named template (optional)", default:"" } ] },
+    field:     { label:"Form field", fields:[
+                 { key:"field", type:"select", label:"Field", options:["Loan amount","Total Current Assets","Company Name","DSCR","Requested term","Purpose","Collateral value"] },
+                 { key:"op",    type:"select", label:"Operator", options:["equals","not equals","greater than","less than","between","is blank","is filled"] },
+                 { key:"val",   type:"text",   label:"Value", default:"" } ] },
+    amount:    { label:"Loan amount", fields:[
+                 { key:"op",  type:"select", label:"Operator", options:["greater than","less than","between","equals"] },
+                 { key:"val", type:"text",   label:"Amount (USD)", default:"250000" } ] },
+    role:      { label:"Customer role", fields:[
+                 { key:"role", type:"select", label:"Role", options:["Borrower","Co-borrower","Guarantor","Business contact","Any"] } ] },
+    custtype:  { label:"Customer type", fields:[
+                 { key:"type", type:"select", label:"Type", options:["Business","Individual"] } ] },
+    count:     { label:"Count", fields:[
+                 { key:"op",  type:"select", label:"Operator", options:["equals","at least","at most"] },
+                 { key:"n",   type:"number", label:"Number", default:1 } ] },
+    stage:     { label:"Request stage", fields:[
+                 { key:"stage", type:"select", label:"Stage is", options:["Initiated","Processing","Approved","Closed"] } ] },
+    doctype:   { label:"Document type", fields:[
+                 { key:"doc", type:"select", label:"Document", options:["Balance Sheet","Income Statement","Tax Return","Bank Statement","Appraisal","Any supporting doc"] },
+                 { key:"state", type:"select", label:"State", options:["uploaded","approved","rejected","skipped"] } ] },
+    sigstatus: { label:"Signature status", fields:[
+                 { key:"s", type:"select", label:"Status", options:["signed","declined","pending","all signers complete"] } ] },
+    score:     { label:"Scorecard result", fields:[
+                 { key:"op",  type:"select", label:"Operator", options:["greater than or equal","less than","between","band equals"] },
+                 { key:"val", type:"text",   label:"Score / band", default:"70" } ] },
+    credit:    { label:"Credit result", fields:[
+                 { key:"metric", type:"select", label:"Metric", options:["FICO","Business credit score","Bankruptcy flag"] },
+                 { key:"op",  type:"select", label:"Operator", options:["greater than or equal","less than","equals"] },
+                 { key:"val", type:"text",   label:"Value", default:"680" } ] },
+    product:   { label:"Product", fields:[
+                 { key:"prod", type:"select", label:"Product / program", options:["Term Loan","Line of Credit","Ag Operating Loan","Equipment Finance","Any"] } ] },
+    retailer:  { label:"Retailer", fields:[
+                 { key:"ret", type:"text", label:"Retailer / dealer", default:"Any" } ] },
+    queue:     { label:"Queue", fields:[
+                 { key:"q", type:"select", label:"Queue", options:["My","Unassigned","Assigned","Auto Approved","Approved","Rejected","All"] } ] },
+    offerstatus:{ label:"Offer status", fields:[
+                 { key:"s", type:"select", label:"Status", options:["accepted","rejected","assigned","unassigned"] } ] },
+    uwstatus:  { label:"Underwriting result", fields:[
+                 { key:"s", type:"select", label:"Result", options:["Auto Approved","Approved","Rejected"] } ] },
+    core:      { label:"Core system", fields:[
+                 { key:"sys", type:"select", label:"Core", options:["Fiserv","FMAC","Any"] } ] },
+    bookstatus:{ label:"Booking status", fields:[
+                 { key:"s", type:"select", label:"Status", options:["Not Sent","In Flight","Sent","Confirmed","Partially Confirmed","Unconfirmed","Error"] } ] },
+    loantype:  { label:"Loan type", fields:[
+                 { key:"t", type:"select", label:"Type", options:["Term Loan","Line of Credit"] } ] },
+    systype:   { label:"System event type", fields:[
+                 { key:"e", type:"select", label:"Event", options:["OFFER ACCEPTED","LOAN REJECTED","FISERV LOAN","FMAC LOAN"] } ] },
+  };
+
+  // ---- OUTPUTS (actions) ------------------------------------------------
+  const OUTPUTS = [
+    { id:"assign_authority", cat:"Routing",      label:"Assign to approval authority", icon:"🧑‍⚖️",
+      params:[ { key:"target", type:"select", label:"Authority level", options:["Loan Officer","Credit Analyst","Underwriter I","Underwriter II","Senior Credit Officer","Loan Committee"] } ] },
+    { id:"assign_user",   cat:"Routing",  label:"Assign to user / team", icon:"👤",
+      params:[ { key:"who", type:"text", label:"User or team", default:"" } ] },
+    { id:"route_queue",   cat:"Routing",  label:"Route to queue", icon:"📂",
+      params:[ { key:"q", type:"select", label:"Queue", options:["Underwriting · Unassigned","Offers · Unassigned","Review Needed","Follow-Up Needed"] } ] },
+    { id:"change_stage",  cat:"Requests", label:"Change request stage", icon:"🔀",
+      params:[ { key:"stage", type:"select", label:"To stage", options:["Initiated","Processing","Approved","Closed"] } ] },
+    { id:"auto_decision", cat:"Underwriting", label:"Auto approve / reject", icon:"⚖️",
+      params:[ { key:"d", type:"select", label:"Decision", options:["Auto Approve","Auto Reject","Refer to human"] } ] },
+    { id:"make_offer",    cat:"Offers",   label:"Generate / make offer", icon:"📨",
+      params:[ { key:"prod", type:"select", label:"Product", options:["Best eligible","Term Loan","Line of Credit","Ag Operating Loan"] } ] },
+    { id:"send_letter",   cat:"Comms",    label:"Send letter", icon:"📜",
+      params:[ { key:"tmpl", type:"select", label:"Letter template", options:["Approval","Adverse Action","Conditional Approval","Welcome","Custom"] } ] },
+    { id:"send_notify",   cat:"Comms",    label:"Send notification / email", icon:"🔔",
+      params:[ { key:"to", type:"select", label:"Recipient", options:["Borrower","Request owner","Team","Manager"] },
+               { key:"msg", type:"text", label:"Message", default:"" } ] },
+    { id:"request_doc",   cat:"Collect",  label:"Request a document", icon:"📎",
+      params:[ { key:"doc", type:"text", label:"Document name", default:"" } ] },
+    { id:"request_sig",   cat:"Collect",  label:"Request signature", icon:"✍️",
+      params:[ { key:"role", type:"select", label:"From role", options:["Borrower","Guarantor","All signers"] } ] },
+    { id:"create_task",   cat:"Collect",  label:"Create task", icon:"🗒️",
+      params:[ { key:"title", type:"text", label:"Task title", default:"" } ] },
+    { id:"create_request",cat:"Requests", label:"Create follow-on request", icon:"➕",
+      params:[ { key:"tmpl", type:"select", label:"From template", options:["Covenant","Origination","Renewal"] } ] },
+    { id:"trigger_booking",cat:"Booking", label:"Trigger / resend booking event", icon:"📡",
+      params:[ { key:"core", type:"select", label:"Core", options:["Fiserv","FMAC"] } ] },
+    { id:"flag_followup", cat:"Ops",      label:"Flag Follow-Up / escalate", icon:"🚩",
+      params:[ { key:"lvl", type:"select", label:"Escalate to", options:["Request owner","Manager","Senior Credit Officer"] } ] },
+    { id:"add_note",      cat:"Ops",      label:"Post discussion note", icon:"💬",
+      params:[ { key:"chan", type:"select", label:"Channel", options:["Request-wide","Customer task","Internal task"] },
+               { key:"text", type:"text", label:"Note", default:"" } ] },
+    { id:"update_field",  cat:"Data",     label:"Update / prefill field", icon:"✏️",
+      params:[ { key:"field", type:"text", label:"Field", default:"" }, { key:"val", type:"text", label:"Value", default:"" } ] },
+    { id:"schedule_rem",  cat:"Data",     label:"Schedule reminder", icon:"⏰",
+      params:[ { key:"when", type:"text", label:"When", default:"in 7 days" } ] },
+    { id:"webhook",       cat:"Data",     label:"Call webhook / API", icon:"🔌",
+      params:[ { key:"url", type:"text", label:"Endpoint", default:"https://" } ] },
+  ];
+
+  return { EVENTS, CONDITIONS, OUTPUTS };
+})();
+</script>
+<script>
+const { EVENTS, CONDITIONS, OUTPUTS } = window.LJ;
+
+let nodes=[], edges=[], seq=1, selId=null, connectMode=false, connectFrom=null;
+let saved=[
+  {name:"Large loan → committee", desc:"Event: Request created ◆ amount > $500k → Output: assign Loan Committee", on:true, tags:["Requests"]},
+  {name:"Maturity reminder", desc:"Event: Loan maturing ◆ 30 days before → Output: notify owner", on:true, tags:["Calendar"]},
+];
+
+// tabs
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active'); document.getElementById(t.dataset.view).classList.add('active');
+});
+function renderExisting(){
+  document.getElementById('existing').innerHTML =
+   '<div style="font-size:12px;color:#5a6b7b;margin-bottom:10px">'+saved.length+' workflows</div>'+
+   saved.map((w,i)=>`<div class="wf-row"><div><div class="name">${w.name}</div><div class="desc">${w.desc}</div></div>
+     ${w.tags.map(t=>`<span class="pill">${t}</span>`).join('')}
+     <label class="switch"><input type="checkbox" ${w.on?'checked':''} onchange="saved[${i}].on=this.checked"></label></div>`).join('');
+}
+window.saved=saved;
+
+const canvas=document.getElementById('canvas');
+const svg=document.getElementById('svg');
+
+// ---- drag from palette ----
+document.querySelectorAll('.palnode').forEach(p=>{
+  p.addEventListener('dragstart',e=> e.dataTransfer.setData('type',p.dataset.type));
+  p.addEventListener('click',()=> addNode(p.dataset.type, canvas.clientWidth/2, canvas.clientHeight/2));
+});
+canvas.addEventListener('dragover',e=>e.preventDefault());
+canvas.addEventListener('drop',e=>{
+  e.preventDefault(); const type=e.dataTransfer.getData('type'); if(!type) return;
+  const r=canvas.getBoundingClientRect(); addNode(type, e.clientX-r.left, e.clientY-r.top);
+});
+
+function defaultConfig(type){
+  if(type==='event') return { evId:EVENTS[0].id };
+  if(type==='condition') return { condKey:'amount', vals:seedVals(CONDITIONS['amount']) };
+  return { outId:OUTPUTS[0].id, vals:seedVals2(OUTPUTS[0]) };
+}
+function seedVals(def){ const v={}; def.fields.forEach(f=>v[f.key]=f.default!==undefined?f.default:(f.type==='select'?f.options[0]:'')); return v; }
+function seedVals2(o){ const v={}; o.params.forEach(p=>v[p.key]=p.default!==undefined?p.default:(p.type==='select'?p.options[0]:'')); return v; }
+
+function addNode(type,x,y){
+  const n={id:seq++, type, x, y, cfg:defaultConfig(type)};
+  nodes.push(n); document.getElementById('canvashint').style.display='none';
+  render(); select(n.id); return n;
+}
+
+function nodeLabel(n){
+  if(n.type==='event'){ const e=EVENTS.find(e=>e.id===n.cfg.evId); return e?e.icon+' '+e.label:'Event'; }
+  if(n.type==='condition'){ const d=CONDITIONS[n.cfg.condKey]; return d?d.label:'Condition'; }
+  const o=OUTPUTS.find(o=>o.id===n.cfg.outId); return o?o.icon+' '+o.label:'Output';
+}
+function nodeCap(n){
+  if(n.type==='condition'){ const d=CONDITIONS[n.cfg.condKey]; return d.fields.map(f=>n.cfg.vals[f.key]).filter(Boolean).join(' '); }
+  if(n.type==='output'){ const o=OUTPUTS.find(o=>o.id===n.cfg.outId); return o?Object.values(n.cfg.vals).filter(Boolean).join(', '):''; }
+  return EVENTS.find(e=>e.id===n.cfg.evId)?.cat||'';
+}
+
+function render(){
+  // remove old node divs
+  canvas.querySelectorAll('.node').forEach(d=>d.remove());
+  nodes.forEach(n=>{
+    const d=document.createElement('div');
+    d.className='node '+n.type+(n.id===selId?' sel':'');
+    d.style.left=n.x+'px'; d.style.top=n.y+'px'; d.dataset.id=n.id;
+    const inner = n.type==='condition' ? `<span>${nodeLabel(n)}</span>` : nodeLabel(n);
+    d.innerHTML=`<div class="shape">${inner}</div><div class="cap">${nodeCap(n)}</div><div class="port" title="drag to connect"></div>`;
+    canvas.appendChild(d);
+    makeDraggable(d,n);
+    d.querySelector('.shape').addEventListener('mousedown',ev=>{ if(!draggingPort) select(n.id); });
+    // port -> start connection
+    d.querySelector('.port').addEventListener('mousedown',ev=>{ ev.stopPropagation(); startPortDrag(n,ev); });
+  });
+  drawEdges();
+}
+
+function drawEdges(){
+  svg.innerHTML='<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#6b3fa0"/></marker></defs>';
+  edges.forEach(e=>{
+    const a=nodes.find(n=>n.id===e.from), b=nodes.find(n=>n.id===e.to); if(!a||!b) return;
+    const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+    const dx=Math.abs(b.x-a.x)*0.4;
+    p.setAttribute('d',`M ${a.x+48} ${a.y} C ${a.x+48+dx} ${a.y}, ${b.x-48-dx} ${b.y}, ${b.x-48} ${b.y}`);
+    p.setAttribute('stroke','#6b3fa0'); p.setAttribute('stroke-width','2'); p.setAttribute('fill','none');
+    p.setAttribute('marker-end','url(#arrow)');
+    svg.appendChild(p);
+  });
+}
+
+// node dragging
+function makeDraggable(d,n){
+  d.addEventListener('mousedown',ev=>{
+    if(ev.target.classList.contains('port')) return;
+    if(connectMode){ handleConnectClick(n); return; }
+    const r=canvas.getBoundingClientRect(); const ox=ev.clientX-r.left-n.x, oy=ev.clientY-r.top-n.y;
+    function mv(e){ n.x=e.clientX-r.left-ox; n.y=e.clientY-r.top-oy; d.style.left=n.x+'px'; d.style.top=n.y+'px'; drawEdges(); }
+    function up(){ document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
+    document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+  });
+}
+
+// port drag connect
+let draggingPort=false, tempLine=null;
+function startPortDrag(n,ev){
+  draggingPort=true; const r=canvas.getBoundingClientRect();
+  tempLine=document.createElementNS('http://www.w3.org/2000/svg','line');
+  tempLine.setAttribute('stroke','#6b3fa0'); tempLine.setAttribute('stroke-dasharray','4'); svg.appendChild(tempLine);
+  function mv(e){ tempLine.setAttribute('x1',n.x+48); tempLine.setAttribute('y1',n.y);
+    tempLine.setAttribute('x2',e.clientX-r.left); tempLine.setAttribute('y2',e.clientY-r.top); }
+  function up(e){
+    document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up);
+    draggingPort=false; if(tempLine){tempLine.remove(); tempLine=null;}
+    const tgt=e.target.closest('.node'); if(tgt && +tgt.dataset.id!==n.id){ addEdge(n.id,+tgt.dataset.id); }
+  }
+  document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+}
+function addEdge(from,to){ if(!edges.some(e=>e.from===from&&e.to===to)){ edges.push({from,to}); drawEdges(); } }
+
+// connect-mode click alternative
+function handleConnectClick(n){
+  if(!connectFrom){ connectFrom=n.id; select(n.id); }
+  else { if(connectFrom!==n.id) addEdge(connectFrom,n.id); connectFrom=null; }
+}
+document.getElementById('connectBtn').onclick=function(){ connectMode=!connectMode; connectFrom=null;
+  this.classList.toggle('on',connectMode); this.textContent=connectMode?'🔗 Connect: ON (click two nodes)':'🔗 Connect mode'; };
+document.getElementById('clearCanvas').onclick=()=>{ nodes=[];edges=[];selId=null; render(); document.getElementById('canvashint').style.display='block'; inspect(); };
+
+// ---- inspector ----
+function select(id){ selId=id; render(); inspect(); }
+function inspect(){
+  const n=nodes.find(x=>x.id===selId);
+  const title=document.getElementById('inspTitle'), body=document.getElementById('inspBody');
+  if(!n){ title.textContent='Inspector'; body.innerHTML='<div class="empty">Select a node to configure it.</div>'; return; }
+  title.textContent = n.type.charAt(0).toUpperCase()+n.type.slice(1)+' node';
+  let h='';
+  if(n.type==='event'){
+    h+=field('Event', selectEl(EVENTS.map(e=>e.label), EVENTS.find(e=>e.id===n.cfg.evId).label,
+        `onchange="setEv(${n.id},this.value)"`));
+    const e=EVENTS.find(e=>e.id===n.cfg.evId);
+    h+=`<div class="catlabel">Relevant conditions to wire next</div><div style="font-size:11px;color:#5a6b7b">${e.conds.map(c=>CONDITIONS[c].label).join(' · ')}</div>`;
+  } else if(n.type==='condition'){
+    // condition type dropdown limited by connected upstream event, else all
+    const up=edges.filter(e=>e.to===n.id).map(e=>nodes.find(x=>x.id===e.from)).find(x=>x&&x.type==='event');
+    const allowed = up ? EVENTS.find(e=>e.id===up.cfg.evId).conds : Object.keys(CONDITIONS);
+    h+=field('Condition', selectEl(allowed.map(k=>CONDITIONS[k].label), CONDITIONS[n.cfg.condKey]?.label,
+        `onchange="setCond(${n.id},this.value,${JSON.stringify(allowed).replace(/"/g,'&quot;')})"`));
+    const def=CONDITIONS[n.cfg.condKey];
+    if(def) def.fields.forEach(f=>{
+      h+=field(f.label, f.type==='select'
+        ? selectEl(f.options, n.cfg.vals[f.key], `onchange="setVal(${n.id},'${f.key}',this.value)"`)
+        : `<input type="${f.type}" value="${n.cfg.vals[f.key]??''}" oninput="setVal(${n.id},'${f.key}',this.value)">`);
+    });
+  } else {
+    h+=field('Action', selectEl(OUTPUTS.map(o=>o.label), OUTPUTS.find(o=>o.id===n.cfg.outId).label,
+        `onchange="setOut(${n.id},this.value)"`));
+    const o=OUTPUTS.find(o=>o.id===n.cfg.outId);
+    o.params.forEach(p=>{
+      h+=field(p.label, p.type==='select'
+        ? selectEl(p.options, n.cfg.vals[p.key], `onchange="setVal(${n.id},'${p.key}',this.value)"`)
+        : `<input value="${n.cfg.vals[p.key]??''}" oninput="setVal(${n.id},'${p.key}',this.value)">`);
+    });
+  }
+  h+=`<button class="btn danger" style="margin-top:10px" onclick="delNode(${n.id})">Delete node</button>`;
+  body.innerHTML=h;
+}
+function field(label,inner){ return `<div class="fld"><label>${label}</label>${inner}</div>`; }
+function selectEl(opts,val,attr){ return `<select ${attr}>`+opts.map(o=>`<option ${o===val?'selected':''}>${o}</option>`).join('')+`</select>`; }
+
+window.setEv=(id,label)=>{ const n=nodes.find(x=>x.id===id); n.cfg.evId=EVENTS.find(e=>e.label===label).id; render(); inspect(); };
+window.setCond=(id,label)=>{ const n=nodes.find(x=>x.id===id); const key=Object.keys(CONDITIONS).find(k=>CONDITIONS[k].label===label);
+  n.cfg.condKey=key; n.cfg.vals=seedVals(CONDITIONS[key]); render(); inspect(); };
+window.setOut=(id,label)=>{ const n=nodes.find(x=>x.id===id); const o=OUTPUTS.find(o=>o.label===label);
+  n.cfg.outId=o.id; n.cfg.vals=seedVals2(o); render(); inspect(); };
+window.setVal=(id,key,v)=>{ const n=nodes.find(x=>x.id===id); n.cfg.vals[key]=v; render(); };
+window.delNode=(id)=>{ nodes=nodes.filter(n=>n.id!==id); edges=edges.filter(e=>e.from!==id&&e.to!==id); selId=null; render(); inspect(); if(!nodes.length) document.getElementById('canvashint').style.display='block'; };
+
+document.getElementById('saveWf').onclick=()=>{
+  if(!nodes.length) return alert('Add some nodes first.');
+  const ev=nodes.find(n=>n.type==='event');
+  saved.unshift({name:(ev?nodeLabel(ev):'Workflow')+' flow', desc:nodes.map(n=>nodeLabel(n)).join(' → '), on:true, tags:['Canvas']});
+  renderExisting(); alert('Saved to Existing Workflows.');
+};
+
+// ---- AI chat: lays out a 3-node graph ----
+function botBuild(text){
+  const t=text.toLowerCase(); nodes=[]; edges=[]; seq=1;
+  const cx=canvas.clientWidth, cy=canvas.clientHeight/2;
+  let ev,condKey,cvals,outId,ovals;
+  if(/book|error|fiserv|fmac/.test(t)){ ev='booking_status'; condKey='bookstatus'; cvals={s:'Error'}; outId='flag_followup'; ovals={lvl:'Manager'}; }
+  else if(/maturit|renew|remind|days before/.test(t)){ ev='loan_maturing'; condKey='time'; cvals={offset:(t.match(/(\d+)/)||[])[1]||30,unit:'days',dir:'before',anchor:'Maturity date'}; outId='send_notify'; ovals={to:'Request owner',msg:'Maturity approaching'}; }
+  else if(/fico|credit|approve/.test(t)){ ev='credit_pull'; condKey='credit'; cvals={metric:'FICO',op:'greater than or equal',val:(t.match(/(\d{3})/)||[])[1]||720}; outId='auto_decision'; ovals={d:'Auto Approve'}; }
+  else { ev='req_created'; condKey='amount'; cvals={op:'greater than',val:'500000'}; outId='assign_authority'; ovals={target:'Loan Committee'}; }
+  const n1={id:seq++,type:'event',x:cx*0.18,y:cy,cfg:{evId:ev}};
+  const n2={id:seq++,type:'condition',x:cx*0.5,y:cy,cfg:{condKey,vals:cvals}};
+  const n3={id:seq++,type:'output',x:cx*0.82,y:cy,cfg:{outId,vals:ovals}};
+  nodes=[n1,n2,n3]; edges=[{from:n1.id,to:n2.id},{from:n2.id,to:n3.id}];
+  document.getElementById('canvashint').style.display='none';
+  render(); select(n2.id);
+  return `Built a 3-node flow: ${nodeLabel(n1)} → ${nodeLabel(n2)} → ${nodeLabel(n3)}. Drag nodes to reposition or click any to edit.`;
+}
+function addMsg(who,txt){ const l=document.getElementById('chatlog'); l.insertAdjacentHTML('beforeend',`<div class="msg ${who}"><span class="b">${txt}</span></div>`); l.scrollTop=l.scrollHeight; }
+function send(){ const i=document.getElementById('chatinput'), v=i.value.trim(); if(!v)return; addMsg('u',v); i.value=''; document.querySelector('.tab[data-view="creator"]').click(); setTimeout(()=>addMsg('a',botBuild(v)),250); }
+document.getElementById('chatsend').onclick=send;
+document.getElementById('chatinput').addEventListener('keydown',e=>{if(e.key==='Enter')send();});
+
+renderExisting(); render(); inspect();
+addMsg('a','Tell me an automation and I’ll drop the nodes on the board.');
+</script>
+</body></html>

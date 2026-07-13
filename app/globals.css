@@ -36,6 +36,10 @@
   --warn-bg: #fef3c7;
   --warn-fg: #92400e;
   --warn-br: rgba(146, 64, 14, 0.25);
+
+  --danger-bg: #fee2e2;
+  --danger-fg: #b91c1c;
+  --danger-br: rgba(185, 28, 28, 0.22);
 }
 
 :root[data-theme="dark"] {
@@ -68,6 +72,10 @@
   --warn-bg: rgba(180, 83, 9, 0.2);
   --warn-fg: #fcd34d;
   --warn-br: rgba(217, 119, 6, 0.4);
+
+  --danger-bg: rgba(220, 38, 38, 0.18);
+  --danger-fg: #fca5a5;
+  --danger-br: rgba(248, 113, 113, 0.4);
 }
 
 * {

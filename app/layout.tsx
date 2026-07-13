@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import AppShell from "@/components/shell/AppShell";
 
 export const metadata: Metadata = {
-  title: "Workflow Creator · Sweet",
+  title: "Landjourney Admin Console",
   description:
-    "Design loan-origination automations in plain English — WHEN an event happens, IF conditions hold, THEN take action.",
+    "Loan-origination admin console with a plain-English Workflow Creator — WHEN an event happens, IF conditions hold, THEN take action.",
 };
 
 /**
@@ -33,7 +34,9 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
       </head>
-      <body>{children}</body>
+      <body>
+        <AppShell>{children}</AppShell>
+      </body>
     </html>
   );
 }

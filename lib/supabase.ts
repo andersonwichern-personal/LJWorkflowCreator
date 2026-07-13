@@ -1,4 +1,4 @@
-import { createBrowserClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 
 /**
  * Browser-side Supabase client.
@@ -8,10 +8,10 @@ import { createBrowserClient } from "@supabase/supabase-js";
  *
  * Example:
  *   const supabase = createSupabaseBrowserClient();
- *   const { data, error } = await supabase.from("price_ranges").select("*");
+ *   const { data, error } = await supabase.from("workflows").select("*");
  */
 export function createSupabaseBrowserClient() {
-  return createBrowserClient(
+  return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );

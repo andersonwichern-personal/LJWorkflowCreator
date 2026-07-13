@@ -8,7 +8,7 @@ import { createClient } from "@supabase/supabase-js";
  *
  * Example:
  *   const supabase = createSupabaseServerClient();
- *   const { data, error } = await supabase.from("quotes").select("*");
+ *   const { data, error } = await supabase.from("workflows").select("*");
  */
 export function createSupabaseServerClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

@@ -2,13 +2,154 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ------------------------------------------------------------------ */
+/* Theme tokens — light + dark, driven by [data-theme] on <html>       */
+/* ------------------------------------------------------------------ */
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --bg: #f4f6fb;
+  --bg-grad-1: #e9edf8;
+  --bg-grad-2: #f6f1fb;
+  --panel: rgba(255, 255, 255, 0.66);
+  --panel-solid: #ffffff;
+  --panel-border: rgba(17, 24, 39, 0.08);
+  --panel-shadow: 0 20px 45px -25px rgba(30, 41, 59, 0.45);
+  --fg: #101828;
+  --fg-muted: #5a6478;
+  --fg-subtle: #8a93a6;
+  --accent: #4f46e5;
+  --accent-soft: rgba(79, 70, 229, 0.12);
+  --ring: rgba(79, 70, 229, 0.35);
+
+  /* Token pill palettes (WHEN / IF / THEN) */
+  --tok-when-bg: #eef2ff;
+  --tok-when-fg: #4338ca;
+  --tok-when-br: rgba(67, 56, 202, 0.25);
+  --tok-if-bg: #ecfdf5;
+  --tok-if-fg: #047857;
+  --tok-if-br: rgba(4, 120, 87, 0.22);
+  --tok-then-bg: #fff7ed;
+  --tok-then-fg: #c2410c;
+  --tok-then-br: rgba(194, 65, 12, 0.22);
+  --tok-op-bg: rgba(100, 116, 139, 0.12);
+  --tok-op-fg: #475569;
+
+  --warn-bg: #fef3c7;
+  --warn-fg: #92400e;
+  --warn-br: rgba(146, 64, 14, 0.25);
+}
+
+:root[data-theme="dark"] {
+  --bg: #0b0f1a;
+  --bg-grad-1: #131a2e;
+  --bg-grad-2: #1a1330;
+  --panel: rgba(21, 27, 44, 0.6);
+  --panel-solid: #151b2c;
+  --panel-border: rgba(148, 163, 184, 0.14);
+  --panel-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.75);
+  --fg: #e8ecf6;
+  --fg-muted: #9aa5bd;
+  --fg-subtle: #6b7690;
+  --accent: #818cf8;
+  --accent-soft: rgba(129, 140, 248, 0.16);
+  --ring: rgba(129, 140, 248, 0.45);
+
+  --tok-when-bg: rgba(99, 102, 241, 0.18);
+  --tok-when-fg: #c7d2fe;
+  --tok-when-br: rgba(129, 140, 248, 0.4);
+  --tok-if-bg: rgba(16, 185, 129, 0.16);
+  --tok-if-fg: #6ee7b7;
+  --tok-if-br: rgba(52, 211, 153, 0.38);
+  --tok-then-bg: rgba(249, 115, 22, 0.16);
+  --tok-then-fg: #fdba74;
+  --tok-then-br: rgba(251, 146, 60, 0.38);
+  --tok-op-bg: rgba(148, 163, 184, 0.16);
+  --tok-op-fg: #cbd5e1;
+
+  --warn-bg: rgba(180, 83, 9, 0.2);
+  --warn-fg: #fcd34d;
+  --warn-br: rgba(217, 119, 6, 0.4);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+  background-image: radial-gradient(
+      1100px 620px at 12% -8%,
+      var(--bg-grad-1),
+      transparent 60%
+    ),
+    radial-gradient(1000px 640px at 108% 12%, var(--bg-grad-2), transparent 55%);
+  background-attachment: fixed;
+  min-height: 100vh;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Glass panel utility */
+.glass {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--panel-shadow);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+
+/* Focus ring */
+.ring-accent:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+/* Soft entrance animation */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-rise {
+  animation: rise 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes popin {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.animate-popin {
+  animation: popin 0.16s ease-out both;
+}
+
+/* Custom scrollbar */
+.scroll-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: var(--panel-border);
+  border-radius: 999px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
 }

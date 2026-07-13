@@ -6,30 +6,15 @@ datasource db {
   provider = "postgresql"
 }
 
-model PriceRange {
-  id        String   @id @default(cuid())
-  category  String   @unique
-  low       Float
-  high      Float
-  unit      String
-  notes     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  quotes    Quote[]
+model Workflow {
+  id          String   @id @default(uuid())
+  orgId       String   @map("org_id")
+  name        String
+  description String?
+  enabled     Boolean  @default(true)
+  ruleJson    Json     @map("rule_json")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  @@map("price_ranges")
-}
-
-model Quote {
-  id                String     @id @default(cuid())
-  contractor        String
-  amount            Float
-  category          String
-  verdict           String     // "great" | "fair" | "high" | "very_high"
-  message           String
-  percentOfMidpoint Int
-  priceRange        PriceRange @relation(fields: [category], references: [category])
-  createdAt         DateTime   @default(now())
-
-  @@map("quotes")
+  @@map("workflows")
 }

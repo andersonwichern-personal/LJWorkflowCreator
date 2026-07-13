@@ -1,462 +1,418 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { evaluateQuote, type Verdict } from "@/lib/priceData";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  WorkflowRule,
+  emptyRule,
+  ruleUsesUnconfirmed,
+  getEvent,
+  getAction,
+  FIELDS,
+  opLabel,
+  paramKeyFor,
+  STARTER_TEMPLATES,
+} from "@/lib/vocabulary";
+import {
+  WorkflowRecord,
+  listWorkflows,
+  createWorkflow,
+  updateWorkflow,
+  toggleWorkflow,
+  deleteWorkflow,
+} from "@/lib/api";
+import RuleSentence from "@/components/RuleSentence";
+import ChatBox from "@/components/ChatBox";
+import WorkflowSidebar from "@/components/WorkflowSidebar";
+import ThemeToggle from "@/components/ThemeToggle";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+type Toast = { id: number; kind: "ok" | "err"; text: string };
 
-interface PriceRange {
-  id: string;
-  category: string;
-  low: number;
-  high: number;
-  unit: string;
-  notes: string;
-}
+export default function Page() {
+  const [workflows, setWorkflows] = useState<WorkflowRecord[]>([]);
+  const [loadingList, setLoadingList] = useState(true);
 
-interface QuoteRecord {
-  id: string;
-  contractor: string;
-  amount: number;
-  category: string;
-  verdict: Verdict;
-  message: string;
-  percentOfMidpoint: number;
-  createdAt: string;
-  priceRange: Pick<PriceRange, "low" | "high" | "unit" | "notes">;
-}
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [name, setName] = useState("Untitled workflow");
+  const [description, setDescription] = useState("");
+  const [rule, setRule] = useState<WorkflowRule>(emptyRule());
+  const [enabled, setEnabled] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
 
-// ─── Verdict styles ───────────────────────────────────────────────────────────
+  const [toasts, setToasts] = useState<Toast[]>([]);
 
-const VERDICT_STYLES: Record<
-  Verdict,
-  { bg: string; border: string; text: string; badge: string; label: string }
-> = {
-  great: {
-    bg: "bg-emerald-50",
-    border: "border-emerald-400",
-    text: "text-emerald-800",
-    badge: "bg-emerald-100 text-emerald-700",
-    label: "Below Market",
-  },
-  fair: {
-    bg: "bg-blue-50",
-    border: "border-blue-400",
-    text: "text-blue-800",
-    badge: "bg-blue-100 text-blue-700",
-    label: "Fair Price",
-  },
-  high: {
-    bg: "bg-amber-50",
-    border: "border-amber-400",
-    text: "text-amber-800",
-    badge: "bg-amber-100 text-amber-700",
-    label: "Above Average",
-  },
-  very_high: {
-    bg: "bg-red-50",
-    border: "border-red-400",
-    text: "text-red-800",
-    badge: "bg-red-100 text-red-700",
-    label: "Overpriced",
-  },
-};
-
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(n);
-}
-
-// ─── Dashboard ────────────────────────────────────────────────────────────────
-
-export default function Dashboard() {
-  const [priceRanges, setPriceRanges] = useState<PriceRange[]>([]);
-  const [quotes, setQuotes] = useState<QuoteRecord[]>([]);
-  const [activeResult, setActiveResult] = useState<QuoteRecord | null>(null);
-  const [loadingRanges, setLoadingRanges] = useState(true);
-  const [loadingQuotes, setLoadingQuotes] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [dbAvailable, setDbAvailable] = useState(true);
-
-  const [contractor, setContractor] = useState("");
-  const [category, setCategory] = useState("");
-  const [amount, setAmount] = useState("");
-
-  // Fetch price ranges from DB
-  const fetchPriceRanges = useCallback(async () => {
-    try {
-      const res = await fetch("/api/price-ranges");
-      if (!res.ok) throw new Error("Failed");
-      const data: PriceRange[] = await res.json();
-      setPriceRanges(data);
-    } catch {
-      setDbAvailable(false);
-    } finally {
-      setLoadingRanges(false);
-    }
+  const pushToast = useCallback((kind: Toast["kind"], text: string) => {
+    const id = toastId();
+    setToasts((t) => [...t, { id, kind, text }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3200);
   }, []);
 
-  // Fetch quote history from DB
-  const fetchQuotes = useCallback(async () => {
+  const refresh = useCallback(async () => {
+    setLoadingList(true);
     try {
-      const res = await fetch("/api/quotes");
-      if (!res.ok) throw new Error("Failed");
-      const data: QuoteRecord[] = await res.json();
-      setQuotes(data);
-    } catch {
-      // silently fail — history just won't show
+      setWorkflows(await listWorkflows());
+    } catch (e: unknown) {
+      pushToast("err", errMsg(e, "Couldn't load workflows"));
     } finally {
-      setLoadingQuotes(false);
+      setLoadingList(false);
     }
-  }, []);
+  }, [pushToast]);
 
   useEffect(() => {
-    fetchPriceRanges();
-    fetchQuotes();
-  }, [fetchPriceRanges, fetchQuotes]);
+    refresh();
+  }, [refresh]);
 
-  const selectedRange = priceRanges.find((r) => r.category === category) ?? null;
+  function loadIntoEditor(wf: WorkflowRecord) {
+    setActiveId(wf.id);
+    setName(wf.name);
+    setDescription(wf.description ?? "");
+    setRule(normalizeRule(wf.ruleJson));
+    setEnabled(wf.enabled);
+    setDirty(false);
+  }
 
-  async function handleCheck(e: React.FormEvent) {
-    e.preventDefault();
-    if (!category || !amount) return;
-    const numAmount = parseFloat(amount.replace(/[^0-9.]/g, ""));
-    if (isNaN(numAmount) || numAmount <= 0) return;
+  function newWorkflow() {
+    setActiveId(null);
+    setName("Untitled workflow");
+    setDescription("");
+    setRule(emptyRule());
+    setEnabled(true);
+    setDirty(false);
+  }
 
-    setSubmitting(true);
+  function applyStarter(name: string, description: string, rule: WorkflowRule) {
+    setActiveId(null);
+    setName(name);
+    setDescription(description);
+    setRule(rule);
+    setEnabled(true);
+    setDirty(true);
+    pushToast("ok", "Template loaded — tweak the tokens and save.");
+  }
 
-    // Optimistic client-side evaluation for instant feedback
-    const { verdict, message, percentOfMidpoint } = evaluateQuote(
-      category as Parameters<typeof evaluateQuote>[0],
-      numAmount
-    );
+  function onRuleChange(next: WorkflowRule) {
+    setRule(next);
+    setDirty(true);
+  }
+  function onDraftFromChat(next: WorkflowRule) {
+    setRule(next);
+    setDirty(true);
+    pushToast("ok", "Drafted from your instruction — review the tokens below.");
+  }
 
-    const optimistic: QuoteRecord = {
-      id: "optimistic",
-      contractor: contractor || "Unknown Contractor",
-      amount: numAmount,
-      category,
-      verdict,
-      message,
-      percentOfMidpoint,
-      createdAt: new Date().toISOString(),
-      priceRange: selectedRange
-        ? { low: selectedRange.low, high: selectedRange.high, unit: selectedRange.unit, notes: selectedRange.notes }
-        : { low: 0, high: 0, unit: "", notes: "" },
-    };
-    setActiveResult(optimistic);
-
-    // Persist to DB
+  async function save() {
+    if (!name.trim()) return pushToast("err", "Give the workflow a name first.");
+    if (rule.outputs.length === 0) return pushToast("err", "Add at least one action (THEN) before saving.");
+    setSaving(true);
     try {
-      const res = await fetch("/api/quotes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contractor: contractor || "Unknown Contractor",
-          category,
-          amount: numAmount,
-        }),
-      });
-
-      if (res.ok) {
-        const saved: QuoteRecord = await res.json();
-        setActiveResult(saved);
-        setQuotes((prev) => [saved, ...prev]);
+      if (activeId) {
+        const updated = await updateWorkflow(activeId, {
+          name: name.trim(),
+          description: description.trim() || null,
+          ruleJson: rule,
+          enabled,
+        });
+        pushToast("ok", "Workflow updated.");
+        setWorkflows((list) => list.map((w) => (w.id === updated.id ? updated : w)));
       } else {
-        // DB unavailable — still show local result
-        setQuotes((prev) => [optimistic, ...prev]);
+        const created = await createWorkflow({
+          name: name.trim(),
+          description: description.trim() || undefined,
+          ruleJson: rule,
+          enabled,
+        });
+        pushToast("ok", "Workflow saved.");
+        setActiveId(created.id);
+        setWorkflows((list) => [created, ...list]);
       }
-    } catch {
-      setQuotes((prev) => [optimistic, ...prev]);
+      setDirty(false);
+    } catch (e: unknown) {
+      pushToast("err", errMsg(e, "Save failed"));
     } finally {
-      setSubmitting(false);
+      setSaving(false);
     }
   }
 
+  async function onToggleWorkflow(wf: WorkflowRecord, next: boolean) {
+    setWorkflows((list) => list.map((w) => (w.id === wf.id ? { ...w, enabled: next } : w)));
+    if (wf.id === activeId) setEnabled(next);
+    try {
+      await toggleWorkflow(wf.id, next);
+    } catch (e: unknown) {
+      setWorkflows((list) => list.map((w) => (w.id === wf.id ? { ...w, enabled: !next } : w)));
+      pushToast("err", errMsg(e, "Toggle failed"));
+    }
+  }
+
+  async function onDeleteWorkflow(wf: WorkflowRecord) {
+    if (!confirm(`Delete “${wf.name}”? This can't be undone.`)) return;
+    try {
+      await deleteWorkflow(wf.id);
+      setWorkflows((list) => list.filter((w) => w.id !== wf.id));
+      if (wf.id === activeId) newWorkflow();
+      pushToast("ok", "Workflow deleted.");
+    } catch (e: unknown) {
+      pushToast("err", errMsg(e, "Delete failed"));
+    }
+  }
+
+  const summary = useMemo(() => plainSummary(rule), [rule]);
+  const unconfirmed = useMemo(() => ruleUsesUnconfirmed(rule), [rule]);
+  const enabledCount = workflows.filter((w) => w.enabled).length;
+  const isBlank = !activeId && rule.conds.length === 0 && rule.outputs.length === 0;
+
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen px-4 py-5 sm:px-6 lg:px-8">
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-900">QuoteCheck</h1>
-              <p className="text-xs text-slate-500">Contractor Quote Verifier</p>
-            </div>
+      <header className="mx-auto mb-6 flex max-w-[1280px] items-center justify-between">
+        <div className="flex items-center gap-3.5">
+          <div
+            className="flex h-11 w-11 items-center justify-center rounded-2xl text-xl font-bold text-white shadow-lg"
+            style={{ background: "linear-gradient(135deg, var(--accent), #a855f7)" }}
+          >
+            ⚡
           </div>
-          <div className="flex items-center gap-2">
-            {!dbAvailable && (
-              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full">
-                DB not connected
-              </span>
-            )}
-            {dbAvailable && !loadingRanges && (
-              <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">
-                DB connected
-              </span>
-            )}
-            <span className="text-xs text-slate-400 hidden sm:block">
-              Prices based on U.S. national averages
-            </span>
+          <div>
+            <h1 className="text-xl font-semibold leading-tight tracking-tight" style={{ color: "var(--fg)" }}>
+              Workflow Creator
+            </h1>
+            <p className="text-[13px]" style={{ color: "var(--fg-subtle)" }}>
+              Automate loan origination — in plain English.
+            </p>
           </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <span
+            className="hidden rounded-full px-3 py-1.5 text-xs font-medium sm:inline-flex"
+            style={{ background: "var(--panel)", border: "1px solid var(--panel-border)", color: "var(--fg-muted)" }}
+          >
+            {enabledCount} enabled · {workflows.length} total
+          </span>
+          <ThemeToggle />
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-8 space-y-8">
-        {/* Stats row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {[
-            { label: "Quotes Checked", value: quotes.length },
-            { label: "Fair / Below", value: quotes.filter((r) => r.verdict === "fair" || r.verdict === "great").length },
-            { label: "Above Average", value: quotes.filter((r) => r.verdict === "high").length },
-            { label: "Overpriced", value: quotes.filter((r) => r.verdict === "very_high").length },
-          ].map(({ label, value }) => (
-            <div key={label} className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
-              <p className="text-2xl font-bold text-slate-900">{value}</p>
-              <p className="text-xs text-slate-500 mt-1">{label}</p>
-            </div>
-          ))}
+      {/* Body */}
+      <div className="mx-auto grid max-w-[1280px] grid-cols-1 gap-5 lg:grid-cols-[290px_1fr]">
+        {/* Sidebar */}
+        <div className="lg:sticky lg:top-5 lg:h-[calc(100vh-120px)]">
+          <WorkflowSidebar
+            workflows={workflows}
+            activeId={activeId}
+            loading={loadingList}
+            onSelect={loadIntoEditor}
+            onNew={newWorkflow}
+            onToggle={onToggleWorkflow}
+            onDelete={onDeleteWorkflow}
+          />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Check a Quote Form */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-slate-800 mb-4">Check a Quote</h2>
-            <form onSubmit={handleCheck} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Contractor Name
-                </label>
+        {/* Designer canvas */}
+        <main className="animate-rise flex flex-col gap-5">
+          {/* Meta row */}
+          <div className="glass rounded-2xl p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex-1">
                 <input
-                  type="text"
-                  value={contractor}
-                  onChange={(e) => setContractor(e.target.value)}
-                  placeholder="e.g. Acme Roofing Co."
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  value={name}
+                  onChange={(e) => { setName(e.target.value); setDirty(true); }}
+                  placeholder="Workflow name"
+                  className="ring-accent w-full rounded-lg bg-transparent px-1 py-0.5 text-2xl font-semibold tracking-tight outline-none"
+                  style={{ color: "var(--fg)" }}
+                />
+                <input
+                  value={description}
+                  onChange={(e) => { setDescription(e.target.value); setDirty(true); }}
+                  placeholder="Add a short description…"
+                  className="ring-accent mt-1 w-full rounded-lg bg-transparent px-1 py-0.5 text-sm outline-none"
+                  style={{ color: "var(--fg-muted)" }}
                 />
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Job Type <span className="text-red-500">*</span>
-                </label>
-                {loadingRanges ? (
-                  <div className="h-10 bg-slate-100 rounded-lg animate-pulse" />
-                ) : (
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+              <div className="flex items-center gap-3">
+                {(activeId || dirty) && (
+                  <span
+                    className="rounded-full px-2.5 py-1 text-[11px] font-medium"
+                    style={{
+                      background: dirty ? "var(--warn-bg)" : "var(--tok-if-bg)",
+                      color: dirty ? "var(--warn-fg)" : "var(--tok-if-fg)",
+                    }}
                   >
-                    <option value="">Select a job type...</option>
-                    {priceRanges.map((r) => (
-                      <option key={r.id} value={r.category}>{r.category}</option>
-                    ))}
-                  </select>
+                    {dirty ? "Unsaved changes" : "Saved"}
+                  </span>
                 )}
+                <button
+                  type="button"
+                  onClick={save}
+                  disabled={saving}
+                  className="ring-accent rounded-xl px-6 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:brightness-110 disabled:opacity-50"
+                  style={{ background: "var(--accent)" }}
+                >
+                  {saving ? "Saving…" : activeId ? "Update" : "Save workflow"}
+                </button>
               </div>
-
-              {selectedRange && (
-                <div className="text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2 border border-slate-200">
-                  Typical range:{" "}
-                  <span className="font-medium text-slate-700">
-                    {formatCurrency(selectedRange.low)} – {formatCurrency(selectedRange.high)}
-                  </span>{" "}
-                  {selectedRange.unit}
-                  <br />
-                  <span className="italic">{selectedRange.notes}</span>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Quoted Amount ($) <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="e.g. 8500"
-                  required
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={submitting || loadingRanges}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors"
-              >
-                {submitting ? "Checking..." : "Check This Quote"}
-              </button>
-            </form>
+            </div>
           </div>
 
-          {/* Result Panel */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 flex flex-col">
-            <h2 className="text-lg font-semibold text-slate-800 mb-4">Result</h2>
-            {activeResult ? (
-              <ResultCard result={activeResult} />
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-center py-10">
-                <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mb-3">
-                  <svg className="w-7 h-7 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <p className="text-slate-500 text-sm">Enter a quote to see if it&apos;s in range</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* History */}
-        {(loadingQuotes || quotes.length > 0) && (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-slate-800 mb-4">Quote History</h2>
-            {loadingQuotes ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-14 bg-slate-100 rounded-lg animate-pulse" />
+          {/* Starter templates (only on a blank new workflow) */}
+          {isBlank && (
+            <div className="glass rounded-2xl p-5">
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--fg-subtle)" }}>
+                Start from a template
+              </h3>
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                {STARTER_TEMPLATES.map((t) => (
+                  <button
+                    key={t.name}
+                    type="button"
+                    onClick={() => applyStarter(t.name, t.description, structuredClone(t.rule))}
+                    className="ring-accent group flex items-start gap-3 rounded-xl border p-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-md"
+                    style={{ borderColor: "var(--panel-border)", background: "var(--panel-solid)" }}
+                  >
+                    <span
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lg"
+                      style={{ background: "var(--accent-soft)" }}
+                    >
+                      {t.icon}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold" style={{ color: "var(--fg)" }}>
+                        {t.name}
+                      </span>
+                      <span className="mt-0.5 block text-xs leading-snug" style={{ color: "var(--fg-muted)" }}>
+                        {t.description}
+                      </span>
+                    </span>
+                  </button>
                 ))}
               </div>
-            ) : (
-              <div className="space-y-3">
-                {quotes.map((r) => {
-                  const styles = VERDICT_STYLES[r.verdict];
-                  return (
-                    <div
-                      key={r.id}
-                      className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg border ${styles.border} ${styles.bg}`}
-                    >
-                      <div>
-                        <p className="font-medium text-sm text-slate-800">{r.contractor}</p>
-                        <p className="text-xs text-slate-500">
-                          {r.category} · {r.priceRange.unit}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-semibold text-slate-800">
-                          {formatCurrency(r.amount)}
-                        </span>
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${styles.badge}`}>
-                          {styles.label}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
+            </div>
+          )}
+
+          {/* Rule sentence */}
+          <div className="glass rounded-2xl p-6">
+            <div className="mb-5 flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--fg-subtle)" }}>
+                Rule builder
+              </h3>
+              {ev(rule) && (
+                <span className="hidden max-w-[46ch] truncate text-xs sm:block" style={{ color: "var(--fg-subtle)" }}>
+                  {ev(rule)}
+                </span>
+              )}
+            </div>
+
+            <RuleSentence rule={rule} onChange={onRuleChange} />
+
+            {/* Live plain-English readout */}
+            <div className="mt-6 rounded-xl p-4" style={{ background: "var(--panel-solid)", border: "1px solid var(--panel-border)" }}>
+              <div className="mb-1 text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--fg-subtle)" }}>
+                Reads as
+              </div>
+              <p className="text-[15px] leading-relaxed" style={{ color: "var(--fg)" }}>
+                {summary}
+              </p>
+            </div>
+
+            {unconfirmed && (
+              <div
+                className="mt-3 flex items-start gap-2 rounded-xl px-3 py-2.5 text-xs"
+                style={{ background: "var(--warn-bg)", color: "var(--warn-fg)", border: "1px solid var(--warn-br)" }}
+              >
+                <span aria-hidden>⚠</span>
+                <span>
+                  This rule uses vocabulary that isn&apos;t yet confirmed against the live platform.
+                  It will save, but the engine may not be able to emit or execute it.
+                </span>
               </div>
             )}
           </div>
-        )}
 
-        {/* Price Reference Table */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-          <h2 className="text-lg font-semibold text-slate-800 mb-4">Price Reference Guide</h2>
-          {loadingRanges ? (
-            <div className="space-y-2">
-              {[...Array(8)].map((_, i) => (
-                <div key={i} className="h-8 bg-slate-100 rounded animate-pulse" />
-              ))}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-slate-500 border-b border-slate-200">
-                    <th className="pb-2 pr-4 font-medium">Job Type</th>
-                    <th className="pb-2 pr-4 font-medium">Low</th>
-                    <th className="pb-2 pr-4 font-medium">High</th>
-                    <th className="pb-2 font-medium hidden sm:table-cell">Unit</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {priceRanges.map((r) => (
-                    <tr key={r.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-2 pr-4 font-medium text-slate-700">{r.category}</td>
-                      <td className="py-2 pr-4 text-emerald-700">{formatCurrency(r.low)}</td>
-                      <td className="py-2 pr-4 text-slate-700">{formatCurrency(r.high)}</td>
-                      <td className="py-2 text-slate-400 text-xs hidden sm:table-cell">{r.unit}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </main>
+          {/* Chat drafting */}
+          <ChatBox onDraft={onDraftFromChat} />
 
-      <footer className="text-center text-xs text-slate-400 py-6">
-        Prices are estimates based on U.S. national averages and may vary by region. Always get multiple bids.
-      </footer>
+          {/* Rule JSON */}
+          <details className="glass rounded-2xl p-4">
+            <summary className="cursor-pointer text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--fg-subtle)" }}>
+              Rule JSON (persisted contract)
+            </summary>
+            <pre
+              className="scroll-thin mt-3 overflow-x-auto rounded-xl p-3 text-xs"
+              style={{ background: "var(--panel-solid)", color: "var(--fg-muted)", border: "1px solid var(--panel-border)" }}
+            >
+              {JSON.stringify(rule, null, 2)}
+            </pre>
+          </details>
+        </main>
+      </div>
+
+      {/* Toasts */}
+      <div className="fixed bottom-5 right-5 z-[60] flex flex-col gap-2">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className="animate-popin glass rounded-xl px-4 py-2.5 text-sm shadow-lg"
+            style={{ color: "var(--fg)", borderLeft: `3px solid ${t.kind === "ok" ? "var(--accent)" : "var(--warn-fg)"}` }}
+          >
+            {t.text}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-// ─── Result Card ──────────────────────────────────────────────────────────────
+/* ------------------------------------------------------------------ */
+/* helpers                                                             */
+/* ------------------------------------------------------------------ */
 
-function ResultCard({ result }: { result: QuoteRecord }) {
-  const styles = VERDICT_STYLES[result.verdict];
-  const { low, high, notes } = result.priceRange;
-  const barMin = low * 0.5;
-  const barMax = high * 1.5;
-  const barRange = barMax - barMin;
-  const lowPct = ((low - barMin) / barRange) * 100;
-  const highPct = ((high - barMin) / barRange) * 100;
-  const clampedAmount = Math.min(Math.max(result.amount, barMin), barMax);
-  const markerPct = ((clampedAmount - barMin) / barRange) * 100;
+let _tid = 0;
+function toastId(): number {
+  return ++_tid;
+}
+function errMsg(e: unknown, fallback: string): string {
+  return e instanceof Error ? e.message : fallback;
+}
+function ev(rule: WorkflowRule): string | undefined {
+  return getEvent(rule.event)?.blurb;
+}
 
-  return (
-    <div className={`rounded-xl border-2 ${styles.border} ${styles.bg} p-5 flex-1 flex flex-col gap-4`}>
-      <div className="flex items-start justify-between">
-        <div>
-          <p className={`text-xs font-medium uppercase tracking-wide ${styles.text} opacity-70`}>
-            {result.contractor}
-          </p>
-          <p className="text-2xl font-bold text-slate-900 mt-0.5">
-            {formatCurrency(result.amount)}
-          </p>
-          <p className="text-sm text-slate-600">{result.category}</p>
-        </div>
-        <span className={`text-sm font-semibold px-3 py-1 rounded-full ${styles.badge}`}>
-          {styles.label}
-        </span>
-      </div>
+function normalizeRule(raw: WorkflowRule | undefined): WorkflowRule {
+  if (!raw) return emptyRule();
+  return {
+    event: raw.event ?? emptyRule().event,
+    conds: Array.isArray(raw.conds) ? raw.conds : [],
+    outputs: Array.isArray(raw.outputs) ? raw.outputs : [],
+    condLogic: raw.condLogic === "OR" ? "OR" : "AND",
+  };
+}
 
-      {/* Price bar */}
-      <div>
-        <div className="relative h-5 bg-slate-200 rounded-full overflow-visible">
-          <div
-            className="absolute top-0 h-full bg-emerald-200 rounded-full"
-            style={{ left: `${lowPct}%`, width: `${highPct - lowPct}%` }}
-          />
-          <div
-            className="absolute w-4 h-4 rounded-full border-2 border-white shadow-md bg-indigo-600"
-            style={{ left: `${markerPct}%`, top: "50%", transform: "translate(-50%, -50%)" }}
-          />
-        </div>
-        <div className="flex justify-between text-xs text-slate-500 mt-1">
-          <span>{formatCurrency(low)}</span>
-          <span className="text-slate-400">typical range</span>
-          <span>{formatCurrency(high)}</span>
-        </div>
-      </div>
-
-      <p className={`text-sm ${styles.text}`}>{result.message}</p>
-
-      <div className="text-xs text-slate-500 italic border-t border-slate-200 pt-3">
-        {notes}
-      </div>
-    </div>
-  );
+function plainSummary(rule: WorkflowRule): string {
+  const evLabel = getEvent(rule.event)?.label ?? rule.event;
+  let s = `When ${evLabel} fires`;
+  if (rule.conds.length) {
+    const parts = rule.conds.map((c) => {
+      const field = FIELDS[c.field];
+      const label = field?.label ?? c.field;
+      const op = opLabel(field?.kind ?? "text", c.operator);
+      let val = c.value || "…";
+      if (field?.kind === "numeric" && c.value && !isNaN(Number(c.value))) {
+        val = `${field.unit ?? ""}${Number(c.value).toLocaleString("en-US")}`;
+      }
+      return `${label} ${op} ${val}`;
+    });
+    s += ` and ${parts.join(` ${rule.condLogic.toLowerCase()} `)}`;
+  }
+  if (rule.outputs.length) {
+    const parts = rule.outputs.map((o) => {
+      const action = getAction(o.action);
+      const label = action?.label ?? o.action;
+      if (action?.paramKind === "none") return label;
+      const val = o.params[paramKeyFor(o.action)] || "…";
+      return `${label} ${val}`;
+    });
+    s += `, then ${parts.join(" and ")}`;
+  } else {
+    s += ", then … (add an action)";
+  }
+  return s + ".";
 }

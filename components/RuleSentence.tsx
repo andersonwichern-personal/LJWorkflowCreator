@@ -129,36 +129,49 @@ export default function RuleSentence({ rule, onChange }: RuleSentenceProps) {
     setAnchor(null);
   }
 
+  // Convenience accessors into the versioned (v2) rule shape.
+  const eventKey = rule.trigger.event;
+  const conds = rule.conditions.rules;
+  const logic = rule.conditions.logic;
+  const actions = rule.actions;
+
   /* ---- mutators ---- */
-  function setEvent(eventKey: string) {
-    const allowed = new Set(allowedFieldsForEvent(eventKey).map((f) => f.key));
-    onChange({ ...rule, event: eventKey, conds: rule.conds.filter((c) => allowed.has(c.field)) });
+  function setEvent(newEvent: string) {
+    const allowed = new Set(allowedFieldsForEvent(newEvent).map((f) => f.key));
+    onChange({
+      ...rule,
+      trigger: { event: newEvent },
+      conditions: { ...rule.conditions, rules: conds.filter((c) => allowed.has(c.field)) },
+    });
   }
   function addCondition(fieldKey: string) {
     const field = FIELDS[fieldKey];
     onChange({
       ...rule,
-      conds: [...rule.conds, { field: fieldKey, operator: OPERATORS[field.kind][0].value, value: defaultValueFor(field) }],
+      conditions: {
+        ...rule.conditions,
+        rules: [...conds, { field: fieldKey, operator: OPERATORS[field.kind][0].value, value: defaultValueFor(field) }],
+      },
     });
   }
   function updateCond(i: number, patch: Partial<RuleCondition>) {
-    onChange({ ...rule, conds: rule.conds.map((c, idx) => (idx === i ? { ...c, ...patch } : c)) });
+    onChange({ ...rule, conditions: { ...rule.conditions, rules: conds.map((c, idx) => (idx === i ? { ...c, ...patch } : c)) } });
   }
   function removeCond(i: number) {
-    onChange({ ...rule, conds: rule.conds.filter((_, idx) => idx !== i) });
+    onChange({ ...rule, conditions: { ...rule.conditions, rules: conds.filter((_, idx) => idx !== i) } });
   }
   function toggleLogic() {
-    onChange({ ...rule, condLogic: rule.condLogic === "AND" ? "OR" : "AND" });
+    onChange({ ...rule, conditions: { ...rule.conditions, logic: logic === "AND" ? "OR" : "AND" } });
   }
   function addAction(actionKey: string) {
     const action = getAction(actionKey)!;
-    onChange({ ...rule, outputs: [...rule.outputs, { action: actionKey, params: defaultParamFor(action) }] });
+    onChange({ ...rule, actions: [...actions, { action: actionKey, params: defaultParamFor(action) }] });
   }
   function updateAction(i: number, patch: Partial<RuleOutput>) {
-    onChange({ ...rule, outputs: rule.outputs.map((o, idx) => (idx === i ? { ...o, ...patch } : o)) });
+    onChange({ ...rule, actions: actions.map((o, idx) => (idx === i ? { ...o, ...patch } : o)) });
   }
   function removeAction(i: number) {
-    onChange({ ...rule, outputs: rule.outputs.filter((_, idx) => idx !== i) });
+    onChange({ ...rule, actions: actions.filter((_, idx) => idx !== i) });
   }
 
   /* ---- option builders ---- */
@@ -168,7 +181,7 @@ export default function RuleSentence({ rule, onChange }: RuleSentenceProps) {
     confidence: e.confidence,
     hint: e.blurb,
   }));
-  const fieldOptions = fieldOptionsFor(rule.event);
+  const fieldOptions = fieldOptionsFor(eventKey);
   const actionOptions: PickerOption[] = ACTIONS.map((a) => ({
     value: a.key,
     label: a.label,
@@ -176,7 +189,7 @@ export default function RuleSentence({ rule, onChange }: RuleSentenceProps) {
     hint: a.blurb,
   }));
 
-  const ev = getEvent(rule.event);
+  const ev = getEvent(eventKey);
 
   return (
     <div className="relative">
@@ -188,14 +201,14 @@ export default function RuleSentence({ rule, onChange }: RuleSentenceProps) {
         </Pill>
 
         {/* IF */}
-        {rule.conds.length > 0 && <Word>If</Word>}
-        {rule.conds.map((c, i) => {
+        {conds.length > 0 && <Word>If</Word>}
+        {conds.map((c, i) => {
           const field = FIELDS[c.field];
           return (
             <span key={i} className="inline-flex flex-wrap items-center gap-2">
               {i > 0 && (
                 <Pill palette="op" onClick={() => toggleLogic()}>
-                  {rule.condLogic}
+                  {logic}
                 </Pill>
               )}
               <span className="inline-flex items-center gap-1.5 rounded-full border px-1 py-0.5" style={{ borderColor: "var(--tok-if-br)" }}>
@@ -227,12 +240,12 @@ export default function RuleSentence({ rule, onChange }: RuleSentenceProps) {
           );
         })}
         <Pill palette="if" dashed onClick={(el) => openPicker({ kind: "add-cond" }, el)}>
-          {rule.conds.length ? "+ and" : "+ add condition"}
+          {conds.length ? "+ and" : "+ add condition"}
         </Pill>
 
         {/* THEN */}
         <Word>Then</Word>
-        {rule.outputs.map((o, i) => {
+        {actions.map((o, i) => {
           const action = getAction(o.action);
           const key = paramKeyFor(o.action);
           const paramVal = o.params[key] ?? "";
@@ -262,17 +275,17 @@ export default function RuleSentence({ rule, onChange }: RuleSentenceProps) {
           );
         })}
         <Pill palette="then" dashed onClick={(el) => openPicker({ kind: "add-action" }, el)}>
-          {rule.outputs.length ? "+ action" : "+ add action"}
+          {actions.length ? "+ action" : "+ add action"}
         </Pill>
       </div>
 
       {/* Pickers */}
       {open?.kind === "event" && (
-        <TokenPicker anchor={anchor} title="Trigger event" options={eventOptions} value={rule.event} onSelect={(v) => { setEvent(v); close(); }} onClose={close} />
+        <TokenPicker anchor={anchor} title="Trigger event" options={eventOptions} value={eventKey} onSelect={(v) => { setEvent(v); close(); }} onClose={close} />
       )}
 
       {open?.kind === "add-cond" && (
-        <TokenPicker anchor={anchor} title={`Conditions for ${rule.event}`} options={fieldOptions} onSelect={(v) => { addCondition(v); close(); }} onClose={close} />
+        <TokenPicker anchor={anchor} title={`Conditions for ${eventKey}`} options={fieldOptions} onSelect={(v) => { addCondition(v); close(); }} onClose={close} />
       )}
 
       {open?.kind === "cond-field" && (
@@ -280,7 +293,7 @@ export default function RuleSentence({ rule, onChange }: RuleSentenceProps) {
           anchor={anchor}
           title="Condition field"
           options={fieldOptions}
-          value={rule.conds[open.i]?.field}
+          value={conds[open.i]?.field}
           onSelect={(v) => {
             const field = FIELDS[v];
             updateCond(open.i, { field: v, operator: OPERATORS[field.kind][0].value, value: defaultValueFor(field) });
@@ -292,16 +305,16 @@ export default function RuleSentence({ rule, onChange }: RuleSentenceProps) {
 
       {open?.kind === "cond-op" &&
         (() => {
-          const field = FIELDS[rule.conds[open.i]?.field];
+          const field = FIELDS[conds[open.i]?.field];
           const opts: PickerOption[] = OPERATORS[field?.kind ?? "text"].map((o) => ({ value: o.value, label: o.label }));
           return (
-            <TokenPicker anchor={anchor} title="Operator" options={opts} value={rule.conds[open.i]?.operator} onSelect={(v) => { updateCond(open.i, { operator: v }); close(); }} onClose={close} />
+            <TokenPicker anchor={anchor} title="Operator" options={opts} value={conds[open.i]?.operator} onSelect={(v) => { updateCond(open.i, { operator: v }); close(); }} onClose={close} />
           );
         })()}
 
       {open?.kind === "cond-value" &&
         (() => {
-          const cond = rule.conds[open.i];
+          const cond = conds[open.i];
           const field = FIELDS[cond?.field];
           const isEnum = field?.kind === "enum";
           const isNum = field?.kind === "numeric";
@@ -328,7 +341,7 @@ export default function RuleSentence({ rule, onChange }: RuleSentenceProps) {
           anchor={anchor}
           title="Action"
           options={actionOptions}
-          value={rule.outputs[open.i]?.action}
+          value={actions[open.i]?.action}
           onSelect={(v) => { const action = getAction(v)!; updateAction(open.i, { action: v, params: defaultParamFor(action) }); close(); }}
           onClose={close}
         />
@@ -340,7 +353,7 @@ export default function RuleSentence({ rule, onChange }: RuleSentenceProps) {
 
       {open?.kind === "action-param" &&
         (() => {
-          const output = rule.outputs[open.i];
+          const output = actions[open.i];
           const action = getAction(output?.action);
           const isEnum = action?.paramKind === "enum";
           const opts: PickerOption[] = (action?.paramOptions ?? []).map((o) => ({ value: o, label: o }));

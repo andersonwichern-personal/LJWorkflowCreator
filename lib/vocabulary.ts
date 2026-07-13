@@ -542,21 +542,78 @@ export interface RuleOutput {
 
 export type CondLogic = "AND" | "OR";
 
+/**
+ * Versioned, live-compatible rule schema (v2).
+ *
+ * The nested `trigger` / `conditions` / `actions` structure leaves room to store
+ * stable platform references (template/field IDs) in production instead of
+ * hard-coding the mockup shape. Legacy `{ event, conds, outputs, condLogic }`
+ * records persisted before this migration are upgraded on read by normalizeRule().
+ */
+export const RULE_SCHEMA_VERSION = 2;
+
 export interface WorkflowRule {
-  event: string;
-  conds: RuleCondition[];
-  outputs: RuleOutput[];
-  condLogic: CondLogic;
+  schemaVersion: number;
+  trigger: {
+    event: string;
+  };
+  conditions: {
+    logic: CondLogic;
+    rules: RuleCondition[];
+  };
+  actions: RuleOutput[];
 }
 
 export function emptyRule(): WorkflowRule {
-  return { event: EVENTS[0].key, conds: [], outputs: [], condLogic: "AND" };
+  return {
+    schemaVersion: RULE_SCHEMA_VERSION,
+    trigger: { event: EVENTS[0].key },
+    conditions: { logic: "AND", rules: [] },
+    actions: [],
+  };
+}
+
+/**
+ * Coerce any persisted rule JSON — legacy mockup shape or versioned v2 — into a
+ * well-formed v2 WorkflowRule. Safe to call on API results and builder state.
+ */
+export function normalizeRule(raw: unknown): WorkflowRule {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const fallback = emptyRule();
+
+  // Prefer v2 nested fields, then fall back to legacy flat fields.
+  const trigger = r.trigger as { event?: string } | undefined;
+  const conditions = r.conditions as { logic?: string; rules?: unknown } | undefined;
+
+  const event = trigger?.event ?? (r.event as string | undefined) ?? fallback.trigger.event;
+
+  const logicRaw = conditions?.logic ?? (r.condLogic as string | undefined);
+  const logic: CondLogic = logicRaw === "OR" ? "OR" : "AND";
+
+  const rulesSrc = Array.isArray(conditions?.rules)
+    ? (conditions!.rules as RuleCondition[])
+    : Array.isArray(r.conds)
+    ? (r.conds as RuleCondition[])
+    : [];
+
+  const actions = Array.isArray(r.actions)
+    ? (r.actions as RuleOutput[])
+    : Array.isArray(r.outputs)
+    ? (r.outputs as RuleOutput[])
+    : [];
+
+  return {
+    schemaVersion: RULE_SCHEMA_VERSION,
+    trigger: { event },
+    conditions: { logic, rules: rulesSrc },
+    actions,
+  };
 }
 
 export function ruleUsesUnconfirmed(rule: WorkflowRule): boolean {
-  if (getEvent(rule.event)?.confidence === "unconfirmed") return true;
-  if (rule.conds.some((c) => FIELDS[c.field]?.confidence === "unconfirmed")) return true;
-  if (rule.outputs.some((o) => getAction(o.action)?.confidence === "unconfirmed")) return true;
+  if (getEvent(rule.trigger.event)?.confidence === "unconfirmed") return true;
+  if (rule.conditions.rules.some((c) => FIELDS[c.field]?.confidence === "unconfirmed")) return true;
+  if (rule.actions.some((o) => getAction(o.action)?.confidence === "unconfirmed")) return true;
   return false;
 }
 
@@ -590,10 +647,10 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
     description: "When a booking hits an error, hand it to the escalation team.",
     icon: "🚨",
     rule: {
-      event: "SYSTEM ERROR",
-      conds: [{ field: "bookstatus", operator: "is", value: "Error" }],
-      outputs: [{ action: "assign_user", params: { assignee: "Escalation Team" } }],
-      condLogic: "AND",
+      schemaVersion: RULE_SCHEMA_VERSION,
+      trigger: { event: "SYSTEM ERROR" },
+      conditions: { logic: "AND", rules: [{ field: "bookstatus", operator: "is", value: "Error" }] },
+      actions: [{ action: "assign_user", params: { assignee: "Escalation Team" } }],
     },
   },
   {
@@ -601,10 +658,10 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
     description: "Route freshly approved loans to the underwriting team.",
     icon: "✅",
     rule: {
-      event: "LOAN APPROVED",
-      conds: [{ field: "uwstatus", operator: "is", value: "Approved" }],
-      outputs: [{ action: "assign_user", params: { assignee: "Underwriting Team" } }],
-      condLogic: "AND",
+      schemaVersion: RULE_SCHEMA_VERSION,
+      trigger: { event: "LOAN APPROVED" },
+      conditions: { logic: "AND", rules: [{ field: "uwstatus", operator: "is", value: "Approved" }] },
+      actions: [{ action: "assign_user", params: { assignee: "Underwriting Team" } }],
     },
   },
   {
@@ -612,10 +669,10 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
     description: "Send high-value approvals to a senior reviewer.",
     icon: "💰",
     rule: {
-      event: "LOAN APPROVED",
-      conds: [{ field: "loan_amount", operator: "gte", value: "250000" }],
-      outputs: [{ action: "assign_user", params: { assignee: "Wael" } }],
-      condLogic: "AND",
+      schemaVersion: RULE_SCHEMA_VERSION,
+      trigger: { event: "LOAN APPROVED" },
+      conditions: { logic: "AND", rules: [{ field: "loan_amount", operator: "gte", value: "250000" }] },
+      actions: [{ action: "assign_user", params: { assignee: "Wael" } }],
     },
   },
   {
@@ -623,13 +680,13 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
     description: "Flag failed Fiserv bookings and tag them for follow-up.",
     icon: "🏦",
     rule: {
-      event: "FISERV LOAN",
-      conds: [{ field: "bookstatus", operator: "is", value: "Error" }],
-      outputs: [
+      schemaVersion: RULE_SCHEMA_VERSION,
+      trigger: { event: "FISERV LOAN" },
+      conditions: { logic: "AND", rules: [{ field: "bookstatus", operator: "is", value: "Error" }] },
+      actions: [
         { action: "assign_user", params: { assignee: "Booking Team" } },
         { action: "add_tag", params: { value: "booking-failed" } },
       ],
-      condLogic: "AND",
     },
   },
 ];

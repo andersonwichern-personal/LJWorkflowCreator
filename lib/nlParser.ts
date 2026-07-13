@@ -234,5 +234,13 @@ export function parseInstruction(input: string): ParseResult {
     notes.push('No action matched. Add one like "assign to Wael".');
   }
 
-  return { rule: { event: eventKey, conds, outputs, condLogic }, notes };
+  return {
+    rule: {
+      schemaVersion: 2,
+      trigger: { event: eventKey },
+      conditions: { logic: condLogic, rules: conds },
+      actions: outputs,
+    },
+    notes,
+  };
 }

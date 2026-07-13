@@ -98,10 +98,11 @@ export function requestMatchesEvent(r: PlatformRequest, eventKey: string): boole
 
 /** Evaluate a full rule (event + conditions) against a request. */
 export function evaluateRule(rule: WorkflowRule, r: PlatformRequest): boolean {
-  if (!requestMatchesEvent(r, rule.event)) return false;
-  if (rule.conds.length === 0) return true;
-  const results = rule.conds.map((c) => evalCondition(r, c));
-  return rule.condLogic === "OR" ? results.some(Boolean) : results.every(Boolean);
+  if (!requestMatchesEvent(r, rule.trigger.event)) return false;
+  const conds = rule.conditions.rules;
+  if (conds.length === 0) return true;
+  const results = conds.map((c) => evalCondition(r, c));
+  return rule.conditions.logic === "OR" ? results.some(Boolean) : results.every(Boolean);
 }
 
 /** All demo requests a rule would match right now. */
@@ -118,14 +119,14 @@ export function workflowsForRequest(r: PlatformRequest, workflows: WorkflowRecor
 export function workflowsForEvent(evt: SystemEvent, workflows: WorkflowRecord[]): WorkflowRecord[] {
   const req = REQUESTS.find((r) => r.id === evt.requestId);
   return workflows.filter((w) => {
-    if (!w.enabled || w.ruleJson.event !== evt.type) return false;
-    return req ? evaluateRule(w.ruleJson, req) : w.ruleJson.conds.length === 0;
+    if (!w.enabled || w.ruleJson.trigger.event !== evt.type) return false;
+    return req ? evaluateRule(w.ruleJson, req) : w.ruleJson.conditions.rules.length === 0;
   });
 }
 
 /** Human-readable list of the actions a rule would perform. */
 export function describeActions(rule: WorkflowRule): string[] {
-  return rule.outputs.map((o) => {
+  return rule.actions.map((o) => {
     const action = getAction(o.action);
     const label = action?.label ?? o.action;
     if (action?.paramKind === "none") return label;

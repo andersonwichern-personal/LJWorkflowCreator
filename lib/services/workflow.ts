@@ -74,9 +74,18 @@ export class WorkflowService {
       throw new Error("Workflow rule JSON is required");
     }
 
-    // Validate the minimum structure of the rule JSON
+    // Validate the minimum structure of the rule JSON.
+    // Supports both the versioned live schema (v2) and the legacy mockup shape.
     const rule = data.ruleJson as any;
-    if (!rule.event || !Array.isArray(rule.conds) || !Array.isArray(rule.outputs)) {
+    const isNewSchema = rule.schemaVersion !== undefined;
+    if (isNewSchema) {
+      if (!rule.trigger?.event || !rule.conditions?.rules || !Array.isArray(rule.actions)) {
+        throw new Error(
+          "Invalid rule JSON structure (v2). Must contain 'schemaVersion', " +
+          "'trigger.event', 'conditions.rules', and 'actions'."
+        );
+      }
+    } else if (!rule.event || !Array.isArray(rule.conds) || !Array.isArray(rule.outputs)) {
       throw new Error(
         "Invalid rule JSON structure. Must contain 'event' (string), " +
         "'conds' (array), and 'outputs' (array)."
@@ -141,11 +150,21 @@ export class WorkflowService {
 
     if (updates.ruleJson !== undefined) {
       const rule = updates.ruleJson as any;
-      if (rule && (!rule.event || !Array.isArray(rule.conds) || !Array.isArray(rule.outputs))) {
-        throw new Error(
-          "Invalid rule JSON structure. Must contain 'event' (string), " +
-          "'conds' (array), and 'outputs' (array)."
-        );
+      if (rule) {
+        const isNewSchema = rule.schemaVersion !== undefined;
+        if (isNewSchema) {
+          if (!rule.trigger?.event || !rule.conditions?.rules || !Array.isArray(rule.actions)) {
+            throw new Error(
+              "Invalid rule JSON structure (v2). Must contain 'schemaVersion', " +
+              "'trigger.event', 'conditions.rules', and 'actions'."
+            );
+          }
+        } else if (!rule.event || !Array.isArray(rule.conds) || !Array.isArray(rule.outputs)) {
+          throw new Error(
+            "Invalid rule JSON structure. Must contain 'event' (string), " +
+            "'conds' (array), and 'outputs' (array)."
+          );
+        }
       }
       data.ruleJson = rule as Prisma.InputJsonValue;
     }

@@ -3,7 +3,7 @@
  * Overseer). Uses a fixed tenant context for the demo, per the UI prompt.
  */
 
-import { WorkflowRule } from "./vocabulary";
+import { WorkflowRule, normalizeRule } from "./vocabulary";
 
 /** Fixed demo tenant. Real app derives org_id from the authed session / JWT. */
 export const DEMO_ORG_ID = "test-org-uuid-999";
@@ -33,11 +33,16 @@ async function handle<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** Upgrade a record's rule JSON to the versioned v2 schema (handles legacy rows). */
+function normalizeRecord(rec: WorkflowRecord): WorkflowRecord {
+  return { ...rec, ruleJson: normalizeRule(rec.ruleJson) };
+}
+
 export async function listWorkflows(): Promise<WorkflowRecord[]> {
   const res = await fetch(`/api/workflows?orgId=${encodeURIComponent(DEMO_ORG_ID)}`, {
     cache: "no-store",
   });
-  return handle<WorkflowRecord[]>(res);
+  return (await handle<WorkflowRecord[]>(res)).map(normalizeRecord);
 }
 
 export async function createWorkflow(input: {
@@ -51,7 +56,7 @@ export async function createWorkflow(input: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ orgId: DEMO_ORG_ID, ...input }),
   });
-  return handle<WorkflowRecord>(res);
+  return normalizeRecord(await handle<WorkflowRecord>(res));
 }
 
 export async function updateWorkflow(
@@ -68,7 +73,7 @@ export async function updateWorkflow(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(updates),
   });
-  return handle<WorkflowRecord>(res);
+  return normalizeRecord(await handle<WorkflowRecord>(res));
 }
 
 export async function toggleWorkflow(id: string, enabled: boolean): Promise<WorkflowRecord> {

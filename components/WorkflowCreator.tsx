@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   WorkflowRule,
   emptyRule,
+  normalizeRule,
   ruleUsesUnconfirmed,
   getEvent,
   getAction,
@@ -103,7 +104,7 @@ export default function WorkflowCreator() {
 
   async function save() {
     if (!name.trim()) return pushToast("err", "Give the workflow a name first.");
-    if (rule.outputs.length === 0) return pushToast("err", "Add at least one action (THEN) before saving.");
+    if (rule.actions.length === 0) return pushToast("err", "Add at least one action (THEN) before saving.");
     setSaving(true);
     try {
       if (activeId) {
@@ -160,7 +161,7 @@ export default function WorkflowCreator() {
   const summary = useMemo(() => plainSummary(rule), [rule]);
   const unconfirmed = useMemo(() => ruleUsesUnconfirmed(rule), [rule]);
   const enabledCount = workflows.filter((w) => w.enabled).length;
-  const isBlank = !activeId && rule.conds.length === 0 && rule.outputs.length === 0;
+  const isBlank = !activeId && rule.conditions.rules.length === 0 && rule.actions.length === 0;
 
   return (
     <div>
@@ -269,9 +270,9 @@ export default function WorkflowCreator() {
               <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--fg-subtle)" }}>
                 Rule builder
               </h3>
-              {getEvent(rule.event)?.blurb && (
+              {getEvent(rule.trigger.event)?.blurb && (
                 <span className="hidden max-w-[46ch] truncate text-xs sm:block" style={{ color: "var(--fg-subtle)" }}>
-                  {getEvent(rule.event)?.blurb}
+                  {getEvent(rule.trigger.event)?.blurb}
                 </span>
               )}
             </div>
@@ -340,20 +341,12 @@ function toastId(): number {
 function errMsg(e: unknown, fallback: string): string {
   return e instanceof Error ? e.message : fallback;
 }
-function normalizeRule(raw: WorkflowRule | undefined): WorkflowRule {
-  if (!raw) return emptyRule();
-  return {
-    event: raw.event ?? emptyRule().event,
-    conds: Array.isArray(raw.conds) ? raw.conds : [],
-    outputs: Array.isArray(raw.outputs) ? raw.outputs : [],
-    condLogic: raw.condLogic === "OR" ? "OR" : "AND",
-  };
-}
 function plainSummary(rule: WorkflowRule): string {
-  const evLabel = getEvent(rule.event)?.label ?? rule.event;
+  const evLabel = getEvent(rule.trigger.event)?.label ?? rule.trigger.event;
   let s = `When ${evLabel} fires`;
-  if (rule.conds.length) {
-    const parts = rule.conds.map((c) => {
+  const conds = rule.conditions.rules;
+  if (conds.length) {
+    const parts = conds.map((c) => {
       const field = FIELDS[c.field];
       const label = field?.label ?? c.field;
       const op = opLabel(field?.kind ?? "text", c.operator);
@@ -363,10 +356,10 @@ function plainSummary(rule: WorkflowRule): string {
       }
       return `${label} ${op} ${val}`;
     });
-    s += ` and ${parts.join(` ${rule.condLogic.toLowerCase()} `)}`;
+    s += ` and ${parts.join(` ${rule.conditions.logic.toLowerCase()} `)}`;
   }
-  if (rule.outputs.length) {
-    const parts = rule.outputs.map((o) => {
+  if (rule.actions.length) {
+    const parts = rule.actions.map((o) => {
       const action = getAction(o.action);
       const label = action?.label ?? o.action;
       if (action?.paramKind === "none") return label;

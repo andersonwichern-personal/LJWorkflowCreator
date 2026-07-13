@@ -57,7 +57,7 @@ export default function WorkflowSidebar({
 
         {workflows.map((wf) => {
           const active = wf.id === activeId;
-          const ev = getEvent(wf.ruleJson?.event);
+          const ev = getEvent(wf.ruleJson?.trigger?.event);
           return (
             <div
               key={wf.id}
@@ -80,7 +80,7 @@ export default function WorkflowSidebar({
                     className="mt-0.5 truncate text-[11px] uppercase tracking-wide"
                     style={{ color: "var(--fg-subtle)" }}
                   >
-                    {ev?.label ?? wf.ruleJson?.event ?? "—"}
+                    {ev?.label ?? wf.ruleJson?.trigger?.event ?? "—"}
                   </div>
                 </div>
                 <div onClick={(e) => e.stopPropagation()}>

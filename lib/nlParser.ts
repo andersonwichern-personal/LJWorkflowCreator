@@ -17,6 +17,7 @@ import {
   CondLogic,
   opLabel,
   paramKeyFor,
+  RULE_SCHEMA_VERSION,
 } from "./vocabulary";
 
 export interface ParseResult {
@@ -236,7 +237,7 @@ export function parseInstruction(input: string): ParseResult {
 
   return {
     rule: {
-      schemaVersion: 2,
+      schemaVersion: RULE_SCHEMA_VERSION,
       trigger: { event: eventKey },
       conditions: { logic: condLogic, rules: conds },
       actions: outputs,

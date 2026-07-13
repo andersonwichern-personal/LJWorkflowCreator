@@ -2,26 +2,11 @@ import { prisma } from "@/lib/prisma";
 import { Workflow, Prisma } from "@prisma/client";
 
 /**
- * TypeScript interface representing the rule JSON structure contract
- * as defined in the Workflow Creator Foundation Brief.
- * A rule is structured as: event → conditions → outputs.
+ * The versioned rule JSON contract lives in `@/lib/vocabulary` (the single
+ * source of truth). The service treats `ruleJson` as opaque JSON and validates
+ * its structure at runtime (supporting both the v2 and legacy shapes), so it
+ * intentionally does not re-declare the rule type here.
  */
-export interface RuleCondition {
-  field: string;
-  operator: string;
-  value: any;
-}
-
-export interface RuleOutput {
-  action: string;
-  params: Record<string, any>;
-}
-
-export interface WorkflowRule {
-  event: string;
-  conds: RuleCondition[];
-  outputs: RuleOutput[];
-}
 
 export class WorkflowService {
   /**
@@ -61,7 +46,7 @@ export class WorkflowService {
     orgId: string;
     name: string;
     description?: string;
-    ruleJson: WorkflowRule | Prisma.InputJsonValue;
+    ruleJson: Prisma.InputJsonValue;
     enabled?: boolean;
   }): Promise<Workflow> {
     if (!data.orgId) {
@@ -79,7 +64,7 @@ export class WorkflowService {
     const rule = data.ruleJson as any;
     const isNewSchema = rule.schemaVersion !== undefined;
     if (isNewSchema) {
-      if (!rule.trigger?.event || !rule.conditions?.rules || !Array.isArray(rule.actions)) {
+      if (!rule.trigger?.event || !Array.isArray(rule.conditions?.rules) || !Array.isArray(rule.actions)) {
         throw new Error(
           "Invalid rule JSON structure (v2). Must contain 'schemaVersion', " +
           "'trigger.event', 'conditions.rules', and 'actions'."
@@ -113,7 +98,7 @@ export class WorkflowService {
       name: string;
       description: string | null;
       enabled: boolean;
-      ruleJson: WorkflowRule | Prisma.InputJsonValue;
+      ruleJson: Prisma.InputJsonValue;
     }>
   ): Promise<Workflow> {
     if (!id) {
@@ -153,7 +138,7 @@ export class WorkflowService {
       if (rule) {
         const isNewSchema = rule.schemaVersion !== undefined;
         if (isNewSchema) {
-          if (!rule.trigger?.event || !rule.conditions?.rules || !Array.isArray(rule.actions)) {
+          if (!rule.trigger?.event || !Array.isArray(rule.conditions?.rules) || !Array.isArray(rule.actions)) {
             throw new Error(
               "Invalid rule JSON structure (v2). Must contain 'schemaVersion', " +
               "'trigger.event', 'conditions.rules', and 'actions'."

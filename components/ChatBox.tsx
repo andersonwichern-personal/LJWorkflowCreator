@@ -1,15 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import {
-  parseInstruction,
-  ParseAmbiguity,
-  ParseOptions,
-  UnresolvedSlot,
-} from "@/lib/nlParser";
+import { ParseAmbiguity, ParseOptions, UnresolvedSlot } from "@/lib/nlParser";
 import { WorkflowRule } from "@/lib/vocabulary";
 
-/** Parser honesty sidecar handed to the canvas along with the draft. */
 export interface ChatDraftMeta {
   unresolved: UnresolvedSlot[];
   uncovered: string[];
@@ -17,11 +11,9 @@ export interface ChatDraftMeta {
 
 interface ChatBoxProps {
   onDraft: (rule: WorkflowRule, meta: ChatDraftMeta) => void;
-  /** Live option lists so the parser resolves against real vocabulary. */
   parserOptions?: Omit<ParseOptions, "forceEvent">;
 }
 
-/** Full instruction fed to the parser, plus a short pill label for the UI. */
 const EXAMPLES: { label: string; text: string }[] = [
   { label: "System error → assign Wael", text: "If there is a system error and booking status is Error, assign to Wael" },
   { label: "Loan ≥ 250k → Underwriting", text: "When a loan is approved and loan amount is at least 250k, assign to Underwriting Team" },
@@ -29,25 +21,42 @@ const EXAMPLES: { label: string; text: string }[] = [
   { label: "Rejected → close stage", text: "When a loan is rejected, change stage to Closed" },
 ];
 
-/**
- * Plain-language input that drafts the same WHEN/IF/THEN rule object the token
- * builder edits. Deterministic parse (no LLM) so the demo path never surprises.
- */
-export default function ChatBox({ onDraft, parserOptions }: ChatBoxProps) {
+export default function ChatBox({ onDraft }: ChatBoxProps) {
   const [input, setInput] = useState("");
   const [notes, setNotes] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [uncovered, setUncovered] = useState<string[]>([]);
   const [ambiguities, setAmbiguities] = useState<ParseAmbiguity[]>([]);
   const [lastText, setLastText] = useState("");
+  const [engine, setEngine] = useState<"gemini" | "heuristic">("heuristic");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function run(text: string, forceEvent?: string) {
-    const result = parseInstruction(text, { ...parserOptions, forceEvent });
-    setLastText(text);
-    setNotes(result.notes);
-    setUncovered(result.uncovered);
-    setAmbiguities(result.ambiguities);
-    if (result.rule) {
-      onDraft(result.rule, { unresolved: result.unresolved, uncovered: result.uncovered });
+  async function run(text: string, forceEvent?: string) {
+    if (!text.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/workflows/parse-ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instruction: text, forceEvent }),
+      });
+      if (!res.ok) throw new Error("Parsing failed");
+      const data = await res.json();
+      setLastText(text);
+      setNotes(data.notes || []);
+      setSuggestions(data.suggestions || []);
+      setUncovered(data.uncovered || []);
+      setAmbiguities(data.ambiguities || []);
+      setEngine(data.engine || "heuristic");
+      if (data.rule) {
+        onDraft(data.rule, { unresolved: data.unresolved || [], uncovered: data.uncovered || [] });
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Parsing error");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -61,8 +70,28 @@ export default function ChatBox({ onDraft, parserOptions }: ChatBoxProps) {
         How can I help, Anderson?
       </h2>
 
+      {/* Suggestion refinement chips */}
+      {suggestions.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-2 justify-center animate-fade-in">
+          {suggestions.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => {
+                setInput(s);
+                run(s);
+              }}
+              className="ring-accent rounded-full border px-3 py-1.5 text-xs font-semibold transition-all duration-150 hover:-translate-y-px hover:shadow-sm"
+              style={{ background: "var(--accent-soft)", color: "var(--accent)", borderColor: "var(--accent-soft)" }}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Focal input pill */}
-      <div className="command-bar flex items-center gap-3 rounded-full py-2.5 pl-6 pr-2.5">
+      <div className="command-bar flex items-center gap-3 rounded-full py-2.5 pl-6 pr-2.5 relative">
         <span aria-hidden style={{ color: "var(--fg-subtle)" }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M12 5v14M5 12h14" />
@@ -80,19 +109,17 @@ export default function ChatBox({ onDraft, parserOptions }: ChatBoxProps) {
           rows={1}
           aria-label="Describe your rule in plain English"
           placeholder="Describe your rule in plain English…"
+          disabled={loading}
           className="scroll-thin w-full resize-none bg-transparent py-2 text-base outline-none placeholder:text-[var(--fg-subtle)] sm:text-lg"
           style={{ color: "var(--fg)" }}
         />
-        <span aria-hidden className="shrink-0" style={{ color: "var(--fg-subtle)" }}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="9" y="3" width="6" height="11" rx="3" />
-            <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
-          </svg>
-        </span>
+        {loading && (
+          <div className="animate-spin rounded-full h-5 w-5 border-2 border-t-transparent mr-2" style={{ borderColor: "var(--accent)" }} />
+        )}
         <button
           type="button"
           onClick={() => run(input)}
-          disabled={!input.trim()}
+          disabled={!input.trim() || loading}
           aria-label="Draft workflow"
           className="ring-accent flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-sm transition-all duration-150 hover:brightness-110 disabled:opacity-40"
           style={{ background: "var(--accent)" }}
@@ -103,7 +130,35 @@ export default function ChatBox({ onDraft, parserOptions }: ChatBoxProps) {
         </button>
       </div>
 
-      {/* N2: a partial parse must LOOK partial — amber, prominent, per fragment */}
+      {/* Engine and Status indicators */}
+      <div className="mt-2 flex items-center justify-between px-4 text-xs">
+        <div className="flex items-center gap-1.5 font-medium">
+          {engine === "gemini" ? (
+            <span
+              className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400"
+              title="Smart context-aware Gemini LLM parsing is active"
+            >
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              AI Engine: Gemini LLM
+            </span>
+          ) : (
+            <span
+              className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 cursor-help"
+              title="Add GEMINI_API_KEY to your .env.local file to enable dynamic LLM parsing."
+            >
+              <span className="h-2 w-2 rounded-full bg-amber-500" />
+              AI Engine: Heuristic Fallback
+            </span>
+          )}
+        </div>
+        {error && (
+          <span className="text-red-500 font-medium">
+            Error: {error}
+          </span>
+        )}
+      </div>
+
+      {/* N2: a partial parse must LOOK partial */}
       {uncovered.map((frag, i) => (
         <div
           key={i}

@@ -88,6 +88,7 @@ export function buildOverlay(v: VocabularySource | null): VocabOverlay | null {
   if (v.templates.length) {
     fieldOptions.stage = stages;
     fieldOptions.reqtype = reqTypes;
+    fieldOptions.template = v.templates.map((t) => t.name);
     actionParamOptions.change_stage = merge(
       stages,
       ACTIONS.find((a) => a.key === "change_stage")?.paramOptions

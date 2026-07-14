@@ -31,44 +31,59 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
   }
 
   return (
-    <div>
-      {/* Prominent command-center input bar */}
-      <div className="command-bar flex items-end gap-3 rounded-2xl px-6 py-4">
-        <span
-          className="mb-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-lg"
-          style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
-          aria-hidden
-        >
-          ✦
+    <section className="mx-auto w-full max-w-3xl py-6">
+      {/* Greeting */}
+      <h2
+        className="mb-5 text-center text-2xl font-medium tracking-tight sm:text-3xl"
+        style={{ color: "var(--fg)" }}
+      >
+        How can I help, Anderson?
+      </h2>
+
+      {/* Focal input pill */}
+      <div className="command-bar flex items-center gap-3 rounded-full py-2.5 pl-6 pr-2.5">
+        <span aria-hidden style={{ color: "var(--fg-subtle)" }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
         </span>
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               run(input);
             }
           }}
           rows={1}
-          aria-label="Describe a workflow in plain English"
-          placeholder="Describe a workflow… e.g. when booking status is Error, assign to Wael"
-          className="scroll-thin w-full resize-none bg-transparent py-2 text-lg leading-relaxed outline-none placeholder:text-[var(--fg-subtle)]"
+          aria-label="Describe your rule in plain English"
+          placeholder="Describe your rule in plain English…"
+          className="scroll-thin w-full resize-none bg-transparent py-2 text-base outline-none placeholder:text-[var(--fg-subtle)] sm:text-lg"
           style={{ color: "var(--fg)" }}
         />
+        <span aria-hidden className="shrink-0" style={{ color: "var(--fg-subtle)" }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="9" y="3" width="6" height="11" rx="3" />
+            <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+          </svg>
+        </span>
         <button
           type="button"
           onClick={() => run(input)}
           disabled={!input.trim()}
-          className="ring-accent mb-0.5 shrink-0 rounded-xl px-6 py-3 text-base font-semibold text-white shadow-md transition-all duration-150 hover:brightness-110 disabled:opacity-40"
+          aria-label="Draft workflow"
+          className="ring-accent flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-sm transition-all duration-150 hover:brightness-110 disabled:opacity-40"
           style={{ background: "var(--accent)" }}
         >
-          Draft →
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 19V5M5 12l7-7 7 7" />
+          </svg>
         </button>
       </div>
 
       {notes.length > 0 && (
-        <ul className="mt-3 space-y-1 px-1 text-xs" style={{ color: "var(--fg-muted)" }}>
+        <ul className="mt-3 space-y-1 px-2 text-xs" style={{ color: "var(--fg-muted)" }}>
           {notes.map((n, i) => (
             <li key={i} className="flex gap-1.5">
               <span style={{ color: "var(--accent)" }}>·</span>
@@ -78,8 +93,8 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
         </ul>
       )}
 
-      {/* Sleek minimal quick-prompt pills */}
-      <div className="mt-3 flex flex-wrap gap-1.5 px-1">
+      {/* Subtle template suggestions */}
+      <div className="mt-4 flex flex-wrap justify-center gap-1.5">
         {EXAMPLES.map((ex) => (
           <button
             key={ex.label}
@@ -88,13 +103,13 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
               setInput(ex.text);
               run(ex.text);
             }}
-            className="ring-accent rounded-full px-3 py-1 text-xs font-medium transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
-            style={{ border: "1px solid var(--panel-border)", color: "var(--fg-muted)" }}
+            className="ring-accent rounded-full border px-3 py-1 text-xs font-medium transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
+            style={{ borderColor: "var(--panel-border)", color: "var(--fg-muted)" }}
           >
             {ex.label}
           </button>
         ))}
       </div>
-    </div>
+    </section>
   );
 }

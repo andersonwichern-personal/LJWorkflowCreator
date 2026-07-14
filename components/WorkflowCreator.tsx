@@ -26,6 +26,7 @@ import ChatBox from "@/components/ChatBox";
 import WorkflowSidebar from "@/components/WorkflowSidebar";
 import SimulationPanel from "@/components/SimulationPanel";
 import PageHeader from "@/components/ui/PageHeader";
+import Toggle from "@/components/Toggle";
 
 type Toast = { id: number; kind: "ok" | "err"; text: string };
 
@@ -192,11 +193,9 @@ export default function WorkflowCreator() {
           />
         </div>
 
-        {/* Designer canvas */}
+        {/* Designer canvas — hierarchy: title bar → AI console → tokens → simulation */}
         <div className="flex flex-col gap-5">
-          {/* AI-first: the plain-English command bar leads the canvas */}
-          <ChatBox onDraft={onDraftFromChat} />
-
+          {/* 1. Workflow Title Bar — anchors what rule you are editing */}
           <div className="glass rounded-2xl p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex-1">
@@ -215,7 +214,18 @@ export default function WorkflowCreator() {
                   style={{ color: "var(--fg-muted)" }}
                 />
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="flex items-center gap-2">
+                  <Toggle
+                    size="sm"
+                    checked={enabled}
+                    onChange={(v) => { setEnabled(v); setDirty(true); }}
+                    label="Workflow enabled"
+                  />
+                  <span className="text-xs font-medium" style={{ color: "var(--fg-muted)" }}>
+                    {enabled ? "Enabled" : "Off"}
+                  </span>
+                </span>
                 {(activeId || dirty) && (
                   <span
                     className="rounded-full px-2.5 py-1 text-[11px] font-medium"
@@ -229,9 +239,30 @@ export default function WorkflowCreator() {
                 )}
                 <button
                   type="button"
+                  onClick={newWorkflow}
+                  className="ring-accent rounded-xl border px-3.5 py-2 text-sm font-medium transition-colors hover:bg-[var(--accent-soft)]"
+                  style={{ borderColor: "var(--panel-border)", color: "var(--fg-muted)" }}
+                >
+                  New
+                </button>
+                {activeId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const wf = workflows.find((w) => w.id === activeId);
+                      if (wf) onDeleteWorkflow(wf);
+                    }}
+                    className="ring-accent rounded-xl border px-3.5 py-2 text-sm font-medium transition-colors hover:bg-[var(--danger-bg)]"
+                    style={{ borderColor: "var(--panel-border)", color: "var(--danger-fg)" }}
+                  >
+                    Delete
+                  </button>
+                )}
+                <button
+                  type="button"
                   onClick={save}
                   disabled={saving}
-                  className="ring-accent rounded-xl px-6 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:brightness-110 disabled:opacity-50"
+                  className="ring-accent rounded-xl px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:brightness-110 disabled:opacity-50"
                   style={{ background: "var(--accent)" }}
                 >
                   {saving ? "Saving…" : activeId ? "Update" : "Save workflow"}
@@ -239,6 +270,9 @@ export default function WorkflowCreator() {
               </div>
             </div>
           </div>
+
+          {/* 2. Focal AI console */}
+          <ChatBox onDraft={onDraftFromChat} />
 
           {isBlank && (
             <div className="glass rounded-2xl p-5">

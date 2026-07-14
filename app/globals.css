@@ -6,13 +6,11 @@
 /* Theme tokens — light + dark, driven by [data-theme] on <html>       */
 /* ------------------------------------------------------------------ */
 :root {
-  --bg: #f7f8fb;
-  --bg-grad-1: #eef1f7;
-  --bg-grad-2: #f1f0f9;
-  --panel: rgba(255, 255, 255, 0.74);
+  --bg: #f8fafc; /* slate-50 */
+  --panel: #ffffff;
   --panel-solid: #ffffff;
-  --panel-border: rgba(15, 23, 42, 0.07);
-  --panel-shadow: 0 12px 32px -20px rgba(15, 23, 42, 0.35);
+  --panel-border: #e2e8f0; /* slate-200 */
+  --panel-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
   --fg: #0f172a;
   --fg-muted: #56607a;
   --fg-subtle: #8b93a7;
@@ -20,10 +18,10 @@
   --accent-soft: rgba(79, 70, 229, 0.1);
   --ring: rgba(79, 70, 229, 0.35);
 
-  /* Prominent command-bar (AI chat) surface */
-  --command-border: rgba(79, 70, 229, 0.28);
-  --command-shadow: 0 18px 44px -22px rgba(79, 70, 229, 0.5);
-  --command-ring: rgba(79, 70, 229, 0.22);
+  /* Focal AI console (input pill) surface */
+  --command-border: #e2e8f0;
+  --command-shadow: 0 4px 16px -6px rgba(15, 23, 42, 0.12);
+  --command-ring: rgba(79, 70, 229, 0.16);
 
   /* Token pill palettes (WHEN / IF / THEN) */
   --tok-when-bg: #eef2ff;
@@ -48,13 +46,11 @@
 }
 
 :root[data-theme="dark"] {
-  --bg: #0a0e17;
-  --bg-grad-1: #111726;
-  --bg-grad-2: #14162a;
-  --panel: rgba(20, 26, 42, 0.64);
-  --panel-solid: #141a2a;
-  --panel-border: rgba(148, 163, 184, 0.12);
-  --panel-shadow: 0 20px 50px -30px rgba(0, 0, 0, 0.7);
+  --bg: #020617; /* slate-950 */
+  --panel: #0f172a; /* slate-900 */
+  --panel-solid: #0f172a;
+  --panel-border: #1e293b; /* slate-800 */
+  --panel-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   --fg: #e8ecf6;
   --fg-muted: #9aa5bd;
   --fg-subtle: #6b7690;
@@ -62,10 +58,10 @@
   --accent-soft: rgba(129, 140, 248, 0.14);
   --ring: rgba(129, 140, 248, 0.45);
 
-  /* Prominent command-bar (AI chat) surface */
-  --command-border: rgba(129, 140, 248, 0.42);
-  --command-shadow: 0 22px 54px -26px rgba(99, 102, 241, 0.55);
-  --command-ring: rgba(129, 140, 248, 0.3);
+  /* Focal AI console (input pill) surface */
+  --command-border: #293548;
+  --command-shadow: 0 4px 18px -6px rgba(0, 0, 0, 0.5);
+  --command-ring: rgba(129, 140, 248, 0.22);
 
   --tok-when-bg: rgba(99, 102, 241, 0.18);
   --tok-when-fg: #c7d2fe;
@@ -101,27 +97,18 @@ body {
 body {
   color: var(--fg);
   background: var(--bg);
-  background-image: radial-gradient(
-      1200px 560px at 8% -12%,
-      var(--bg-grad-1),
-      transparent 55%
-    ),
-    radial-gradient(1100px 560px at 112% 4%, var(--bg-grad-2), transparent 50%);
-  background-attachment: fixed;
   min-height: 100vh;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-sans, "Inter"), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-/* Glass panel utility */
+/* Flat panel utility (name kept from the earlier glass treatment) */
 .glass {
   background: var(--panel);
   border: 1px solid var(--panel-border);
   box-shadow: var(--panel-shadow);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
 }
 
 /* Focus ring */
@@ -130,7 +117,7 @@ body {
   box-shadow: 0 0 0 3px var(--ring);
 }
 
-/* Prominent AI command-bar surface — the focal point of the builder */
+/* Focal AI console pill — soft, neutral, elevated; gentle ring on focus */
 .command-bar {
   background: var(--panel-solid);
   border: 1px solid var(--command-border);
@@ -138,7 +125,7 @@ body {
   transition: box-shadow 0.18s ease, border-color 0.18s ease;
 }
 .command-bar:focus-within {
-  border-color: var(--accent);
+  border-color: var(--ring);
   box-shadow: var(--command-shadow), 0 0 0 4px var(--command-ring);
 }
 

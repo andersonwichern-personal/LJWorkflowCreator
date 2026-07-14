@@ -175,3 +175,67 @@ export async function deleteAuthority(id: string): Promise<void> {
   });
   await handle<{ success: boolean }>(res);
 }
+
+/* -------------------------------------------------------------------------- */
+/* Simulator + Audit Logs — /api/workflows/simulate, /api/workflows/executions */
+/* -------------------------------------------------------------------------- */
+
+export interface ConditionTraceRecord {
+  field: string;
+  label: string;
+  operator: string;
+  expected: string;
+  actual: string | null;
+  matched: boolean;
+}
+
+export interface EvaluationTrace {
+  trigger: { event: string; matched: boolean; actual: string | null };
+  conditions: ConditionTraceRecord[];
+}
+
+export interface SimulateResult {
+  matched: boolean;
+  trace: EvaluationTrace;
+  actions: string[];
+  request: { id: string; name: string };
+  logged: boolean;
+  logError?: string;
+}
+
+export interface ExecutionRecord {
+  id: string;
+  orgId: string;
+  workflowId: string;
+  requestId: string;
+  requestName: string;
+  eventName: string;
+  status: "FIRED" | "CONDITIONS_NOT_MET" | "ERROR";
+  evaluationTrace: EvaluationTrace | { error?: string };
+  actionsDispatched: string[];
+  createdAt: string;
+  workflow: { id: string; name: string } | null;
+}
+
+/** Dry-run the rule against a request; logs to the audit trail when workflowId is given. */
+export async function simulateWorkflowRule(
+  requestId: string,
+  rule: WorkflowRule,
+  workflowId?: string | null
+): Promise<SimulateResult> {
+  const orgId = await getOrgId();
+  const res = await fetch(`/api/workflows/simulate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ requestId, rule, orgId, workflowId: workflowId || undefined }),
+  });
+  return handle<SimulateResult>(res);
+}
+
+export async function listExecutions(): Promise<ExecutionRecord[]> {
+  const orgId = await getOrgId();
+  const res = await fetch(`/api/workflows/executions?orgId=${encodeURIComponent(orgId)}`, {
+    cache: "no-store",
+  });
+  return handle<ExecutionRecord[]>(res);
+}

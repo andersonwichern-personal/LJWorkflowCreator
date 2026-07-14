@@ -50,6 +50,20 @@ function fieldValue(r: PlatformRequest, field: string): string | number | string
   }
 }
 
+/**
+ * Public resolver for the traced simulator (lib/ruleEvaluator.ts): resolve a
+ * condition-field key on a request, reporting whether the field is known to
+ * the demo data at all (unknown ≠ empty — the trace shows the difference).
+ */
+export function resolveField(
+  r: PlatformRequest,
+  fieldKey: string
+): { known: boolean; value: string | number | string[] | null } {
+  const v = fieldValue(r, fieldKey);
+  if (v === UNKNOWN) return { known: false, value: null };
+  return { known: true, value: v };
+}
+
 function eq(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }

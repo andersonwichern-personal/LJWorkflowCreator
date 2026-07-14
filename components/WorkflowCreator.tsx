@@ -378,7 +378,7 @@ export default function WorkflowCreator() {
             )}
           </div>
 
-          <SimulationPanel rule={rule} />
+          <SimulationPanel rule={rule} workflowId={activeId} />
 
           <details className="glass rounded-2xl p-4">
             <summary className="cursor-pointer text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--fg-subtle)" }}>

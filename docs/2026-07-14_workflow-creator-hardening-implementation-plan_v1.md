@@ -521,14 +521,16 @@ exclusions)` — re-evaluates and transitions status; unique-vote violations →
 `POST /api/platform/authorities/tasks`, `POST …/tasks/[id]/decisions`,
 `GET …/tasks?requestId=`. Demo org fallback matches existing authority routes.
 
-### 5.4 UI — `components/ApprovalAuthorities.tsx`
-Drawer: replace the members checklist with a requirement editor — type segmented control
-(`Anyone / N of / Everyone / Sequence`), approver multi-select (live users via overlay;
-pseudo-teams badged), count stepper for `n_of`, step list (max 5, each step is one of the
-first three types) for `sequence`. Matrix table: MEMBERS column → REQUIREMENT summary
-(`any of 3`, `2 of 5`, `L1 → committee`). Decision preview panel extends with the
-requirement line + an interactive "who approved" checkbox simulation calling
-`evaluateRequirement` live (pure function — no API).
+### 5.4 UI & User Viewpoints (Admin vs. Approver vs. Demo Views)
+*   **ApprovalAuthorities.tsx Drawer**: Replace the members checklist with a requirement editor — type segmented control (`Anyone / N of / Everyone / Sequence`), approver multi-select (live users via overlay; pseudo-teams badged), count stepper for `n_of`, step list (max 5, each step is one of the first three types) for `sequence`. Matrix table: MEMBERS column → REQUIREMENT summary (`any of 3`, `2 of 5`, `L1 → committee`).
+*   **Role Switcher (Header)**: Add a mock identity selector in the dashboard header letting the user toggle between different viewpoints:
+    1.  **Anderson (Admin)**: Full read/write access to rule creation, canvas, and authority matrix config.
+    2.  **Wael (Executive Approver)**: Read-only access to rule rules/matrix. Access to view audit logs. Active vote buttons on pending tasks where he is an eligible approver.
+    3.  **Omar (Loan Preparer / Maker)**: Read-only access. Excluded from approving tasks he initiated (Maker-Checker violation warning).
+*   **Permission Enforcement**: Gated components. If the selected role does not have edit rights, the rule builder canvas and authority configuration drawers display warning banners and disable save buttons. In the decision simulator panel, vote cards for the active task enable/disable based on whether the selected identity matches an outstanding eligible approver who is not barred by the Maker-Checker exception.
+*   **Demo Toggle (Presentation vs. Builder Views)**: Add a toggle to switch console styling:
+    *   *Presentation View*: Clean, client-facing sales mode. Hides debugging tables, technical trace steps, RLS keys, and JSON schemas.
+    *   *Builder View*: Full technical view containing linter warnings, simulator step traces, database indexes, and logs.
 
 ### 5.5 Tests (`scripts/assert-requirement.ts`)
 Quorum math (2-of-5 with 1 decline / 4 declines→declined), all_of with exclusion, sequence

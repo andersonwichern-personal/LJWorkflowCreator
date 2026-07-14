@@ -19,6 +19,7 @@ import {
   RuleOutput,
 } from "@/lib/vocabulary";
 import TokenPicker, { PickerOption } from "./TokenPicker";
+import { VocabOverlay } from "@/lib/liveVocabulary";
 
 type Open =
   | { kind: "event" }
@@ -114,9 +115,11 @@ function fieldOptionsFor(eventKey: string): PickerOption[] {
 interface RuleSentenceProps {
   rule: WorkflowRule;
   onChange: (rule: WorkflowRule) => void;
+  /** Live platform values overlaid on the static picker options (demo bridge). */
+  overlay?: VocabOverlay | null;
 }
 
-export default function RuleSentence({ rule, onChange }: RuleSentenceProps) {
+export default function RuleSentence({ rule, onChange, overlay }: RuleSentenceProps) {
   const [open, setOpen] = useState<Open | null>(null);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
@@ -318,9 +321,9 @@ export default function RuleSentence({ rule, onChange }: RuleSentenceProps) {
           const field = FIELDS[cond?.field];
           const isEnum = field?.kind === "enum";
           const isNum = field?.kind === "numeric";
-          const opts: PickerOption[] = isEnum
-            ? (field.options ?? []).map((o) => ({ value: o, label: o }))
-            : (field?.options ?? []).map((o) => ({ value: o, label: o }));
+          // Live platform values take precedence over the static demo list.
+          const values = overlay?.fieldOptions[cond?.field] ?? field?.options ?? [];
+          const opts: PickerOption[] = values.map((o) => ({ value: o, label: o }));
           return (
             <TokenPicker
               anchor={anchor}
@@ -356,7 +359,9 @@ export default function RuleSentence({ rule, onChange }: RuleSentenceProps) {
           const output = actions[open.i];
           const action = getAction(output?.action);
           const isEnum = action?.paramKind === "enum";
-          const opts: PickerOption[] = (action?.paramOptions ?? []).map((o) => ({ value: o, label: o }));
+          // Live platform values (real users, stages) take precedence.
+          const values = overlay?.actionParamOptions[output?.action] ?? action?.paramOptions ?? [];
+          const opts: PickerOption[] = values.map((o) => ({ value: o, label: o }));
           const key = paramKeyFor(output?.action ?? "");
           return (
             <TokenPicker

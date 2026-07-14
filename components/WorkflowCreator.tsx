@@ -27,6 +27,12 @@ import WorkflowSidebar from "@/components/WorkflowSidebar";
 import SimulationPanel from "@/components/SimulationPanel";
 import PageHeader from "@/components/ui/PageHeader";
 import Toggle from "@/components/Toggle";
+import {
+  VocabularySource,
+  buildOverlay,
+  describeSource,
+  loadLiveVocabulary,
+} from "@/lib/liveVocabulary";
 
 type Toast = { id: number; kind: "ok" | "err"; text: string };
 
@@ -43,6 +49,13 @@ export default function WorkflowCreator() {
   const [dirty, setDirty] = useState(false);
 
   const [toasts, setToasts] = useState<Toast[]>([]);
+
+  // Demo bridge: live platform vocabulary for the pickers (falls back to static).
+  const [vocabSource, setVocabSource] = useState<VocabularySource | null>(null);
+  useEffect(() => {
+    loadLiveVocabulary().then(setVocabSource);
+  }, []);
+  const overlay = useMemo(() => buildOverlay(vocabSource), [vocabSource]);
 
   const pushToast = useCallback((kind: Toast["kind"], text: string) => {
     const id = toastId();
@@ -170,12 +183,29 @@ export default function WorkflowCreator() {
         title="Workflows"
         icon="⚡"
         actions={
-          <span
-            className="rounded-full px-3 py-1.5 text-xs font-medium"
-            style={{ background: "var(--panel)", border: "1px solid var(--panel-border)", color: "var(--fg-muted)" }}
-          >
-            {enabledCount} enabled · {workflows.length} total
-          </span>
+          <>
+            <span
+              title={describeSource(vocabSource)}
+              className="rounded-full px-3 py-1.5 text-xs font-medium"
+              style={
+                overlay
+                  ? { background: "var(--tok-if-bg)", color: "var(--tok-if-fg)" }
+                  : {
+                      background: "var(--panel)",
+                      border: "1px solid var(--panel-border)",
+                      color: "var(--fg-subtle)",
+                    }
+              }
+            >
+              {overlay ? "● Live vocabulary" : "○ Demo vocabulary"}
+            </span>
+            <span
+              className="rounded-full px-3 py-1.5 text-xs font-medium"
+              style={{ background: "var(--panel)", border: "1px solid var(--panel-border)", color: "var(--fg-muted)" }}
+            >
+              {enabledCount} enabled · {workflows.length} total
+            </span>
+          </>
         }
       />
 
@@ -305,7 +335,7 @@ export default function WorkflowCreator() {
               </h3>
             </div>
 
-            <RuleSentence rule={rule} onChange={onRuleChange} />
+            <RuleSentence rule={rule} onChange={onRuleChange} overlay={overlay} />
 
             <div className="mt-6 rounded-xl p-4" style={{ background: "var(--panel-solid)", border: "1px solid var(--panel-border)" }}>
               <div className="mb-1 text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--fg-subtle)" }}>

@@ -70,7 +70,8 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
         How can I help, Anderson?
       </h2>
 
-      {/* Suggestion refinement chips */}
+      {/* Suggestion refinement chips — clicking APPENDS the refinement to the
+          current instruction and re-parses instantly (spec §2). */}
       {suggestions.length > 0 && (
         <div className="mb-4 flex flex-wrap gap-2 justify-center animate-fade-in">
           {suggestions.map((s) => (
@@ -78,8 +79,11 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
               key={s}
               type="button"
               onClick={() => {
-                setInput(s);
-                run(s);
+                const base = (input.trim() || lastText).replace(/[.?!\s]+$/, "");
+                const refinement = s.replace(/\?+$/, "");
+                const appended = base ? `${base}, and ${refinement.charAt(0).toLowerCase()}${refinement.slice(1)}` : refinement;
+                setInput(appended);
+                run(appended);
               }}
               className="ring-accent rounded-full border px-3 py-1.5 text-xs font-semibold transition-all duration-150 hover:-translate-y-px hover:shadow-sm"
               style={{ background: "var(--accent-soft)", color: "var(--accent)", borderColor: "var(--accent-soft)" }}

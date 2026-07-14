@@ -20,6 +20,7 @@ import {
   updateWorkflow,
   toggleWorkflow,
   deleteWorkflow,
+  listAuthorities,
 } from "@/lib/api";
 import RuleSentence from "@/components/RuleSentence";
 import ChatBox from "@/components/ChatBox";
@@ -55,7 +56,23 @@ export default function WorkflowCreator() {
   useEffect(() => {
     loadLiveVocabulary().then(setVocabSource);
   }, []);
-  const overlay = useMemo(() => buildOverlay(vocabSource), [vocabSource]);
+
+  // Configured approval-authority levels feed the `escalate to authority` action.
+  const [authorityNames, setAuthorityNames] = useState<string[]>([]);
+  useEffect(() => {
+    listAuthorities()
+      .then((list) => setAuthorityNames(list.map((a) => a.name)))
+      .catch(() => setAuthorityNames([])); // static paramOptions remain the fallback
+  }, []);
+
+  const overlay = useMemo(() => {
+    const base = buildOverlay(vocabSource);
+    if (!authorityNames.length) return base;
+    return {
+      fieldOptions: base?.fieldOptions ?? {},
+      actionParamOptions: { ...base?.actionParamOptions, assign_authority: authorityNames },
+    };
+  }, [vocabSource, authorityNames]);
 
   const pushToast = useCallback((kind: Toast["kind"], text: string) => {
     const id = toastId();
@@ -188,7 +205,7 @@ export default function WorkflowCreator() {
               title={describeSource(vocabSource)}
               className="rounded-full px-3 py-1.5 text-xs font-medium"
               style={
-                overlay
+                vocabSource?.source === "live"
                   ? { background: "var(--tok-if-bg)", color: "var(--tok-if-fg)" }
                   : {
                       background: "var(--panel)",
@@ -197,7 +214,7 @@ export default function WorkflowCreator() {
                     }
               }
             >
-              {overlay ? "● Live vocabulary" : "○ Demo vocabulary"}
+              {vocabSource?.source === "live" ? "● Live vocabulary" : "○ Demo vocabulary"}
             </span>
             <span
               className="rounded-full px-3 py-1.5 text-xs font-medium"

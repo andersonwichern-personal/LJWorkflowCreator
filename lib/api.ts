@@ -86,3 +86,72 @@ export async function deleteWorkflow(id: string): Promise<void> {
   });
   await handle<{ success: boolean }>(res);
 }
+
+/* -------------------------------------------------------------------------- */
+/* Approval Authorities — /api/platform/authorities                           */
+/* -------------------------------------------------------------------------- */
+
+export interface AuthorityRecord {
+  id: string;
+  orgId: string;
+  name: string;
+  /** Prisma Decimal serializes to a string over JSON. */
+  limit: string | number;
+  riskGrade: string;
+  product: string;
+  userIds: string[];
+  escalationId: string | null;
+  autoApprove: boolean;
+  createdAt: string;
+  updatedAt: string;
+  escalation: { id: string; name: string } | null;
+}
+
+export interface AuthorityInput {
+  name: string;
+  limit: number;
+  riskGrade: string;
+  product: string;
+  userIds: string[];
+  escalationId: string | null;
+  autoApprove: boolean;
+}
+
+export async function listAuthorities(): Promise<AuthorityRecord[]> {
+  const res = await fetch(`/api/platform/authorities?orgId=${encodeURIComponent(DEMO_ORG_ID)}`, {
+    cache: "no-store",
+  });
+  return handle<AuthorityRecord[]>(res);
+}
+
+export async function createAuthority(input: AuthorityInput): Promise<AuthorityRecord> {
+  const res = await fetch(`/api/platform/authorities`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ orgId: DEMO_ORG_ID, ...input }),
+  });
+  return handle<AuthorityRecord>(res);
+}
+
+export async function updateAuthority(
+  id: string,
+  updates: Partial<AuthorityInput>
+): Promise<AuthorityRecord> {
+  const res = await fetch(
+    `/api/platform/authorities/${id}?orgId=${encodeURIComponent(DEMO_ORG_ID)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    }
+  );
+  return handle<AuthorityRecord>(res);
+}
+
+export async function deleteAuthority(id: string): Promise<void> {
+  const res = await fetch(
+    `/api/platform/authorities/${id}?orgId=${encodeURIComponent(DEMO_ORG_ID)}`,
+    { method: "DELETE" }
+  );
+  await handle<{ success: boolean }>(res);
+}

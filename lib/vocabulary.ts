@@ -95,6 +95,15 @@ export const FIELDS: Record<string, FieldDef> = {
     options: ["Loan Application", "Origination", "Covenant"],
     hint: "Template type the request was created from.",
   },
+  intake_path: {
+    key: "intake_path",
+    label: "intake path",
+    kind: "enum",
+    confidence: "verified",
+    group: "Request",
+    options: ["Intake Link", "Staff Wizard", "Blank Request"],
+    hint: "How the request entered the system.",
+  },
 
   /* ---- Customer ---- */
   custtype: {
@@ -159,6 +168,15 @@ export const FIELDS: Record<string, FieldDef> = {
     group: "Underwriting",
     unit: "$",
     hint: "Loan amount (an Underwriting column).",
+  },
+  risk_grade: {
+    key: "risk_grade",
+    label: "risk grade",
+    kind: "enum",
+    confidence: "verified",
+    group: "Underwriting",
+    options: ["A", "B", "C", "D", "E"],
+    hint: "Underwriting risk grade — drives the approval authority matrix.",
   },
   team_member: {
     key: "team_member",
@@ -325,7 +343,7 @@ export interface EventDef {
 }
 
 /** Fields most lifecycle events can filter on. */
-const COMMON = ["reqtype", "custtype", "retailer", "program", "tags", "stage"];
+const COMMON = ["reqtype", "intake_path", "custtype", "retailer", "program", "tags", "stage"];
 
 export const EVENTS: EventDef[] = [
   {
@@ -343,6 +361,7 @@ export const EVENTS: EventDef[] = [
       "uwstatus",
       "queue",
       "loan_amount",
+      "risk_grade",
       "team_member",
       "main_borrower",
       ...COMMON,
@@ -353,14 +372,14 @@ export const EVENTS: EventDef[] = [
     key: "LOAN REJECTED",
     label: "LOAN REJECTED",
     confidence: "verified",
-    condFields: ["uwstatus", "queue", "loan_amount", "team_member", "main_borrower", ...COMMON],
+    condFields: ["uwstatus", "queue", "loan_amount", "risk_grade", "team_member", "main_borrower", ...COMMON],
     blurb: "A loan is rejected in underwriting.",
   },
   {
     key: "OFFER ACCEPTED",
     label: "OFFER ACCEPTED",
     confidence: "verified",
-    condFields: ["offer_queue", "loan_amount", "main_borrower", ...COMMON],
+    condFields: ["offer_queue", "loan_amount", "risk_grade", "main_borrower", ...COMMON],
     blurb: "A borrower accepts a sent offer.",
   },
   {
@@ -479,6 +498,39 @@ export const ACTIONS: ActionDef[] = [
     paramLabel: "",
     blurb: "Close (abandon) the request.",
   },
+  {
+    key: "assign_authority",
+    label: "escalate to authority",
+    confidence: "verified",
+    paramKind: "enum",
+    paramLabel: "authority level",
+    paramOptions: ["Loan Officer", "Credit Committee"],
+    blurb: "Route the request to a configured approval authority level (Amount + Risk Grade + Product matrix).",
+  },
+  {
+    key: "request_signature",
+    label: "request signature from",
+    confidence: "verified",
+    paramKind: "text",
+    paramLabel: "signer role",
+    blurb: "Request document signatures from a specific party.",
+  },
+  {
+    key: "pull_credit",
+    label: "pull credit",
+    confidence: "verified",
+    paramKind: "none",
+    paramLabel: "",
+    blurb: "Trigger a credit pull for the applicant.",
+  },
+  {
+    key: "run_extraction",
+    label: "run document extraction",
+    confidence: "verified",
+    paramKind: "none",
+    paramLabel: "",
+    blurb: "Execute AI-based document data extraction.",
+  },
   /* Aspirational — gated. Backend emit/execute unconfirmed on 2026-07-13. */
   {
     key: "make_offer",
@@ -504,15 +556,6 @@ export const ACTIONS: ActionDef[] = [
     paramKind: "text",
     paramLabel: "endpoint URL",
     blurb: "Webhook infrastructure not confirmed to exist.",
-  },
-  {
-    key: "assign_authority",
-    label: "escalate to authority",
-    confidence: "unconfirmed",
-    paramKind: "enum",
-    paramLabel: "authority level",
-    paramOptions: ["Loan Officer", "Loan Committee"],
-    blurb: "FABRICATED in the mockup — no Roles/Permissions ladder exists. Use assign to instead.",
   },
 ];
 

@@ -18,3 +18,22 @@ model Workflow {
 
   @@map("workflows")
 }
+
+model ApprovalAuthority {
+  id           String   @id @default(uuid())
+  orgId        String   @map("org_id")
+  name         String
+  limit        Decimal  @db.Decimal(12, 2)
+  riskGrade    String   @map("risk_grade") // Minimum risk grade, e.g. "A", "B", "C", "D", "E"
+  product      String   @map("product") // "Term Loan" | "Line of Credit" | "All"
+  userIds      Json     @map("user_ids") // JSON array of user names/IDs assigned
+  escalationId String?  @map("escalation_id")
+  autoApprove  Boolean  @default(false) @map("auto_approve")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  escalation  ApprovalAuthority?  @relation("EscalationRelation", fields: [escalationId], references: [id], onDelete: SetNull)
+  escalatedBy ApprovalAuthority[] @relation("EscalationRelation")
+
+  @@map("approval_authorities")
+}

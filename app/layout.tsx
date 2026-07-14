@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import AppShell from "@/components/shell/AppShell";
 
 export const metadata: Metadata = {
   title: {
@@ -54,7 +53,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
       </head>
       <body>
-        <AppShell>{children}</AppShell>
+        {children}
       </body>
     </html>
   );

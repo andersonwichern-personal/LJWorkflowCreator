@@ -72,9 +72,6 @@ export default function SimulationPanel({ rule }: { rule: WorkflowRule }) {
           ))}
         </div>
       )}
-      <p className="mt-3 text-[11px]" style={{ color: "var(--fg-subtle)" }}>
-        Simulation against representative data — the real event bus runs in the backend.
-      </p>
     </div>
   );
 }

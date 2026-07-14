@@ -168,7 +168,6 @@ export default function WorkflowCreator() {
       <PageHeader
         title="Workflows"
         icon="⚡"
-        subtitle="Automate loan origination — WHEN an event happens, IF conditions hold, THEN take action."
         actions={
           <span
             className="rounded-full px-3 py-1.5 text-xs font-medium"
@@ -195,6 +194,9 @@ export default function WorkflowCreator() {
 
         {/* Designer canvas */}
         <div className="flex flex-col gap-5">
+          {/* AI-first: the plain-English command bar leads the canvas */}
+          <ChatBox onDraft={onDraftFromChat} />
+
           <div className="glass rounded-2xl p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex-1">
@@ -249,16 +251,13 @@ export default function WorkflowCreator() {
                     key={t.name}
                     type="button"
                     onClick={() => applyStarter(t.name, t.description, structuredClone(t.rule))}
-                    className="ring-accent group flex items-start gap-3 rounded-xl border p-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-md"
+                    className="ring-accent group flex items-center gap-3 rounded-xl border p-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-md"
                     style={{ borderColor: "var(--panel-border)", background: "var(--panel-solid)" }}
                   >
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lg" style={{ background: "var(--accent-soft)" }}>
                       {t.icon}
                     </span>
-                    <span className="min-w-0">
-                      <span className="block text-sm font-semibold" style={{ color: "var(--fg)" }}>{t.name}</span>
-                      <span className="mt-0.5 block text-xs leading-snug" style={{ color: "var(--fg-muted)" }}>{t.description}</span>
-                    </span>
+                    <span className="min-w-0 truncate text-sm font-semibold" style={{ color: "var(--fg)" }}>{t.name}</span>
                   </button>
                 ))}
               </div>
@@ -270,11 +269,6 @@ export default function WorkflowCreator() {
               <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--fg-subtle)" }}>
                 Rule builder
               </h3>
-              {getEvent(rule.trigger.event)?.blurb && (
-                <span className="hidden max-w-[46ch] truncate text-xs sm:block" style={{ color: "var(--fg-subtle)" }}>
-                  {getEvent(rule.trigger.event)?.blurb}
-                </span>
-              )}
             </div>
 
             <RuleSentence rule={rule} onChange={onRuleChange} />
@@ -301,8 +295,6 @@ export default function WorkflowCreator() {
           </div>
 
           <SimulationPanel rule={rule} />
-
-          <ChatBox onDraft={onDraftFromChat} />
 
           <details className="glass rounded-2xl p-4">
             <summary className="cursor-pointer text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--fg-subtle)" }}>

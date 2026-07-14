@@ -88,7 +88,6 @@ export default function TokenPicker({
         key={o.value}
         type="button"
         onClick={() => onSelect(o.value)}
-        title={o.hint}
         className="group flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors"
         style={{ background: selected ? "var(--accent-soft)" : "transparent", color: "var(--fg)" }}
         onMouseEnter={(e) => {

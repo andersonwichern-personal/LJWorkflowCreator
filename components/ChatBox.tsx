@@ -8,11 +8,12 @@ interface ChatBoxProps {
   onDraft: (rule: WorkflowRule) => void;
 }
 
-const EXAMPLES = [
-  "If there is a system error and booking status is Error, assign to Wael",
-  "When a loan is approved and loan amount is at least 250k, assign to Underwriting Team",
-  "When a Fiserv loan booking status is Error, notify Booking Team and add tag booking-failed",
-  "When a loan is rejected, change stage to Closed",
+/** Full instruction fed to the parser, plus a short pill label for the UI. */
+const EXAMPLES: { label: string; text: string }[] = [
+  { label: "System error → assign Wael", text: "If there is a system error and booking status is Error, assign to Wael" },
+  { label: "Loan ≥ 250k → Underwriting", text: "When a loan is approved and loan amount is at least 250k, assign to Underwriting Team" },
+  { label: "Booking error → notify + tag", text: "When a Fiserv loan booking status is Error, notify Booking Team and add tag booking-failed" },
+  { label: "Rejected → close stage", text: "When a loan is rejected, change stage to Closed" },
 ];
 
 /**
@@ -30,21 +31,16 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
   }
 
   return (
-    <div className="glass rounded-2xl p-4">
-      <div className="mb-2 flex items-center gap-2">
+    <div>
+      {/* Prominent command-center input bar */}
+      <div className="command-bar flex items-end gap-3 rounded-2xl px-6 py-4">
         <span
-          className="flex h-6 w-6 items-center justify-center rounded-lg text-sm"
+          className="mb-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-lg"
           style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
           aria-hidden
         >
           ✦
         </span>
-        <h3 className="text-sm font-semibold" style={{ color: "var(--fg)" }}>
-          Draft with plain English
-        </h3>
-      </div>
-
-      <div className="flex items-end gap-2">
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -54,20 +50,17 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
               run(input);
             }
           }}
-          rows={2}
-          placeholder="e.g. If there is a system error and booking status is Error, assign to Wael"
-          className="ring-accent scroll-thin w-full resize-none rounded-xl px-3 py-2 text-sm"
-          style={{
-            background: "var(--panel-solid)",
-            border: "1px solid var(--panel-border)",
-            color: "var(--fg)",
-          }}
+          rows={1}
+          aria-label="Describe a workflow in plain English"
+          placeholder="Describe a workflow… e.g. when booking status is Error, assign to Wael"
+          className="scroll-thin w-full resize-none bg-transparent py-2 text-lg leading-relaxed outline-none placeholder:text-[var(--fg-subtle)]"
+          style={{ color: "var(--fg)" }}
         />
         <button
           type="button"
           onClick={() => run(input)}
           disabled={!input.trim()}
-          className="ring-accent shrink-0 rounded-xl px-4 py-2 text-sm font-semibold text-white transition-all duration-150 hover:brightness-110 disabled:opacity-40"
+          className="ring-accent mb-0.5 shrink-0 rounded-xl px-6 py-3 text-base font-semibold text-white shadow-md transition-all duration-150 hover:brightness-110 disabled:opacity-40"
           style={{ background: "var(--accent)" }}
         >
           Draft →
@@ -75,7 +68,7 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
       </div>
 
       {notes.length > 0 && (
-        <ul className="mt-3 space-y-1 text-xs" style={{ color: "var(--fg-muted)" }}>
+        <ul className="mt-3 space-y-1 px-1 text-xs" style={{ color: "var(--fg-muted)" }}>
           {notes.map((n, i) => (
             <li key={i} className="flex gap-1.5">
               <span style={{ color: "var(--accent)" }}>·</span>
@@ -85,19 +78,20 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
         </ul>
       )}
 
-      <div className="mt-3 flex flex-wrap gap-1.5">
+      {/* Sleek minimal quick-prompt pills */}
+      <div className="mt-3 flex flex-wrap gap-1.5 px-1">
         {EXAMPLES.map((ex) => (
           <button
-            key={ex}
+            key={ex.label}
             type="button"
             onClick={() => {
-              setInput(ex);
-              run(ex);
+              setInput(ex.text);
+              run(ex.text);
             }}
-            className="ring-accent rounded-full px-2.5 py-1 text-[11px] transition-colors hover:bg-[var(--accent-soft)]"
+            className="ring-accent rounded-full px-3 py-1 text-xs font-medium transition-colors hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]"
             style={{ border: "1px solid var(--panel-border)", color: "var(--fg-muted)" }}
           >
-            {ex.length > 42 ? ex.slice(0, 42) + "…" : ex}
+            {ex.label}
           </button>
         ))}
       </div>

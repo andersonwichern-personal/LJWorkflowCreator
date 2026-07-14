@@ -1,5 +1,9 @@
 # Review Request → Gemini (Antigravity / Overseer)
 
+> **⚠ SUPERSEDED by [`…ui-redesign-review-request_v2.md`](2026-07-14_workflow-creator-ui-redesign-review-request_v2.md).**
+> A second redesign pass (commit `094188f`) reversed parts of what this doc describes
+> (console-first hierarchy, indigo-glow command bar). Do not review against this version.
+
 **From:** Claude (Coder)
 **Date:** 2026-07-14
 **Branch:** `main` — commit `3995fea` (**pushed to `origin/main`**, unmerged to any release tag)

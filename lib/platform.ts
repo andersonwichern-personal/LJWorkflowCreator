@@ -18,7 +18,7 @@
  * per-section error instead of crashing the route.
  */
 
-import { LiveOption, LiveTemplate, LiveVocabulary, VocabularySource } from "@/lib/liveVocabulary";
+import { LiveField, LiveOption, LiveTemplate, LiveVocabulary, VocabularySource } from "@/lib/liveVocabulary";
 
 function env(name: string): string | undefined {
   const v = process.env[name];
@@ -110,6 +110,84 @@ function toTemplates(rows: Row[]): LiveTemplate[] {
   });
 }
 
+/**
+ * Resolve the session's real org id from GET /iam/users/me (alignment doc §4c).
+ * Falls back to LANDJOURNEY_ORG_ID when the identity call can't run. Response
+ * shape is [INFER] — probe the plausible org-id locations defensively.
+ */
+export async function fetchSessionOrgId(): Promise<string | null> {
+  const envOrg = env("LANDJOURNEY_ORG_ID") ?? null;
+  if (!platformConfigured()) return envOrg;
+  try {
+    const me = (await getJson(`/iam/users/me`)) as Row;
+    for (const key of ["orgId", "organizationId", "organization_id", "org_id"]) {
+      if (typeof me[key] === "string" && me[key]) return me[key] as string;
+    }
+    const org = me.organization as Row | undefined;
+    if (org && typeof org.id === "string") return org.id;
+    const orgs = me.organizations as Row[] | undefined;
+    if (Array.isArray(orgs) && orgs[0] && typeof orgs[0].id === "string") return orgs[0].id;
+    return envOrg;
+  } catch {
+    return envOrg;
+  }
+}
+
+/**
+ * Flatten a dynamic-form definition (array of sections, each with fields[])
+ * into LiveField rows. Shape verified in build manual §6a:
+ * `{column, fieldType, id, label, name, parameters, required}` per field.
+ */
+function toLiveFields(raw: unknown, formTemplateId: string, formName: string): LiveField[] {
+  // The definition may arrive as the bare sections array (manual §6a) or nested
+  // on a form object — probe the plausible homes before the generic envelopes.
+  let sections: Row[] = [];
+  if (Array.isArray(raw)) {
+    sections = raw as Row[];
+  } else if (raw && typeof raw === "object") {
+    const o = raw as Row;
+    for (const key of ["sections", "definition", "formDefinition", "form_definition", "template"]) {
+      if (Array.isArray(o[key])) {
+        sections = o[key] as Row[];
+        break;
+      }
+    }
+    if (!sections.length) {
+      try {
+        sections = extractArray(raw);
+      } catch {
+        sections = [];
+      }
+    }
+  }
+  // If the probed array is already a flat field list (no sections wrapper), wrap it.
+  if (sections.some((s) => typeof s.fieldType === "string")) {
+    sections = [{ fields: sections } as Row];
+  }
+  return sections.flatMap((section) => {
+    const fields = Array.isArray(section.fields) ? (section.fields as Row[]) : [];
+    return fields.flatMap((f) => {
+      const fieldId = typeof f.id === "string" ? f.id : null;
+      const fieldType = typeof f.fieldType === "string" ? f.fieldType : null;
+      if (!fieldId || !fieldType) return [];
+      return [
+        {
+          formTemplateId,
+          formName,
+          fieldId,
+          name: typeof f.name === "string" ? f.name : fieldId,
+          label: typeof f.label === "string" && f.label ? f.label : (f.name as string) ?? fieldId,
+          fieldType,
+          required: Boolean(f.required),
+        },
+      ];
+    });
+  });
+}
+
+/** Bound the per-form fan-out so a large tenant can't stampede the API. */
+const MAX_FORM_FETCHES = 12;
+
 /* ---- Aggregate fetch across the §7 input surfaces ---- */
 
 export async function fetchLiveVocabulary(): Promise<VocabularySource> {
@@ -143,13 +221,37 @@ export async function fetchLiveVocabulary(): Promise<VocabularySource> {
     }
   });
 
+  const forms = toOptions(rows.forms);
+
+  // Second resolution step (alignment doc §4b): fetch each form's definition
+  // and flatten its sections[].fields[] into the ID-bound field registry.
+  const fields: LiveField[] = [];
+  const formsToFetch = forms.slice(0, MAX_FORM_FETCHES);
+  if (forms.length > formsToFetch.length) {
+    errors.push(`fields: only first ${MAX_FORM_FETCHES} of ${forms.length} forms fetched`);
+  }
+  const formBodies = await Promise.allSettled(
+    formsToFetch.map((f) => getJson(`/documents/templates/forms/${encodeURIComponent(f.id)}`))
+  );
+  formBodies.forEach((result, i) => {
+    const form = formsToFetch[i];
+    if (result.status === "rejected") {
+      errors.push(
+        `fields(${form.label}): ${result.reason instanceof Error ? result.reason.message : "failed"}`
+      );
+      return;
+    }
+    fields.push(...toLiveFields(result.value, form.id, form.label));
+  });
+
   const vocab: LiveVocabulary = {
     source: "live",
     fetchedAt: new Date().toISOString(),
     users: toOptions(rows.users),
     retailers: toOptions(rows.retailers),
     templates: toTemplates(rows.templates),
-    forms: toOptions(rows.forms),
+    forms,
+    fields,
     errors,
   };
 

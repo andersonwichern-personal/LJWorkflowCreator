@@ -2,10 +2,17 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { WorkflowRule } from "@/lib/vocabulary";
+import { WorkflowRule, getAction, paramKeyFor, ActionExecution } from "@/lib/vocabulary";
 import { formatCurrency } from "@/lib/platformData";
-import { matchingRequests, describeActions } from "@/lib/ruleEngine";
+import { matchingRequests } from "@/lib/ruleEngine";
 import StatusBadge from "@/components/ui/StatusBadge";
+
+/** §6c: never let the UI imply a gated action runs — badge each effect's status. */
+const STATUS_META: Record<ActionExecution["status"], { label: string; bg: string; fg: string }> = {
+  "executable-now": { label: "live", bg: "var(--tok-if-bg)", fg: "var(--tok-if-fg)" },
+  "backend-required": { label: "backend", bg: "var(--warn-bg)", fg: "var(--warn-fg)" },
+  "mocked-surface": { label: "mocked", bg: "var(--tok-op-bg)", fg: "var(--fg-subtle)" },
+};
 
 /**
  * Live "test against real requests" panel. As the rule changes in the builder,
@@ -14,7 +21,16 @@ import StatusBadge from "@/components/ui/StatusBadge";
  */
 export default function SimulationPanel({ rule }: { rule: WorkflowRule }) {
   const matches = useMemo(() => matchingRequests(rule), [rule]);
-  const actions = useMemo(() => describeActions(rule), [rule]);
+  const actions = useMemo(
+    () =>
+      rule.actions.map((o) => {
+        const def = getAction(o.action);
+        const label = def?.label ?? o.action;
+        const val = def?.paramKind === "none" ? "" : ` ${o.params[paramKeyFor(o.action)] || "…"}`;
+        return { text: `${label}${val}`, status: def?.execution.status ?? "backend-required" };
+      }),
+    [rule]
+  );
 
   return (
     <div className="glass rounded-2xl p-5">
@@ -23,7 +39,7 @@ export default function SimulationPanel({ rule }: { rule: WorkflowRule }) {
           <span className="flex h-6 w-6 items-center justify-center rounded-lg text-sm" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
             🧪
           </span>
-          <h3 className="text-sm font-semibold" style={{ color: "var(--fg)" }}>Test against real requests</h3>
+          <h3 className="text-sm font-semibold" style={{ color: "var(--fg)" }}>Simulation</h3>
         </div>
         <span
           className="rounded-full px-2.5 py-1 text-xs font-semibold"
@@ -39,11 +55,27 @@ export default function SimulationPanel({ rule }: { rule: WorkflowRule }) {
       {actions.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-1.5">
           <span className="text-xs" style={{ color: "var(--fg-subtle)" }}>Would run:</span>
-          {actions.map((a, i) => (
-            <span key={i} className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: "var(--tok-then-bg)", color: "var(--tok-then-fg)" }}>
-              → {a}
-            </span>
-          ))}
+          {actions.map((a, i) => {
+            const meta = STATUS_META[a.status];
+            return (
+              <span key={i} className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: "var(--tok-then-bg)", color: "var(--tok-then-fg)" }}>
+                → {a.text}
+                <span
+                  className="rounded-full px-1.5 py-px text-[9px] font-bold uppercase leading-tight"
+                  style={{ background: meta.bg, color: meta.fg }}
+                  title={
+                    a.status === "executable-now"
+                      ? "Executable now via the real sink"
+                      : a.status === "backend-required"
+                      ? "Needs a confirmed backend write endpoint"
+                      : "Target surface is mocked in the test tenant"
+                  }
+                >
+                  {meta.label}
+                </span>
+              </span>
+            );
+          })}
         </div>
       )}
 

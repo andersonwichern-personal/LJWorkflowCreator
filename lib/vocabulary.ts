@@ -757,6 +757,18 @@ export function allowedFieldsForEvent(eventKey: string): FieldDef[] {
 
 export type ParamKind = "enum" | "text" | "none";
 
+/**
+ * Action-execution contract (alignment doc §6a): where an action actually
+ * lands on the platform and whether it can run today. The UI surfaces this so
+ * authors always know which effects are live vs pending — never let a gated
+ * action imply it runs.
+ */
+export interface ActionExecution {
+  /** The real platform sink (build manual §8). */
+  sink: "novu" | "workflows" | "credit" | "documents" | "authority" | "none";
+  status: "executable-now" | "backend-required" | "mocked-surface";
+}
+
 export interface ActionDef {
   key: string;
   label: string;
@@ -766,6 +778,7 @@ export interface ActionDef {
   /** For enum params, or as suggestions for text params. */
   paramOptions?: string[];
   blurb: string;
+  execution: ActionExecution;
 }
 
 export const ACTIONS: ActionDef[] = [
@@ -777,6 +790,7 @@ export const ACTIONS: ActionDef[] = [
     paramLabel: "assignee",
     paramOptions: ASSIGNEES,
     blurb: "Assign the request to a named person or team.",
+    execution: { sink: "workflows", status: "backend-required" },
   },
   {
     key: "change_stage",
@@ -786,6 +800,7 @@ export const ACTIONS: ActionDef[] = [
     paramLabel: "stage",
     paramOptions: ["Initiated", "Processing", "Approved", "Closed"],
     blurb: "Move the request to a lifecycle stage (Change Stage).",
+    execution: { sink: "workflows", status: "backend-required" },
   },
   {
     key: "add_tag",
@@ -794,6 +809,7 @@ export const ACTIONS: ActionDef[] = [
     paramKind: "text",
     paramLabel: "tag",
     blurb: "Apply a tag to the request.",
+    execution: { sink: "workflows", status: "backend-required" },
   },
   {
     key: "remove_tag",
@@ -802,6 +818,7 @@ export const ACTIONS: ActionDef[] = [
     paramKind: "text",
     paramLabel: "tag",
     blurb: "Remove a tag from the request.",
+    execution: { sink: "workflows", status: "backend-required" },
   },
   {
     key: "close_request",
@@ -810,6 +827,7 @@ export const ACTIONS: ActionDef[] = [
     paramKind: "none",
     paramLabel: "",
     blurb: "Close (abandon) the request.",
+    execution: { sink: "workflows", status: "backend-required" },
   },
   {
     key: "route_to_queue",
@@ -819,6 +837,7 @@ export const ACTIONS: ActionDef[] = [
     paramLabel: "queue",
     paramOptions: ["Unassigned", "Assigned", "Auto Approved", "Approved", "Rejected"],
     blurb: "Move the request into an underwriting queue.",
+    execution: { sink: "workflows", status: "backend-required" },
   },
   {
     key: "set_underwriting_result",
@@ -828,6 +847,7 @@ export const ACTIONS: ActionDef[] = [
     paramLabel: "result",
     paramOptions: ["Auto Approved", "Approved", "Rejected"],
     blurb: "Record the underwriting decision (the platform's Auto Approved lane does this today).",
+    execution: { sink: "workflows", status: "backend-required" },
   },
   {
     key: "assign_authority",
@@ -837,6 +857,8 @@ export const ACTIONS: ActionDef[] = [
     paramLabel: "authority level",
     paramOptions: ["Loan Officer", "Credit Committee"],
     blurb: "Route the request to a configured approval authority level (Amount + Risk Grade + Product matrix).",
+    // The evaluator runs client-side today; a hard approval gate needs backend support.
+    execution: { sink: "authority", status: "backend-required" },
   },
   {
     key: "request_signature",
@@ -845,6 +867,7 @@ export const ACTIONS: ActionDef[] = [
     paramKind: "text",
     paramLabel: "signer role",
     blurb: "Request document signatures from a specific party.",
+    execution: { sink: "documents", status: "backend-required" },
   },
   {
     key: "pull_credit",
@@ -853,6 +876,7 @@ export const ACTIONS: ActionDef[] = [
     paramKind: "none",
     paramLabel: "",
     blurb: "Trigger a credit pull for the applicant.",
+    execution: { sink: "credit", status: "backend-required" },
   },
   {
     key: "run_extraction",
@@ -861,6 +885,7 @@ export const ACTIONS: ActionDef[] = [
     paramKind: "none",
     paramLabel: "",
     blurb: "Execute AI-based document data extraction.",
+    execution: { sink: "documents", status: "backend-required" },
   },
   {
     key: "request_document",
@@ -869,6 +894,7 @@ export const ACTIONS: ActionDef[] = [
     paramKind: "text",
     paramLabel: "document type",
     blurb: "Ask the borrower to upload a document (file/checklist templates).",
+    execution: { sink: "documents", status: "backend-required" },
   },
   {
     key: "assign_checklist",
@@ -877,6 +903,7 @@ export const ACTIONS: ActionDef[] = [
     paramKind: "text",
     paramLabel: "checklist name",
     blurb: "Attach a document checklist to the request.",
+    execution: { sink: "documents", status: "backend-required" },
   },
   {
     key: "notify",
@@ -886,6 +913,7 @@ export const ACTIONS: ActionDef[] = [
     paramLabel: "recipient",
     paramOptions: ASSIGNEES,
     blurb: "Send an in-app notification via the Novu inbox (already wired in the admin).",
+    execution: { sink: "novu", status: "executable-now" },
   },
   /* Aspirational — gated. Backend emit/execute unconfirmed on 2026-07-14. */
   {
@@ -895,6 +923,7 @@ export const ACTIONS: ActionDef[] = [
     paramKind: "text",
     paramLabel: "product",
     blurb: "Auto-sending an offer isn't confirmed as executable (Offers surface is mocked in test).",
+    execution: { sink: "workflows", status: "mocked-surface" },
   },
   {
     key: "trigger_booking",
@@ -904,6 +933,7 @@ export const ACTIONS: ActionDef[] = [
     paramLabel: "core system",
     paramOptions: ["FISERV LOAN", "FMAC LOAN"],
     blurb: "Transmit the booking to a core system — gated until backend emittability is confirmed.",
+    execution: { sink: "credit", status: "backend-required" },
   },
   {
     key: "log_event",
@@ -912,6 +942,7 @@ export const ACTIONS: ActionDef[] = [
     paramKind: "text",
     paramLabel: "event note",
     blurb: "Write to the System Events log — that surface is client-mocked in test.",
+    execution: { sink: "none", status: "mocked-surface" },
   },
   {
     key: "send_webhook",
@@ -920,6 +951,7 @@ export const ACTIONS: ActionDef[] = [
     paramKind: "text",
     paramLabel: "endpoint URL",
     blurb: "Webhook infrastructure not confirmed to exist.",
+    execution: { sink: "none", status: "backend-required" },
   },
 ];
 
@@ -936,8 +968,57 @@ export function paramKeyFor(actionKey: string): string {
 /* Rule shape — extends the { event, conds[], outputs[] } backend contract    */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * ID-bound condition operand (alignment doc §5a / build manual §9).
+ *
+ * Platform-native structured attributes (stage, loan_amount, risk_grade…)
+ * stay keyed as plain strings — they map to first-class request attributes.
+ * Form-derived fields carry the real {formTemplateId, fieldId} reference so
+ * the eventual executor knows exactly what to read. Label/kind are snapshotted
+ * at author time so a saved rule renders without live data.
+ */
+export interface FormFieldRef {
+  kind: "formField";
+  formTemplateId: string;
+  fieldId: string;
+  /** Stable machine key of the field (e.g. "newField3"). */
+  key?: string;
+  /** Display label snapshot from the live picker. */
+  label?: string;
+  /** FieldKind mapped from the live fieldType at author time. */
+  fieldKind?: FieldKind;
+}
+
+export type ConditionFieldRef = string | FormFieldRef;
+
+export function isFormFieldRef(f: ConditionFieldRef | undefined): f is FormFieldRef {
+  return typeof f === "object" && f !== null && f.kind === "formField";
+}
+
+/** Stable string key for a condition field (attribute key or ff:<form>:<field>). */
+export function condFieldKey(f: ConditionFieldRef): string {
+  return isFormFieldRef(f) ? `ff:${f.formTemplateId}:${f.fieldId}` : f;
+}
+
+/** Display label for a condition field. */
+export function condFieldLabel(f: ConditionFieldRef): string {
+  if (isFormFieldRef(f)) return f.label ?? f.key ?? "form field";
+  return FIELDS[f]?.label ?? f;
+}
+
+/** Effective FieldKind for a condition field (drives operators + input mode). */
+export function condFieldKind(f: ConditionFieldRef): FieldKind {
+  if (isFormFieldRef(f)) return f.fieldKind ?? "text";
+  return FIELDS[f]?.kind ?? "text";
+}
+
+/** Static FieldDef for attribute refs (undefined for ID-bound form fields). */
+export function condFieldDef(f: ConditionFieldRef): FieldDef | undefined {
+  return isFormFieldRef(f) ? undefined : FIELDS[f];
+}
+
 export interface RuleCondition {
-  field: string;
+  field: ConditionFieldRef;
   operator: string;
   value: string;
 }
@@ -997,11 +1078,18 @@ export function normalizeRule(raw: unknown): WorkflowRule {
   const logicRaw = conditions?.logic ?? (r.condLogic as string | undefined);
   const logic: CondLogic = logicRaw === "OR" ? "OR" : "AND";
 
-  const rulesSrc = Array.isArray(conditions?.rules)
+  const rulesRaw = Array.isArray(conditions?.rules)
     ? (conditions!.rules as RuleCondition[])
     : Array.isArray(r.conds)
     ? (r.conds as RuleCondition[])
     : [];
+
+  // Coerce condition field refs: plain attribute keys and well-formed
+  // ID-bound form-field refs pass through; malformed refs are dropped.
+  const rulesSrc = rulesRaw.filter((c) => {
+    if (typeof c?.field === "string") return true;
+    return isFormFieldRef(c?.field) && !!c.field.formTemplateId && !!c.field.fieldId;
+  });
 
   const actions = Array.isArray(r.actions)
     ? (r.actions as RuleOutput[])
@@ -1019,7 +1107,8 @@ export function normalizeRule(raw: unknown): WorkflowRule {
 
 export function ruleUsesUnconfirmed(rule: WorkflowRule): boolean {
   if (getEvent(rule.trigger.event)?.confidence === "unconfirmed") return true;
-  if (rule.conditions.rules.some((c) => FIELDS[c.field]?.confidence === "unconfirmed")) return true;
+  // ID-bound form-field refs come from live platform data — treated as verified.
+  if (rule.conditions.rules.some((c) => condFieldDef(c.field)?.confidence === "unconfirmed")) return true;
   if (rule.actions.some((o) => getAction(o.action)?.confidence === "unconfirmed")) return true;
   return false;
 }

@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
   WorkflowRule,
   EVENTS,
-  FIELDS,
   FIELD_GROUPS,
   ACTIONS,
   OPERATORS,
@@ -17,9 +16,15 @@ import {
   defaultParamFor,
   RuleCondition,
   RuleOutput,
+  ConditionFieldRef,
+  isFormFieldRef,
+  condFieldKey,
+  condFieldLabel,
+  condFieldKind,
+  condFieldDef,
 } from "@/lib/vocabulary";
 import TokenPicker, { PickerOption } from "./TokenPicker";
-import { VocabOverlay } from "@/lib/liveVocabulary";
+import { VocabOverlay, fieldKindForType } from "@/lib/liveVocabulary";
 
 type Open =
   | { kind: "event" }
@@ -82,20 +87,22 @@ function Word({ children }: { children: React.ReactNode }) {
 
 /** Format a condition value for display (adds unit + thousands separators). */
 function displayValue(c: RuleCondition): string {
-  const field = FIELDS[c.field];
   if (!c.value) return "value";
-  if (field?.kind === "numeric") {
+  if (condFieldKind(c.field) === "numeric") {
     const n = Number(c.value);
     const formatted = isNaN(n) ? c.value : n.toLocaleString("en-US");
-    return `${field.unit ?? ""}${formatted}`;
+    return `${condFieldDef(c.field)?.unit ?? ""}${formatted}`;
   }
   return c.value;
 }
 
-/** Build grouped field options for the picker. */
-function fieldOptionsFor(eventKey: string): PickerOption[] {
+/** Encode a live form field as a picker value (decoded back in refForPickerValue). */
+const FF_PREFIX = "ff:";
+
+/** Build grouped field options for the picker — static vocab + live ID-bound form fields. */
+function fieldOptionsFor(eventKey: string, overlay?: VocabOverlay | null): PickerOption[] {
   const groupIcon = (g: string) => FIELD_GROUPS.find((x) => x.key === g)?.icon;
-  return allowedFieldsForEvent(eventKey)
+  const staticOpts = allowedFieldsForEvent(eventKey)
     .slice()
     .sort(
       (a, b) =>
@@ -110,6 +117,15 @@ function fieldOptionsFor(eventKey: string): PickerOption[] {
       group: f.group,
       groupIcon: groupIcon(f.group),
     }));
+  // Real per-template fields (alignment doc §4b) — grouped by their form.
+  const liveOpts = (overlay?.liveFields ?? []).map((f) => ({
+    value: `${FF_PREFIX}${f.formTemplateId}:${f.fieldId}`,
+    label: f.label,
+    confidence: "verified" as const,
+    group: `${f.formName} (live)`,
+    groupIcon: "🌾",
+  }));
+  return [...staticOpts, ...liveOpts];
 }
 
 interface RuleSentenceProps {
@@ -144,16 +160,43 @@ export default function RuleSentence({ rule, onChange, overlay }: RuleSentencePr
     onChange({
       ...rule,
       trigger: { event: newEvent },
-      conditions: { ...rule.conditions, rules: conds.filter((c) => allowed.has(c.field)) },
+      conditions: {
+        ...rule.conditions,
+        // ID-bound form fields are per-template, not event-scoped (§5d pending) — keep them.
+        rules: conds.filter((c) => isFormFieldRef(c.field) || allowed.has(c.field as string)),
+      },
     });
   }
-  function addCondition(fieldKey: string) {
-    const field = FIELDS[fieldKey];
+  /** Decode a picker value into a condition field ref (attribute key or live form field). */
+  function refForPickerValue(v: string): ConditionFieldRef {
+    if (v.startsWith(FF_PREFIX)) {
+      const [formTemplateId, fieldId] = v.slice(FF_PREFIX.length).split(":");
+      const live = overlay?.liveFields.find(
+        (f) => f.formTemplateId === formTemplateId && f.fieldId === fieldId
+      );
+      return {
+        kind: "formField",
+        formTemplateId,
+        fieldId,
+        key: live?.name,
+        label: live?.label,
+        fieldKind: live ? fieldKindForType(live.fieldType) : "text",
+      };
+    }
+    return v;
+  }
+  function addCondition(pickerValue: string) {
+    const ref = refForPickerValue(pickerValue);
+    const kind = condFieldKind(ref);
+    const def = condFieldDef(ref);
     onChange({
       ...rule,
       conditions: {
         ...rule.conditions,
-        rules: [...conds, { field: fieldKey, operator: OPERATORS[field.kind][0].value, value: defaultValueFor(field) }],
+        rules: [
+          ...conds,
+          { field: ref, operator: OPERATORS[kind][0].value, value: def ? defaultValueFor(def) : "" },
+        ],
       },
     });
   }
@@ -184,7 +227,7 @@ export default function RuleSentence({ rule, onChange, overlay }: RuleSentencePr
     confidence: e.confidence,
     hint: e.blurb,
   }));
-  const fieldOptions = fieldOptionsFor(eventKey);
+  const fieldOptions = fieldOptionsFor(eventKey, overlay);
   const actionOptions: PickerOption[] = ACTIONS.map((a) => ({
     value: a.key,
     label: a.label,
@@ -206,7 +249,6 @@ export default function RuleSentence({ rule, onChange, overlay }: RuleSentencePr
         {/* IF */}
         {conds.length > 0 && <Word>If</Word>}
         {conds.map((c, i) => {
-          const field = FIELDS[c.field];
           return (
             <span key={i} className="inline-flex flex-wrap items-center gap-2">
               {i > 0 && (
@@ -215,8 +257,8 @@ export default function RuleSentence({ rule, onChange, overlay }: RuleSentencePr
                 </Pill>
               )}
               <span className="inline-flex items-center gap-1.5 rounded-full border px-1 py-0.5" style={{ borderColor: "var(--tok-if-br)" }}>
-                <Pill palette="if" unconfirmed={field?.confidence === "unconfirmed"} onClick={(el) => openPicker({ kind: "cond-field", i }, el)}>
-                  {field?.label ?? c.field}
+                <Pill palette="if" unconfirmed={condFieldDef(c.field)?.confidence === "unconfirmed"} onClick={(el) => openPicker({ kind: "cond-field", i }, el)}>
+                  {condFieldLabel(c.field)}
                 </Pill>
                 <button
                   type="button"
@@ -224,7 +266,7 @@ export default function RuleSentence({ rule, onChange, overlay }: RuleSentencePr
                   className="ring-accent rounded-md px-1 text-[13px] font-medium lowercase transition-colors hover:bg-[var(--accent-soft)]"
                   style={{ color: "var(--fg-muted)" }}
                 >
-                  {opLabel(field?.kind ?? "text", c.operator)}
+                  {opLabel(condFieldKind(c.field), c.operator)}
                 </button>
                 <Pill palette="if" onClick={(el) => openPicker({ kind: "cond-value", i }, el)}>
                   {displayValue(c)}
@@ -296,10 +338,16 @@ export default function RuleSentence({ rule, onChange, overlay }: RuleSentencePr
           anchor={anchor}
           title="Condition field"
           options={fieldOptions}
-          value={conds[open.i]?.field}
+          value={condFieldKey(conds[open.i]?.field ?? "")}
           onSelect={(v) => {
-            const field = FIELDS[v];
-            updateCond(open.i, { field: v, operator: OPERATORS[field.kind][0].value, value: defaultValueFor(field) });
+            const ref = refForPickerValue(v);
+            const kind = condFieldKind(ref);
+            const def = condFieldDef(ref);
+            updateCond(open.i, {
+              field: ref,
+              operator: OPERATORS[kind][0].value,
+              value: def ? defaultValueFor(def) : "",
+            });
             close();
           }}
           onClose={close}
@@ -308,8 +356,8 @@ export default function RuleSentence({ rule, onChange, overlay }: RuleSentencePr
 
       {open?.kind === "cond-op" &&
         (() => {
-          const field = FIELDS[conds[open.i]?.field];
-          const opts: PickerOption[] = OPERATORS[field?.kind ?? "text"].map((o) => ({ value: o.value, label: o.label }));
+          const kind = condFieldKind(conds[open.i]?.field ?? "");
+          const opts: PickerOption[] = OPERATORS[kind].map((o) => ({ value: o.value, label: o.label }));
           return (
             <TokenPicker anchor={anchor} title="Operator" options={opts} value={conds[open.i]?.operator} onSelect={(v) => { updateCond(open.i, { operator: v }); close(); }} onClose={close} />
           );
@@ -318,21 +366,26 @@ export default function RuleSentence({ rule, onChange, overlay }: RuleSentencePr
       {open?.kind === "cond-value" &&
         (() => {
           const cond = conds[open.i];
-          const field = FIELDS[cond?.field];
-          const isEnum = field?.kind === "enum";
-          const isNum = field?.kind === "numeric";
+          const kind = condFieldKind(cond?.field ?? "");
+          const def = condFieldDef(cond?.field ?? "");
+          const label = condFieldLabel(cond?.field ?? "");
+          const isEnum = kind === "enum" && !!def; // live form-field enums have unknown options → free text
+          const isNum = kind === "numeric";
           // Live platform values take precedence over the static demo list.
-          const values = overlay?.fieldOptions[cond?.field] ?? field?.options ?? [];
+          const values =
+            (typeof cond?.field === "string" ? overlay?.fieldOptions[cond.field] : undefined) ??
+            def?.options ??
+            [];
           const opts: PickerOption[] = values.map((o) => ({ value: o, label: o }));
           return (
             <TokenPicker
               anchor={anchor}
-              title={field?.label ?? "Value"}
+              title={label || "Value"}
               options={opts}
               value={cond?.value}
               freeText={!isEnum}
               numeric={isNum}
-              freeTextPlaceholder={isNum ? "Enter an amount…" : `Enter ${field?.label ?? "value"}…`}
+              freeTextPlaceholder={isNum ? "Enter an amount…" : `Enter ${label || "value"}…`}
               onSelect={(v) => { updateCond(open.i, { value: v }); close(); }}
               onClose={close}
             />

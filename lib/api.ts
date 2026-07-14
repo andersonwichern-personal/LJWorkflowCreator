@@ -1,12 +1,28 @@
 /**
- * Thin client for the /api/workflows route handlers (backend scaffolded by the
- * Overseer). Uses a fixed tenant context for the demo, per the UI prompt.
+ * Thin client for the /api/workflows + /api/platform route handlers.
+ *
+ * Tenant identity is resolved once from /api/platform/me (alignment doc
+ * §4c/§8: one real org everywhere — the same org scopes persistence and the
+ * platform bridge). Falls back to the demo tenant when no live session exists.
  */
 
 import { WorkflowRule, normalizeRule } from "./vocabulary";
 
-/** Fixed demo tenant. Real app derives org_id from the authed session / JWT. */
-export const DEMO_ORG_ID = "test-org-uuid-999";
+/** Demo tenant used only when /api/platform/me can't resolve a real org. */
+const DEMO_FALLBACK_ORG_ID = "test-org-uuid-999";
+
+let orgPromise: Promise<string> | null = null;
+
+/** Resolve (and cache) the tenant org id for this session. */
+export function getOrgId(): Promise<string> {
+  if (!orgPromise) {
+    orgPromise = fetch("/api/platform/me", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body) => body?.orgId || DEMO_FALLBACK_ORG_ID)
+      .catch(() => DEMO_FALLBACK_ORG_ID);
+  }
+  return orgPromise;
+}
 
 export interface WorkflowRecord {
   id: string;
@@ -39,7 +55,8 @@ function normalizeRecord(rec: WorkflowRecord): WorkflowRecord {
 }
 
 export async function listWorkflows(): Promise<WorkflowRecord[]> {
-  const res = await fetch(`/api/workflows?orgId=${encodeURIComponent(DEMO_ORG_ID)}`, {
+  const orgId = await getOrgId();
+  const res = await fetch(`/api/workflows?orgId=${encodeURIComponent(orgId)}`, {
     cache: "no-store",
   });
   return (await handle<WorkflowRecord[]>(res)).map(normalizeRecord);
@@ -51,10 +68,11 @@ export async function createWorkflow(input: {
   ruleJson: WorkflowRule;
   enabled?: boolean;
 }): Promise<WorkflowRecord> {
+  const orgId = await getOrgId();
   const res = await fetch(`/api/workflows`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ orgId: DEMO_ORG_ID, ...input }),
+    body: JSON.stringify({ orgId, ...input }),
   });
   return normalizeRecord(await handle<WorkflowRecord>(res));
 }
@@ -68,7 +86,8 @@ export async function updateWorkflow(
     ruleJson: WorkflowRule;
   }>
 ): Promise<WorkflowRecord> {
-  const res = await fetch(`/api/workflows/${id}?orgId=${encodeURIComponent(DEMO_ORG_ID)}`, {
+  const orgId = await getOrgId();
+  const res = await fetch(`/api/workflows/${id}?orgId=${encodeURIComponent(orgId)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(updates),
@@ -81,7 +100,8 @@ export async function toggleWorkflow(id: string, enabled: boolean): Promise<Work
 }
 
 export async function deleteWorkflow(id: string): Promise<void> {
-  const res = await fetch(`/api/workflows/${id}?orgId=${encodeURIComponent(DEMO_ORG_ID)}`, {
+  const orgId = await getOrgId();
+  const res = await fetch(`/api/workflows/${id}?orgId=${encodeURIComponent(orgId)}`, {
     method: "DELETE",
   });
   await handle<{ success: boolean }>(res);
@@ -118,17 +138,19 @@ export interface AuthorityInput {
 }
 
 export async function listAuthorities(): Promise<AuthorityRecord[]> {
-  const res = await fetch(`/api/platform/authorities?orgId=${encodeURIComponent(DEMO_ORG_ID)}`, {
+  const orgId = await getOrgId();
+  const res = await fetch(`/api/platform/authorities?orgId=${encodeURIComponent(orgId)}`, {
     cache: "no-store",
   });
   return handle<AuthorityRecord[]>(res);
 }
 
 export async function createAuthority(input: AuthorityInput): Promise<AuthorityRecord> {
+  const orgId = await getOrgId();
   const res = await fetch(`/api/platform/authorities`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ orgId: DEMO_ORG_ID, ...input }),
+    body: JSON.stringify({ orgId, ...input }),
   });
   return handle<AuthorityRecord>(res);
 }
@@ -137,21 +159,19 @@ export async function updateAuthority(
   id: string,
   updates: Partial<AuthorityInput>
 ): Promise<AuthorityRecord> {
-  const res = await fetch(
-    `/api/platform/authorities/${id}?orgId=${encodeURIComponent(DEMO_ORG_ID)}`,
-    {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updates),
-    }
-  );
+  const orgId = await getOrgId();
+  const res = await fetch(`/api/platform/authorities/${id}?orgId=${encodeURIComponent(orgId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updates),
+  });
   return handle<AuthorityRecord>(res);
 }
 
 export async function deleteAuthority(id: string): Promise<void> {
-  const res = await fetch(
-    `/api/platform/authorities/${id}?orgId=${encodeURIComponent(DEMO_ORG_ID)}`,
-    { method: "DELETE" }
-  );
+  const orgId = await getOrgId();
+  const res = await fetch(`/api/platform/authorities/${id}?orgId=${encodeURIComponent(orgId)}`, {
+    method: "DELETE",
+  });
   await handle<{ success: boolean }>(res);
 }

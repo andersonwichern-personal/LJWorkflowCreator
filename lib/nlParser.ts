@@ -18,6 +18,8 @@ import {
   opLabel,
   paramKeyFor,
   RULE_SCHEMA_VERSION,
+  condFieldLabel,
+  condFieldKind,
 } from "./vocabulary";
 
 export interface ParseResult {
@@ -210,10 +212,7 @@ export function parseInstruction(input: string): ParseResult {
     notes.push(
       "Conditions → " +
         conds
-          .map((c) => {
-            const f = FIELDS[c.field];
-            return `${f?.label ?? c.field} ${opLabel(f?.kind ?? "text", c.operator)} ${c.value}`;
-          })
+          .map((c) => `${condFieldLabel(c.field)} ${opLabel(condFieldKind(c.field), c.operator)} ${c.value}`)
           .join(` ${condLogic} `) +
         "."
     );

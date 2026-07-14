@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AuthorityRecord,
   AuthorityInput,
@@ -10,6 +10,7 @@ import {
   deleteAuthority,
 } from "@/lib/api";
 import { ASSIGNEES } from "@/lib/vocabulary";
+import { decideAuthority } from "@/lib/authorityEngine";
 import { formatCurrency } from "@/lib/platformData";
 import PageHeader from "@/components/ui/PageHeader";
 import Toggle from "@/components/Toggle";
@@ -163,6 +164,18 @@ export default function ApprovalAuthorities() {
 
   const autoCount = authorities.filter((a) => a.autoApprove).length;
 
+  // Matrix decision preview (alignment doc §7) — explain what the matrix decides.
+  const [previewAmount, setPreviewAmount] = useState("310000");
+  const [previewGrade, setPreviewGrade] = useState("B");
+  const [previewProduct, setPreviewProduct] = useState("Term Loan");
+  const preview = useMemo(() => {
+    const amount = Number(previewAmount);
+    if (!previewAmount.trim() || !Number.isFinite(amount) || amount < 0 || authorities.length === 0) {
+      return null;
+    }
+    return decideAuthority({ amount, riskGrade: previewGrade, product: previewProduct }, authorities);
+  }, [previewAmount, previewGrade, previewProduct, authorities]);
+
   return (
     <div>
       <PageHeader
@@ -187,6 +200,81 @@ export default function ApprovalAuthorities() {
           </>
         }
       />
+
+      {/* Decision preview — what does the matrix decide for a given request? */}
+      {authorities.length > 0 && (
+        <div className="glass mb-5 rounded-2xl p-5">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--fg-subtle)" }}>
+            Decision preview
+          </h3>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--fg-subtle)" }}>Amount</span>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: "var(--fg-subtle)" }}>$</span>
+                <input
+                  value={previewAmount}
+                  onChange={(e) => setPreviewAmount(e.target.value.replace(/[^\d.]/g, ""))}
+                  inputMode="decimal"
+                  className="ring-accent w-36 rounded-lg py-2 pl-7 pr-3 text-sm"
+                  style={inputStyle}
+                />
+              </div>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--fg-subtle)" }}>Risk Grade</span>
+              <select
+                value={previewGrade}
+                onChange={(e) => setPreviewGrade(e.target.value)}
+                className="ring-accent rounded-lg px-3 py-2 text-sm"
+                style={inputStyle}
+              >
+                {RISK_GRADES.map((g) => (
+                  <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--fg-subtle)" }}>Product</span>
+              <select
+                value={previewProduct}
+                onChange={(e) => setPreviewProduct(e.target.value)}
+                className="ring-accent rounded-lg px-3 py-2 text-sm"
+                style={inputStyle}
+              >
+                {PRODUCTS.filter((p) => p !== "All").map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </label>
+            {preview && (
+              <span
+                className="rounded-full px-3 py-1.5 text-xs font-semibold"
+                style={
+                  preview.lane === "auto-approve"
+                    ? { background: "var(--tok-if-bg)", color: "var(--tok-if-fg)" }
+                    : preview.lane === "manual"
+                    ? { background: "var(--tok-when-bg)", color: "var(--tok-when-fg)" }
+                    : preview.lane === "escalate"
+                    ? { background: "var(--warn-bg)", color: "var(--warn-fg)" }
+                    : { background: "var(--danger-bg)", color: "var(--danger-fg)" }
+                }
+              >
+                {preview.lane === "auto-approve"
+                  ? "Auto-approve"
+                  : preview.lane === "manual"
+                  ? `Manual — ${preview.authority?.name}`
+                  : preview.lane === "escalate"
+                  ? `Escalates — ${preview.authority?.name}`
+                  : "Not covered"}
+              </span>
+            )}
+          </div>
+          {preview && (
+            <p className="mt-3 text-sm" style={{ color: "var(--fg-muted)" }}>{preview.reason}</p>
+          )}
+        </div>
+      )}
 
       <div className="glass overflow-hidden rounded-2xl">
         {loading ? (

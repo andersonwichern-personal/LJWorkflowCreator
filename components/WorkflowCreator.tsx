@@ -8,10 +8,12 @@ import {
   ruleUsesUnconfirmed,
   getEvent,
   getAction,
-  FIELDS,
   opLabel,
   paramKeyFor,
   STARTER_TEMPLATES,
+  condFieldLabel,
+  condFieldKind,
+  condFieldDef,
 } from "@/lib/vocabulary";
 import {
   WorkflowRecord,
@@ -71,6 +73,7 @@ export default function WorkflowCreator() {
     return {
       fieldOptions: base?.fieldOptions ?? {},
       actionParamOptions: { ...base?.actionParamOptions, assign_authority: authorityNames },
+      liveFields: base?.liveFields ?? [],
     };
   }, [vocabSource, authorityNames]);
 
@@ -375,7 +378,7 @@ export default function WorkflowCreator() {
             )}
           </div>
 
-          <SimulationPanel rule={rule} />
+          <SimulationPanel rule={rule} workflowId={activeId} />
 
           <details className="glass rounded-2xl p-4">
             <summary className="cursor-pointer text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--fg-subtle)" }}>
@@ -420,12 +423,12 @@ function plainSummary(rule: WorkflowRule): string {
   const conds = rule.conditions.rules;
   if (conds.length) {
     const parts = conds.map((c) => {
-      const field = FIELDS[c.field];
-      const label = field?.label ?? c.field;
-      const op = opLabel(field?.kind ?? "text", c.operator);
+      const label = condFieldLabel(c.field);
+      const kind = condFieldKind(c.field);
+      const op = opLabel(kind, c.operator);
       let val = c.value || "…";
-      if (field?.kind === "numeric" && c.value && !isNaN(Number(c.value))) {
-        val = `${field.unit ?? ""}${Number(c.value).toLocaleString("en-US")}`;
+      if (kind === "numeric" && c.value && !isNaN(Number(c.value))) {
+        val = `${condFieldDef(c.field)?.unit ?? ""}${Number(c.value).toLocaleString("en-US")}`;
       }
       return `${label} ${op} ${val}`;
     });

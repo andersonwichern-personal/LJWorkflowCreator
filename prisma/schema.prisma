@@ -16,7 +16,27 @@ model Workflow {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  executions RuleExecution[]
+
   @@map("workflows")
+}
+
+model RuleExecution {
+  id                String   @id @default(uuid())
+  orgId             String   @map("org_id")
+  workflowId        String   @map("workflow_id")
+  requestId         String   @map("request_id")
+  requestName       String   @map("request_name")
+  eventName         String   @map("event_name")
+  status            String // "FIRED" | "CONDITIONS_NOT_MET" | "ERROR"
+  evaluationTrace   Json     @map("evaluation_trace")
+  actionsDispatched Json     @map("actions_dispatched")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, requestId])
+  @@map("rule_executions")
 }
 
 model ApprovalAuthority {

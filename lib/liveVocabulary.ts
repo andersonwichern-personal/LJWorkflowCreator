@@ -14,7 +14,7 @@
  * client-mocked in test) and never builds a role/authority ladder.
  */
 
-import { ACTIONS, ASSIGNEES, FIELDS } from "@/lib/vocabulary";
+import { ACTIONS, ASSIGNEES, FIELDS, FieldKind } from "@/lib/vocabulary";
 
 /* ---- Shapes shared with the server proxy (lib/platform.ts) ---- */
 
@@ -30,6 +30,30 @@ export interface LiveTemplate {
   stages: LiveOption[];
 }
 
+/**
+ * A real per-template dynamic-form field (build manual §6a) — the ID-bound
+ * operand behind Application-Data conditions (alignment doc §4b).
+ */
+export interface LiveField {
+  formTemplateId: string;
+  formName: string;
+  fieldId: string;
+  /** Stable machine key, e.g. "newField3". */
+  name: string;
+  label: string;
+  /** Raw platform fieldType: INPUT | NUMBER | MONEY | SELECT | LIVESTOCK | … */
+  fieldType: string;
+  required: boolean;
+}
+
+/** Map a platform fieldType onto the builder's operator model. */
+export function fieldKindForType(fieldType: string): FieldKind {
+  const t = fieldType.toUpperCase();
+  if (t === "NUMBER" || t === "MONEY" || t === "COMPUTED") return "numeric";
+  if (t === "SELECT" || t === "RADIO" || t === "CHECKBOX" || t === "YES_NO_QUESTIONNAIRE") return "enum";
+  return "text";
+}
+
 export interface LiveVocabulary {
   source: "live";
   fetchedAt: string;
@@ -37,6 +61,8 @@ export interface LiveVocabulary {
   retailers: LiveOption[];
   templates: LiveTemplate[];
   forms: LiveOption[];
+  /** Flattened per-form field registry (bounded fan-out; see lib/platform.ts). */
+  fields: LiveField[];
   /** Sections that failed to fetch/parse (partial live data still applies). */
   errors: string[];
 }
@@ -50,6 +76,8 @@ export interface VocabOverlay {
   fieldOptions: Record<string, string[]>;
   /** action key → option values for the action-param picker */
   actionParamOptions: Record<string, string[]>;
+  /** Real per-template form fields, offered as ID-bound condition operands. */
+  liveFields: LiveField[];
 }
 
 /** Live values first, then static entries not already present (case-insensitive). */
@@ -95,7 +123,7 @@ export function buildOverlay(v: VocabularySource | null): VocabOverlay | null {
     );
   }
 
-  return { fieldOptions, actionParamOptions };
+  return { fieldOptions, actionParamOptions, liveFields: v.fields ?? [] };
 }
 
 function dedupe(values: string[]): string[] {
@@ -117,6 +145,7 @@ export function describeSource(v: VocabularySource | null): string {
     `${v.retailers.length} retailers`,
     `${v.templates.length} templates`,
     `${v.forms.length} forms`,
+    `${v.fields?.length ?? 0} form fields`,
   ];
   const errs = v.errors.length ? ` · failed: ${v.errors.join("; ")}` : "";
   return `Live platform vocabulary — ${parts.join(", ")}${errs}`;

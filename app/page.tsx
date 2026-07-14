@@ -3,10 +3,12 @@
 import { useState } from "react";
 import WorkflowCreator from "@/components/WorkflowCreator";
 import ApprovalAuthorities from "@/components/ApprovalAuthorities";
+import AuditLogs from "@/components/AuditLogs";
 
 const TABS = [
   { key: "rules", label: "Rules Canvas" },
   { key: "authorities", label: "Approval Authorities" },
+  { key: "audit", label: "Audit Logs" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -49,7 +51,13 @@ export default function HomePage() {
       </header>
 
       <main className="mx-auto max-w-[1440px] px-5 py-6">
-        {activeTab === "rules" ? <WorkflowCreator /> : <ApprovalAuthorities />}
+        {activeTab === "rules" ? (
+          <WorkflowCreator />
+        ) : activeTab === "authorities" ? (
+          <ApprovalAuthorities />
+        ) : (
+          <AuditLogs />
+        )}
       </main>
     </div>
   );

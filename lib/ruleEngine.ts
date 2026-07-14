@@ -8,7 +8,14 @@
  * backend microservices and is out of scope for the first demo.
  */
 
-import { WorkflowRule, RuleCondition, FIELDS, getAction, paramKeyFor } from "./vocabulary";
+import {
+  WorkflowRule,
+  RuleCondition,
+  getAction,
+  paramKeyFor,
+  condFieldKey,
+  condFieldKind,
+} from "./vocabulary";
 import {
   PlatformRequest,
   SystemEvent,
@@ -43,15 +50,31 @@ function fieldValue(r: PlatformRequest, field: string): string | number | string
   }
 }
 
+/**
+ * Public resolver for the traced simulator (lib/ruleEvaluator.ts): resolve a
+ * condition-field key on a request, reporting whether the field is known to
+ * the demo data at all (unknown ≠ empty — the trace shows the difference).
+ */
+export function resolveField(
+  r: PlatformRequest,
+  fieldKey: string
+): { known: boolean; value: string | number | string[] | null } {
+  const v = fieldValue(r, fieldKey);
+  if (v === UNKNOWN) return { known: false, value: null };
+  return { known: true, value: v };
+}
+
 function eq(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
 function evalCondition(r: PlatformRequest, c: RuleCondition): boolean {
-  const actual = fieldValue(r, c.field);
+  // ID-bound form-field refs resolve to ff:<form>:<field> keys — not present in
+  // the demo seed data, so they fall through to UNKNOWN (honest no-match).
+  const actual = fieldValue(r, condFieldKey(c.field));
   if (actual === UNKNOWN || actual === null) return false;
 
-  const kind = FIELDS[c.field]?.kind ?? "text";
+  const kind = condFieldKind(c.field);
 
   if (kind === "numeric") {
     const a = Number(actual);

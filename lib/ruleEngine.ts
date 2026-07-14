@@ -12,6 +12,7 @@ import {
   WorkflowRule,
   getAction,
   paramKeyFor,
+  scopeLabel,
 } from "./vocabulary";
 // Circular at module level only; both modules dereference at call time.
 import { ruleMatches } from "./ruleEvaluator";
@@ -112,7 +113,7 @@ export function describeActions(rule: WorkflowRule): string[] {
     const action = getAction(o.action);
     const label = action?.label ?? o.action;
     if (action?.paramKind === "none") return label;
-    const val = o.params[paramKeyFor(o.action)] || "…";
+    const val = scopeLabel(o.params[paramKeyFor(o.action)]) || "…";
     return `${label} ${val}`;
   });
 }

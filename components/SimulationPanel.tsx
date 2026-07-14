@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { WorkflowRule, getAction, paramKeyFor, ActionExecution } from "@/lib/vocabulary";
+import { WorkflowRule, getAction, paramKeyFor, ActionExecution, scopeLabel } from "@/lib/vocabulary";
 import { formatCurrency, PlatformRequest, REQUESTS } from "@/lib/platformData";
 import { matchingRequests } from "@/lib/ruleEngine";
 import { SimulateResult, simulateWorkflowRule } from "@/lib/api";
@@ -68,7 +68,7 @@ export default function SimulationPanel({
       rule.actions.map((o) => {
         const def = getAction(o.action);
         const label = def?.label ?? o.action;
-        const val = def?.paramKind === "none" ? "" : ` ${o.params[paramKeyFor(o.action)] || "…"}`;
+        const val = def?.paramKind === "none" ? "" : ` ${scopeLabel(o.params[paramKeyFor(o.action)]) || "…"}`;
         return { text: `${label}${val}`, status: def?.execution.status ?? "backend-required" };
       }),
     [rule]

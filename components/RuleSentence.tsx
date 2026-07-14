@@ -23,6 +23,13 @@ import {
   ConditionNode,
   ConditionLeaf,
   ConditionFieldRef,
+  ScopeRef,
+  ScopeSpec,
+  SCOPED_FIELDS,
+  SCOPED_PARAMS,
+  isLegacyString,
+  scopeLabel,
+  scopeInstanceId,
   isGroup,
   isFormFieldRef,
   condFieldKey,
@@ -41,8 +48,8 @@ import {
   nodeAt,
   emptyGroup,
 } from "@/lib/conditionTree";
-import TokenPicker, { PickerOption } from "./TokenPicker";
-import { VocabOverlay, fieldKindForType } from "@/lib/liveVocabulary";
+import TokenPicker, { PickerOption, ScopedOptions } from "./TokenPicker";
+import { VocabOverlay, ScopedInstances, fieldKindForType } from "@/lib/liveVocabulary";
 import { UnresolvedSlot } from "@/lib/nlParser";
 
 type Lane = "then" | "else";
@@ -50,6 +57,7 @@ type Lane = "then" | "else";
 type Open =
   | { kind: "event"; ti: number }
   | { kind: "add-trigger" }
+  | { kind: "trigger-scope"; ti: number }
   | { kind: "cond-field"; path: number[] }
   | { kind: "cond-op"; path: number[] }
   | { kind: "cond-value"; path: number[] }
@@ -57,6 +65,26 @@ type Open =
   | { kind: "action"; lane: Lane; i: number }
   | { kind: "action-param"; lane: Lane; i: number }
   | { kind: "add-action"; lane: Lane };
+
+/** Pseudo-team categories are unconfirmed (plan §4.2) — badge them. */
+const TEAM_CATEGORIES = new Set(["Underwriting Team", "Booking Team", "Escalation Team", "Operations Team"]);
+
+/** Build the picker's scoped sections for a field/param spec + live overlay. */
+function scopedFor(spec: ScopeSpec | undefined, overlay?: VocabOverlay | null): ScopedOptions | undefined {
+  if (!spec) return undefined;
+  const source = spec.instanceSource;
+  const live: { id: string; label: string }[] =
+    source && overlay ? (overlay.instances[source as keyof ScopedInstances] ?? []) : [];
+  return {
+    categories: spec.categories.map((c) => ({
+      value: c,
+      label: c,
+      confidence: TEAM_CATEGORIES.has(c) ? ("unconfirmed" as const) : undefined,
+    })),
+    instances: live.map((o) => ({ value: o.id, label: o.label })),
+    instancesDisabledHint: spec.instancesDisabledHint,
+  };
+}
 
 type Palette = "when" | "if" | "then" | "op" | "danger";
 
@@ -111,6 +139,11 @@ function Word({ children }: { children: React.ReactNode }) {
 /** Format a condition value for display (adds unit + thousands separators). */
 function displayValue(c: RuleCondition): string {
   if (!c.value) return "value";
+  if (!isLegacyString(c.value)) {
+    // Structured ScopeRef — total rendering, never "[object Object]".
+    if (c.value.level === "any") return `any ${condFieldLabel(c.field)}`;
+    return scopeLabel(c.value);
+  }
   if (condFieldKind(c.field) === "numeric") {
     const n = Number(c.value);
     const formatted = isNaN(n) ? c.value : n.toLocaleString("en-US");
@@ -216,6 +249,15 @@ export default function RuleSentence({ rule, onChange, overlay, unresolved, onRe
   function removeTrigger(ti: number) {
     if (triggers.length <= 1) return;
     retriggered(triggers.filter((_, i) => i !== ti));
+  }
+  /** Set/clear a trigger's template scope ("any" = absent, keeps JSON minimal). */
+  function setTriggerScope(ti: number, scope?: ScopeRef) {
+    onChange({
+      ...rule,
+      triggers: triggers.map((t, i) =>
+        i === ti ? (scope && scope.level !== "any" ? { ...t, scope } : { event: t.event }) : t
+      ),
+    });
   }
 
   /* ---- condition-tree mutators (pure via conditionTree.ts) ---- */
@@ -414,7 +456,7 @@ export default function RuleSentence({ rule, onChange, overlay, unresolved, onRe
     return list.map((o, i) => {
       const action = getAction(o.action);
       const key = paramKeyFor(o.action);
-      const paramVal = o.params[key] ?? "";
+      const paramVal = scopeLabel(o.params[key]);
       const hasParam = action?.paramKind !== "none";
       const slot = actionSlot(lane, i);
       return (
@@ -471,6 +513,15 @@ export default function RuleSentence({ rule, onChange, overlay, unresolved, onRe
                 <Pill palette="when" unconfirmed={ev?.confidence === "unconfirmed"} onClick={(el) => openPicker({ kind: "event", ti }, el)}>
                   {ev?.label ?? t.event}
                 </Pill>
+                <button
+                  type="button"
+                  onClick={(e) => openPicker({ kind: "trigger-scope", ti }, e.currentTarget)}
+                  title={t.scope ? `Scoped to ${scopeLabel(t.scope)}` : "Scope this trigger to a specific template"}
+                  className="ring-accent rounded-md px-1 text-[11px] font-medium transition-colors hover:bg-[var(--accent-soft)]"
+                  style={{ color: t.scope ? "var(--accent)" : "var(--fg-subtle)" }}
+                >
+                  {t.scope ? `⌖ ${scopeLabel(t.scope)}` : "⌖ any"}
+                </button>
                 {triggers.length > 1 && (
                   <button
                     type="button"
@@ -578,6 +629,24 @@ export default function RuleSentence({ rule, onChange, overlay, unresolved, onRe
         />
       )}
 
+      {open?.kind === "trigger-scope" && (
+        <TokenPicker
+          anchor={anchor}
+          title="Trigger scope"
+          options={[]}
+          scoped={{
+            categories: [],
+            instances: (overlay?.instances.templates ?? []).map((t) => ({ value: t.id, label: t.label })),
+            instancesDisabledHint: overlay?.instances.templates.length
+              ? undefined
+              : "Template scoping needs the live platform connection — the trigger stays unscoped.",
+          }}
+          onSelect={() => close()}
+          onSelectScope={(ref) => { setTriggerScope(open.ti, ref); close(); }}
+          onClose={close}
+        />
+      )}
+
       {open?.kind === "add-cond" && (
         <TokenPicker
           anchor={anchor}
@@ -633,16 +702,20 @@ export default function RuleSentence({ rule, onChange, overlay, unresolved, onRe
           const label = condFieldLabel(cond?.field ?? "");
           const isEnum = (kind === "enum" || kind === "orderedEnum") && !!def;
           const isNum = kind === "numeric";
+          // Scoped (category/instance) picker for instance-shaped fields (§4.2).
+          const scoped =
+            typeof cond?.field === "string" ? scopedFor(SCOPED_FIELDS[cond.field], overlay) : undefined;
           const values =
             (typeof cond?.field === "string" ? overlay?.fieldOptions[cond.field] : undefined) ?? def?.options ?? [];
           let opts: PickerOption[] = values.map((o) => ({ value: o, label: o }));
           if (slot) opts = slotOptions(slot, opts);
+          const currentValue = cond ? (scopeInstanceId(cond.value) ?? scopeLabel(cond.value)) : undefined;
           return (
             <TokenPicker
               anchor={anchor}
               title={slot ? `${label} — you wrote "${slot.heard}"` : label || "Value"}
               options={opts}
-              value={cond?.value}
+              value={currentValue}
               freeText={!isEnum}
               numeric={isNum}
               validate={
@@ -651,6 +724,12 @@ export default function RuleSentence({ rule, onChange, overlay, unresolved, onRe
                   : undefined
               }
               freeTextPlaceholder={isNum ? "Enter an amount…" : `Enter ${label || "value"}…`}
+              scoped={scoped}
+              onSelectScope={(ref) => {
+                updateLeafAt(open.path, { value: ref });
+                if (slot) onResolve?.(slot);
+                close();
+              }}
               onSelect={(v) => {
                 updateLeafAt(open.path, { value: v });
                 if (slot) onResolve?.(slot);
@@ -692,18 +771,27 @@ export default function RuleSentence({ rule, onChange, overlay, unresolved, onRe
           const slot = actionSlot(open.lane, open.i);
           const action = getAction(output?.action);
           const isEnum = action?.paramKind === "enum";
+          // Scoped (category/instance) picker for instance-shaped params (§4.2).
+          const scoped = scopedFor(SCOPED_PARAMS[output?.action ?? ""], overlay);
           const values = overlay?.actionParamOptions[output?.action] ?? action?.paramOptions ?? [];
           let opts: PickerOption[] = values.map((o) => ({ value: o, label: o }));
           if (slot) opts = slotOptions(slot, opts);
           const key = paramKeyFor(output?.action ?? "");
+          const current = output?.params[key];
           return (
             <TokenPicker
               anchor={anchor}
               title={slot ? `${action?.paramLabel ?? "Value"} — you wrote "${slot.heard}"` : action?.paramLabel ?? "Value"}
               options={opts}
-              value={output?.params[key]}
+              value={current !== undefined ? (scopeInstanceId(current) ?? scopeLabel(current)) : undefined}
               freeText={!isEnum}
               freeTextPlaceholder={`Enter ${action?.paramLabel ?? "value"}…`}
+              scoped={scoped}
+              onSelectScope={(ref) => {
+                updateActionAt(open.lane, open.i, { params: { [key]: ref } });
+                if (slot) onResolve?.(slot);
+                close();
+              }}
               onSelect={(v) => {
                 updateActionAt(open.lane, open.i, { params: { [key]: v } });
                 if (slot) onResolve?.(slot);

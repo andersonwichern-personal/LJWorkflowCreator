@@ -14,6 +14,8 @@ import {
   WorkflowRule,
   RuleOutput,
   ConditionLeaf,
+  isLegacyString,
+  scopeLabel,
   normalizeRule,
   RULE_SCHEMA_VERSION,
   getEvent,
@@ -101,8 +103,13 @@ export function validateRule(raw: unknown): { rule: WorkflowRule | null; issues:
     }
 
     // Numeric field with a non-numeric, non-empty value (empty-ops exempt).
-    if (kind === "numeric" && !isValuelessOperator(leaf.operator) && leaf.value.trim() !== "" && isNaN(Number(leaf.value))) {
-      err("NON_NUMERIC_VALUE", `${label} needs a number, got "${leaf.value}".`, path);
+    // Numerics stay legacy strings (errata E1) — a ScopeRef here is invalid too.
+    if (kind === "numeric" && !isValuelessOperator(leaf.operator)) {
+      if (!isLegacyString(leaf.value)) {
+        err("NON_NUMERIC_VALUE", `${label} needs a number, got a reference (${scopeLabel(leaf.value)}).`, path);
+      } else if (leaf.value.trim() !== "" && isNaN(Number(leaf.value))) {
+        err("NON_NUMERIC_VALUE", `${label} needs a number, got "${leaf.value}".`, path);
+      }
     }
 
     // Attribute field outside the multi-trigger intersection (skip when an event
@@ -142,7 +149,9 @@ export function validateRule(raw: unknown): { rule: WorkflowRule | null; issues:
     }
     if (def.paramKind === "enum" && def.paramOptions) {
       const val = act.params[paramKeyFor(def.key)];
-      if (val && !def.paramOptions.includes(val)) {
+      // ScopeRefs come from registries (picked, not typed) — only legacy free-text
+      // strings are checked against the static enum list.
+      if (val && isLegacyString(val) && !def.paramOptions.includes(val)) {
         err("INVALID_ACTION_PARAM", `"${val}" is not a valid ${def.paramLabel ?? "value"} for ${def.label}.`, path);
       }
     }

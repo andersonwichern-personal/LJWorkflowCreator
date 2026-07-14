@@ -24,6 +24,8 @@ import {
   WorkflowRule,
   RuleCondition,
   RuleOutput,
+  ScopeValue,
+  scopeLabel,
   CondLogic,
   opLabel,
   paramKeyFor,
@@ -62,6 +64,10 @@ export interface ParseOptions {
   assignees?: string[];
   /** Live option lists per field key (from the demo-bridge overlay). */
   instanceOptions?: Record<string, string[]>;
+  /** ID-bearing registries per field/action key (Phase 2 §4.6) — when a name
+   *  resolves exactly AND has a registry entry, the parser emits an instance
+   *  ScopeRef instead of a bare string. */
+  instanceRegistry?: Record<string, { id: string; label: string }[]>;
 }
 
 export interface ParseResult {
@@ -266,6 +272,12 @@ function instanceListFor(field: FieldDef, opts?: ParseOptions): string[] | null 
   return null;
 }
 
+/** Upgrade a resolved label to an instance ScopeRef when a registry id exists. */
+function toInstanceRef(key: string, label: string, opts?: ParseOptions): ScopeValue {
+  const hit = opts?.instanceRegistry?.[key]?.find((o) => norm(o.label) === norm(label));
+  return hit ? { level: "instance", id: hit.id, label: hit.label } : label;
+}
+
 function matchConditions(
   text: string,
   eventKey: string,
@@ -352,7 +364,7 @@ function matchConditions(
         if (list) {
           const exact = list.find((o) => norm(o) === heard);
           if (exact) {
-            conds.push({ field: field.key, operator: "is", value: exact });
+            conds.push({ field: field.key, operator: "is", value: toInstanceRef(field.key, exact, opts) });
           } else {
             conds.push({ field: field.key, operator: "is", value: "" });
             unresolved.push({
@@ -401,7 +413,7 @@ function matchOutputs(
     const param = paramKeyFor(action);
     const exact = assigneeList.find((a) => norm(a) === norm(heard));
     if (exact) {
-      outputs.push({ action, params: { [param]: exact } });
+      outputs.push({ action, params: { [param]: toInstanceRef(action, exact, opts) } });
     } else {
       outputs.push({ action, params: {} });
       unresolved.push({
@@ -483,6 +495,36 @@ function matchOutputs(
 }
 
 /* -------------------------------------------------------------------------- */
+/* Category words (Phase 2 §4.6): "business customers", "any origination"     */
+/* -------------------------------------------------------------------------- */
+
+const CATEGORY_PATTERNS: Array<{ re: RegExp; field: string; category: (m: RegExpExecArray) => string }> = [
+  {
+    re: /\b(?:any\s+)?(business|individual)\s+customers?\b/,
+    field: "customer_name",
+    category: (m) => titleCase(m[1]),
+  },
+  {
+    re: /\b(?:any\s+)?(origination|covenant|loan application)\s+(?:requests?|templates?)\b/,
+    field: "template",
+    category: (m) => titleCase(m[1]),
+  },
+];
+
+/** Map category keywords to category-scoped conditions (skips duplicated fields). */
+function matchCategoryConditions(text: string, spans: Spans, existing: RuleCondition[]): RuleCondition[] {
+  const out: RuleCondition[] = [];
+  for (const pat of CATEGORY_PATTERNS) {
+    const m = pat.re.exec(text);
+    if (!m) continue;
+    if (existing.some((c) => c.field === pat.field) || out.some((c) => c.field === pat.field)) continue;
+    consume(spans, m.index, m[0].length);
+    out.push({ field: pat.field, operator: "is", value: { level: "category", category: pat.category(m) } });
+  }
+  return out;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Entry point                                                                */
 /* -------------------------------------------------------------------------- */
 
@@ -523,6 +565,7 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
   }
 
   const conds = matchConditions(text, eventKey, spans, opts, unresolved);
+  conds.push(...matchCategoryConditions(text, spans, conds));
   const outputs = matchOutputs(text, spans, opts, unresolved, notes);
   const condLogic = matchLogic(text);
   const uncovered = uncoveredFragments(text, spans);
@@ -537,7 +580,7 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
             const op = opLabel(condFieldKind(c.field), c.operator);
             return isValuelessOperator(c.operator)
               ? `${label} ${op}`
-              : `${label} ${op} ${c.value || "(pick a value)"}`;
+              : `${label} ${op} ${scopeLabel(c.value) || "(pick a value)"}`;
           })
           .join(` ${condLogic} `) +
         "."
@@ -551,7 +594,7 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
         outputs
           .map((o) => {
             const key = paramKeyFor(o.action);
-            return `${o.action.replace(/_/g, " ")}${o.params[key] ? " " + o.params[key] : ""}`;
+            return `${o.action.replace(/_/g, " ")}${scopeLabel(o.params[key]) ? " " + scopeLabel(o.params[key]) : ""}`;
           })
           .join("; ") +
         "."

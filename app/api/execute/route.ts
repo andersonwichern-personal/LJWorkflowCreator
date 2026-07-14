@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAction } from "@/lib/vocabulary";
+import { getAction, scopeLabel, ScopeValue } from "@/lib/vocabulary";
 import { decideAuthority, AuthorityInput } from "@/lib/authorityEngine";
 import { ApprovalAuthorityService } from "@/lib/services/authority";
 
@@ -10,7 +10,7 @@ const DEFAULT_ORG_ID = "test-org-uuid-999";
 
 interface ExecuteBody {
   action: string;
-  params?: Record<string, string>;
+  params?: Record<string, ScopeValue>;
   orgId?: string;
   /** Request context for authority decisioning (amount/grade/product). */
   context?: Partial<AuthorityInput> & { requestId?: string };
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
 async function executeNotify(body: ExecuteBody) {
   const apiKey = process.env.NOVU_API_KEY?.trim();
   const workflowId = process.env.NOVU_WORKFLOW_ID?.trim() || "workflow-notify";
-  const recipient = body.params?.value || body.params?.recipient || "";
+  const recipient = scopeLabel(body.params?.value) || scopeLabel(body.params?.recipient) || "";
 
   if (!recipient) {
     return { executed: false, action: "notify", status: "invalid", detail: "No recipient given." };

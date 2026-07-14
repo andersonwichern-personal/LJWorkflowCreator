@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ScopeRef } from "@/lib/vocabulary";
 
 export interface PickerOption {
   value: string;
@@ -11,6 +12,16 @@ export interface PickerOption {
   group?: string;
   /** Optional leading icon for the group (shown once per group). */
   groupIcon?: string;
+}
+
+/** Two-step scoped sections (Phase 2 §4.3): Any / By type / Specific. */
+export interface ScopedOptions {
+  /** Category chips ("By type"). value = category name. */
+  categories: PickerOption[];
+  /** Instance list ("Specific"). value = platform instance id. */
+  instances: PickerOption[];
+  /** Shown when the instance level ships disabled (no live endpoint yet). */
+  instancesDisabledHint?: string;
 }
 
 interface TokenPickerProps {
@@ -24,7 +35,12 @@ interface TokenPickerProps {
   numeric?: boolean;
   /** Author-time validation for free-text values: return an error string to block (C5). */
   validate?: (value: string) => string | null;
+  /** Scoped sections; requires onSelectScope. Plain options render under "Specific"
+   *  as legacy free-text fallbacks when no live instances exist. */
+  scoped?: ScopedOptions;
   onSelect: (value: string) => void;
+  /** Structured selection for scoped pickers (Any / By type / live Specific). */
+  onSelectScope?: (ref: ScopeRef) => void;
   onClose: () => void;
 }
 
@@ -37,12 +53,19 @@ export default function TokenPicker({
   freeTextPlaceholder = "Type a value…",
   numeric = false,
   validate,
+  scoped,
   onSelect,
+  onSelectScope,
   onClose,
 }: TokenPickerProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const [pos, setPos] = useState<{ top: number; left: number; maxH: number } | null>(null);
+
+  if (process.env.NODE_ENV !== "production" && scoped && !onSelectScope) {
+    // eslint-disable-next-line no-console
+    console.warn("TokenPicker: `scoped` requires an `onSelectScope` callback.");
+  }
 
   useLayoutEffect(() => {
     if (!anchor) return;
@@ -71,11 +94,12 @@ export default function TokenPicker({
 
   if (!pos) return null;
 
-  const filtered = query
-    ? options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase()))
-    : options;
+  const q = query.toLowerCase();
+  const filtered = query ? options.filter((o) => o.label.toLowerCase().includes(q)) : options;
+  const liveInstances = scoped?.instances ?? [];
+  const filteredInstances = query ? liveInstances.filter((o) => o.label.toLowerCase().includes(q)) : liveInstances;
   const grouped = options.some((o) => o.group);
-  const showSearch = freeText || options.length > 6;
+  const showSearch = freeText || options.length > 6 || liveInstances.length > 6;
   // C5: block invalid free-text at author time — never save a value that can't match.
   const validationError = freeText && query.trim() && validate ? validate(query.trim()) : null;
 
@@ -86,13 +110,25 @@ export default function TokenPicker({
     if (!groupOrder.includes(g)) groupOrder.push(g);
   }
 
-  function renderOption(o: PickerOption) {
+  function sectionHeader(text: string) {
+    return (
+      <div
+        className="flex items-center gap-1.5 px-2.5 pb-0.5 pt-1.5 text-[10px] font-bold uppercase tracking-wider"
+        style={{ color: "var(--fg-subtle)" }}
+      >
+        {text}
+      </div>
+    );
+  }
+
+  function renderOption(o: PickerOption, pick?: () => void) {
     const selected = o.value === value;
     return (
       <button
         key={o.value}
         type="button"
-        onClick={() => onSelect(o.value)}
+        onClick={pick ?? (() => onSelect(o.value))}
+        title={o.hint}
         className="group flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors"
         style={{ background: selected ? "var(--accent-soft)" : "transparent", color: "var(--fg)" }}
         onMouseEnter={(e) => {
@@ -180,33 +216,94 @@ export default function TokenPicker({
         </button>
       )}
 
-      {grouped ? (
-        <div className="flex flex-col gap-1">
-          {groupOrder
-            .filter((g) => g !== "")
-            .map((g) => {
-              const opts = filtered.filter((o) => (o.group ?? "") === g);
-              if (!opts.length) return null;
-              const icon = opts[0].groupIcon;
-              return (
-                <div key={g}>
-                  <div
-                    className="flex items-center gap-1.5 px-2.5 pb-0.5 pt-1.5 text-[10px] font-bold uppercase tracking-wider"
-                    style={{ color: "var(--fg-subtle)" }}
+      {/* Scoped sections: Any / By type / Specific (Phase 2 §4.3) */}
+      {scoped && onSelectScope && (
+        <>
+          {sectionHeader("Any")}
+          <button
+            type="button"
+            onClick={() => onSelectScope({ level: "any" })}
+            className="mb-0.5 flex w-full items-center rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-[var(--accent-soft)]"
+            style={{ color: "var(--fg)" }}
+          >
+            Any {title.toLowerCase()}
+          </button>
+
+          {scoped.categories.length > 0 && (
+            <>
+              {sectionHeader("By type")}
+              <div className="flex flex-wrap gap-1.5 px-2 pb-1.5">
+                {scoped.categories.map((c) => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    title={c.hint}
+                    onClick={() => onSelectScope({ level: "category", category: c.value })}
+                    className="rounded-full border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-[var(--accent-soft)]"
+                    style={{ borderColor: "var(--panel-border)", color: "var(--fg)" }}
                   >
-                    {icon && <span aria-hidden>{icon}</span>}
-                    {g}
-                  </div>
-                  <div className="flex flex-col gap-0.5">{opts.map(renderOption)}</div>
-                </div>
-              );
-            })}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-0.5">{filtered.map(renderOption)}</div>
+                    {c.label}
+                    {c.confidence === "unconfirmed" && (
+                      <span className="ml-1 text-[9px] font-bold" style={{ color: "var(--warn-fg)" }} title="Unconfirmed against the live platform">?</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {sectionHeader("Specific")}
+          {filteredInstances.length > 0 ? (
+            <div className="flex flex-col gap-0.5">
+              {filteredInstances.map((o) =>
+                renderOption(o, () => onSelectScope({ level: "instance", id: o.value, label: o.label }))
+              )}
+            </div>
+          ) : scoped.instancesDisabledHint ? (
+            <p className="px-2.5 pb-2 text-[11px]" style={{ color: "var(--fg-subtle)" }}>
+              {scoped.instancesDisabledHint}
+            </p>
+          ) : liveInstances.length > 0 ? (
+            <p className="px-2.5 pb-2 text-[11px]" style={{ color: "var(--fg-subtle)" }}>No matches.</p>
+          ) : (
+            // Static mode: no platform ids — fall through to the plain option
+            // list below, which emits legacy strings (never fabricated ids).
+            <p className="px-2.5 pb-1 text-[11px]" style={{ color: "var(--fg-subtle)" }}>
+              Demo values (no platform IDs) — picks save as plain text:
+            </p>
+          )}
+        </>
       )}
 
-      {filtered.length === 0 && !freeText && (
+      {/* Plain options — hidden when live instances already fill "Specific". */}
+      {!(scoped && filteredInstances.length > 0) &&
+        (grouped ? (
+          <div className="flex flex-col gap-1">
+            {groupOrder
+              .filter((g) => g !== "")
+              .map((g) => {
+                const opts = filtered.filter((o) => (o.group ?? "") === g);
+                if (!opts.length) return null;
+                const icon = opts[0].groupIcon;
+                return (
+                  <div key={g}>
+                    <div
+                      className="flex items-center gap-1.5 px-2.5 pb-0.5 pt-1.5 text-[10px] font-bold uppercase tracking-wider"
+                      style={{ color: "var(--fg-subtle)" }}
+                    >
+                      {icon && <span aria-hidden>{icon}</span>}
+                      {g}
+                    </div>
+                    <div className="flex flex-col gap-0.5">{opts.map((o) => renderOption(o))}</div>
+                  </div>
+                );
+              })}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-0.5">{filtered.map((o) => renderOption(o))}</div>
+        ))}
+
+      {filtered.length === 0 && filteredInstances.length === 0 && !freeText && !scoped && (
         <div className="px-2.5 py-3 text-sm" style={{ color: "var(--fg-subtle)" }}>
           No matches.
         </div>

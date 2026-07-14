@@ -113,6 +113,41 @@ t("orderedEnum: worse than → worse_than/B",
   leaves(r.rule).some((c) => c.field === "risk_grade" && c.operator === "worse_than" && c.value === "B") === true,
   JSON.stringify(leaves(r.rule)));
 
+/* ---- Phase 2: ScopeRef emission + category words ---------------------------- */
+r = parseInstruction("When a loan is approved, assign to Wael Hamdan", {
+  assignees: ["Wael Hamdan"],
+  instanceRegistry: { assign_user: [{ id: "u1", label: "Wael Hamdan" }] },
+});
+{
+  const v = r.rule?.actions[0]?.params.assignee;
+  t("P2: registry-resolved assignee → instance ScopeRef",
+    typeof v === "object" && v !== null && (v as { level?: string }).level === "instance" &&
+      (v as { id?: string }).id === "u1",
+    JSON.stringify(v));
+}
+
+r = parseInstruction("When a loan is approved, assign to wael");
+t("P2: no registry → resolved assignee stays a plain string",
+  r.rule?.actions[0]?.params.assignee === "Wael");
+
+r = parseInstruction("When a loan is approved for business customers, notify sara");
+{
+  const catLeaf = leaves(r.rule).find((c) => c.field === "customer_name");
+  t("P2: 'business customers' → customer_name category ref",
+    !!catLeaf && typeof catLeaf.value === "object" &&
+      (catLeaf.value as { level?: string; category?: string }).level === "category" &&
+      (catLeaf.value as { category?: string }).category === "Business",
+    JSON.stringify(catLeaf));
+}
+
+r = parseInstruction("When any origination request is approved, notify sara");
+{
+  const catLeaf = leaves(r.rule).find((c) => c.field === "template");
+  t("P2: 'any origination request' → template category ref",
+    !!catLeaf && (catLeaf.value as { category?: string }).category === "Origination",
+    JSON.stringify(catLeaf));
+}
+
 /* ---- exit ------------------------------------------------------------------- */
 if (failures) {
   console.error(`\n${failures} parser assertion(s) FAILED`);

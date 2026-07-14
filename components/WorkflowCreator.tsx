@@ -17,6 +17,8 @@ import {
   condFieldKind,
   condFieldDef,
   isValuelessOperator,
+  isLegacyString,
+  scopeLabel,
   isGroup,
   walkLeaves,
   ASSIGNEES,
@@ -41,6 +43,7 @@ import Toggle from "@/components/Toggle";
 import {
   VocabularySource,
   buildOverlay,
+  emptyInstances,
   describeSource,
   loadLiveVocabulary,
 } from "@/lib/liveVocabulary";
@@ -67,23 +70,25 @@ export default function WorkflowCreator() {
     loadLiveVocabulary().then(setVocabSource);
   }, []);
 
-  // Configured approval-authority levels feed the `escalate to authority` action.
-  const [authorityNames, setAuthorityNames] = useState<string[]>([]);
+  // Configured approval-authority levels feed the `escalate to authority` action
+  // — both as label options and as ID-bearing instances for the scoped picker.
+  const [authorities, setAuthorities] = useState<{ id: string; label: string }[]>([]);
   useEffect(() => {
     listAuthorities()
-      .then((list) => setAuthorityNames(list.map((a) => a.name)))
-      .catch(() => setAuthorityNames([])); // static paramOptions remain the fallback
+      .then((list) => setAuthorities(list.map((a) => ({ id: a.id, label: a.name }))))
+      .catch(() => setAuthorities([])); // static paramOptions remain the fallback
   }, []);
 
   const overlay = useMemo(() => {
     const base = buildOverlay(vocabSource);
-    if (!authorityNames.length) return base;
+    if (!authorities.length) return base;
     return {
       fieldOptions: base?.fieldOptions ?? {},
-      actionParamOptions: { ...base?.actionParamOptions, assign_authority: authorityNames },
+      actionParamOptions: { ...base?.actionParamOptions, assign_authority: authorities.map((a) => a.label) },
       liveFields: base?.liveFields ?? [],
+      instances: { ...(base?.instances ?? emptyInstances()), authorities },
     };
-  }, [vocabSource, authorityNames]);
+  }, [vocabSource, authorities]);
 
   const pushToast = useCallback((kind: Toast["kind"], text: string) => {
     const id = toastId();
@@ -371,6 +376,17 @@ export default function WorkflowCreator() {
             parserOptions={{
               assignees: overlay?.actionParamOptions.assign_user ?? ASSIGNEES,
               instanceOptions: overlay?.fieldOptions,
+              // Phase 2 §4.6: id-bearing registries → parser emits instance ScopeRefs.
+              instanceRegistry: overlay
+                ? {
+                    team_member: overlay.instances.users,
+                    retailer: overlay.instances.retailers,
+                    template: overlay.instances.templates,
+                    assign_user: overlay.instances.users,
+                    notify: overlay.instances.users,
+                    assign_authority: overlay.instances.authorities,
+                  }
+                : undefined,
             }}
           />
 
@@ -478,8 +494,8 @@ function summarizeLeaf(c: ReturnType<typeof walkLeaves>[number]): string {
   const kind = condFieldKind(c.field);
   const op = opLabel(kind, c.operator);
   if (isValuelessOperator(c.operator)) return `${label} ${op}`;
-  let val = c.value || "…";
-  if (kind === "numeric" && c.value && !isNaN(Number(c.value))) {
+  let val = scopeLabel(c.value) || "…";
+  if (kind === "numeric" && isLegacyString(c.value) && c.value && !isNaN(Number(c.value))) {
     val = `${condFieldDef(c.field)?.unit ?? ""}${Number(c.value).toLocaleString("en-US")}`;
   }
   return `${label} ${op} ${val}`;
@@ -497,7 +513,7 @@ function describeActionList(list: RuleOutput[]): string {
       const action = getAction(o.action);
       const label = action?.label ?? o.action;
       if (action?.paramKind === "none") return label;
-      const val = o.params[paramKeyFor(o.action)] || "…";
+      const val = scopeLabel(o.params[paramKeyFor(o.action)]) || "…";
       return `${label} ${val}`;
     })
     .join(" and ");

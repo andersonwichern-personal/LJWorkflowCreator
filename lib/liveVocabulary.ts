@@ -71,6 +71,23 @@ export type VocabularySource = LiveVocabulary | { source: "static"; reason: stri
 
 /* ---- Overlay: live values merged onto the static token option lists ---- */
 
+/** ID-bearing instance registries for the scoped pickers + reference audit
+ *  (Phase 2). Empty in static mode — Specific sections then fall back to plain
+ *  label options that emit legacy strings (no fabricated ids, ever). */
+export interface ScopedInstances {
+  templates: LiveOption[];
+  retailers: LiveOption[];
+  users: LiveOption[];
+  /** id = `${templateId}:${stageId}`, label = `Template › Stage` (kills C7). */
+  stages: LiveOption[];
+  /** Approval authorities, injected client-side from listAuthorities(). */
+  authorities: LiveOption[];
+}
+
+export function emptyInstances(): ScopedInstances {
+  return { templates: [], retailers: [], users: [], stages: [], authorities: [] };
+}
+
 export interface VocabOverlay {
   /** field key → option values for the condition-value picker */
   fieldOptions: Record<string, string[]>;
@@ -78,6 +95,8 @@ export interface VocabOverlay {
   actionParamOptions: Record<string, string[]>;
   /** Real per-template form fields, offered as ID-bound condition operands. */
   liveFields: LiveField[];
+  /** Live instance registries for scoped (category/instance) pickers. */
+  instances: ScopedInstances;
 }
 
 /** Live values first, then static entries not already present (case-insensitive). */
@@ -123,7 +142,19 @@ export function buildOverlay(v: VocabularySource | null): VocabOverlay | null {
     );
   }
 
-  return { fieldOptions, actionParamOptions, liveFields: v.fields ?? [] };
+  // Phase 2: ID-bearing registries for scoped pickers. Stage instances are
+  // template-qualified so two same-named stages stay distinct (C7).
+  const instances: ScopedInstances = {
+    templates: v.templates.map((t) => ({ id: t.id, label: t.name })),
+    retailers: v.retailers,
+    users: v.users,
+    stages: v.templates.flatMap((t) =>
+      t.stages.map((s) => ({ id: `${t.id}:${s.id}`, label: `${t.name} › ${s.label}` }))
+    ),
+    authorities: [], // injected client-side (listAuthorities) — see WorkflowCreator
+  };
+
+  return { fieldOptions, actionParamOptions, liveFields: v.fields ?? [], instances };
 }
 
 function dedupe(values: string[]): string[] {

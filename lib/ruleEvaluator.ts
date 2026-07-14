@@ -14,6 +14,9 @@ import {
   RuleCondition,
   ConditionGroup,
   FieldKind,
+  ScopeRef,
+  ScopeValue,
+  TriggerRef,
   getAction,
   paramKeyFor,
   condFieldKey,
@@ -21,7 +24,10 @@ import {
   condFieldKind,
   condFieldDef,
   isValuelessOperator,
+  isLegacyString,
+  scopeLabel,
   isGroup,
+  SCOPED_FIELDS,
 } from "./vocabulary";
 import { PlatformRequest } from "./platformData";
 import { requestMatchesEvent, resolveField } from "./ruleEngine";
@@ -128,22 +134,101 @@ function eq(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
+/**
+ * Total scope comparator (Phase 2 §4.4), shared by both evaluators.
+ * - legacy string → case-insensitive label match (today's behavior)
+ * - any          → vacuously true
+ * - category     → caller passes the request's CATEGORY attribute as actualLabel
+ * - instance     → id match when the request carries ids (live data); label
+ *                  fallback when it doesn't (seed data). Stage instances are
+ *                  labeled "Template › Stage" — the fallback also accepts the
+ *                  bare stage segment so seed data still matches while two
+ *                  same-named stages from different templates stay distinct (C7).
+ */
+export function scopeMatches(v: ScopeValue, actualId: string | null, actualLabel: string): boolean {
+  if (isLegacyString(v)) return eq(actualLabel, v);
+  switch (v.level) {
+    case "any":
+      return true;
+    case "category":
+      return eq(actualLabel, v.category);
+    case "instance": {
+      if (actualId !== null) return actualId === v.id;
+      if (eq(actualLabel, v.label)) return true;
+      const seg = v.label.split("›").pop() ?? v.label;
+      return eq(actualLabel, seg);
+    }
+  }
+}
+
+/** The field key whose value carries a scoped field's CATEGORY attribute. */
+function categoryAttributeFor(fieldKey: string): string {
+  return SCOPED_FIELDS[fieldKey]?.categoryAttribute ?? fieldKey;
+}
+
+/** Does a trigger's optional scope admit this request? (absent/any → yes) */
+function triggerScopeOk(t: TriggerRef, r: PlatformRequest): boolean {
+  if (!t.scope || t.scope.level === "any") return true;
+  // Template scope: match the request's template attribute (id-less seed data
+  // falls back to label matching; unknown field → fail-closed).
+  const attr = t.scope.level === "category" ? "reqtype" : "template";
+  const { known, value } = resolveField(r, attr);
+  if (!known || value == null) return false;
+  const label = Array.isArray(value) ? value.join(", ") : String(value);
+  return scopeMatches(t.scope, null, label);
+}
+
 function traceCondition(r: PlatformRequest, c: RuleCondition, depth: number): ConditionTrace {
   const key = condFieldKey(c.field);
   const { known, value } = resolveField(r, key);
   const kind = condFieldKind(c.field);
   const options = condFieldDef(c.field)?.options;
-  // Unknown fields never match — including is_empty (unknown ≠ empty, §2.4).
-  const matched = known && evaluateCondition(value, c.operator, c.value, kind, options);
+  const actualStr = Array.isArray(value) ? value.join(", ") : String(value ?? "");
+
+  let matched: boolean;
+  if (isLegacyString(c.value)) {
+    // Legacy string values: the existing operator engine, unchanged.
+    // Unknown fields never match — including is_empty (unknown ≠ empty, §2.4).
+    matched = known && evaluateCondition(value, c.operator, c.value, kind, options);
+  } else {
+    // Structured ScopeRef values (Phase 2 §4.4). Operators reduce to identity
+    // (is / is_not) — pickers only offer refs on identity-shaped fields.
+    matched = scopeRefMatched(r, key, c.value, known, value);
+    if (c.operator === "is_not") matched = !matched;
+  }
+
   return {
     field: key,
     label: condFieldLabel(c.field),
     operator: c.operator,
-    expected: c.value,
-    actual: known ? (Array.isArray(value) ? value.join(", ") : String(value ?? "")) : null,
+    expected: scopeLabel(c.value),
+    actual: known ? actualStr : null,
     matched,
     depth,
   };
+}
+
+/** Match a ScopeRef leaf value against the resolved request field. */
+function scopeRefMatched(
+  r: PlatformRequest,
+  fieldKey: string,
+  ref: ScopeRef,
+  known: boolean,
+  value: string | number | string[] | null
+): boolean {
+  if (ref.level === "any") return true; // vacuous — "field applies at all"
+  if (ref.level === "category") {
+    // Compare against the request's CATEGORY attribute (reqtype/custtype/stage…).
+    const attr = categoryAttributeFor(fieldKey);
+    const cat = attr === fieldKey ? { known, value } : resolveField(r, attr);
+    if (!cat.known || cat.value == null) return false;
+    const label = Array.isArray(cat.value) ? cat.value.join(", ") : String(cat.value);
+    return scopeMatches(ref, null, label);
+  }
+  // instance — seed data carries no platform ids; label fallback applies.
+  if (!known || value == null) return false;
+  const label = Array.isArray(value) ? value.join(", ") : String(value);
+  return scopeMatches(ref, null, label);
 }
 
 /**
@@ -176,10 +261,10 @@ export function evaluateGroup(
 }
 
 /** Human descriptor for a dispatched action, e.g. "assign_user: Wael". */
-function describeAction(action: string, params: Record<string, string>): string {
+function describeAction(action: string, params: Record<string, ScopeValue>): string {
   const def = getAction(action);
   if (def?.paramKind === "none") return action;
-  const val = params[paramKeyFor(action)];
+  const val = scopeLabel(params[paramKeyFor(action)]);
   return val ? `${action}: ${val}` : action;
 }
 
@@ -195,7 +280,8 @@ export function simulateRule(rule: WorkflowRule, request: PlatformRequest): Simu
 
   const triggers: TriggerTrace[] = rule.triggers.map((t) => ({
     event: t.event,
-    matched: requestMatchesEvent(request, t.event),
+    // Event match AND the trigger's optional scope (template instance) — §4.2.
+    matched: requestMatchesEvent(request, t.event) && triggerScopeOk(t, request),
   }));
   const triggerMatched = triggers.some((t) => t.matched);
   const matchedTrigger = triggers.find((t) => t.matched)?.event ?? null;

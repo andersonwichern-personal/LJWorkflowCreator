@@ -1071,15 +1071,120 @@ export function condFieldDef(f: ConditionFieldRef): FieldDef | undefined {
   return isFormFieldRef(f) ? undefined : FIELDS[f];
 }
 
+/* -------------------------------------------------------------------------- */
+/* ScopeRef — category vs instance (schema v3, Phase 2 / contract §1b)        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A structured entity reference for condition values and action params.
+ * - `any`       — matches vacuously (trigger scopes, "field present" combos).
+ * - `category`  — matches the request's category attribute (requestType,
+ *                 custtype, global stage, pseudo-team).
+ * - `instance`  — a specific platform record: `id` is the platform UUID (for
+ *                 stages: `templateId:stageId`), `label` is a display snapshot.
+ * A bare `string` remains the legacy/free-text form; the helpers below make
+ * every consumer total so `[object Object]` can never render.
+ */
+export type ScopeRef =
+  | { level: "any" }
+  | { level: "category"; category: string }
+  | { level: "instance"; id: string; label: string };
+
+export type ScopeValue = string | ScopeRef;
+
+export function isScopeRef(v: unknown): v is ScopeRef {
+  if (typeof v !== "object" || v === null) return false;
+  const s = v as ScopeRef;
+  if (s.level === "any") return true;
+  if (s.level === "category") return typeof (s as { category?: unknown }).category === "string";
+  if (s.level === "instance")
+    return typeof (s as { id?: unknown }).id === "string" && typeof (s as { label?: unknown }).label === "string";
+  return false;
+}
+
+/** Legacy/free-text form? (type guard) */
+export function isLegacyString(v: ScopeValue): v is string {
+  return typeof v === "string";
+}
+
+/** Total display label — never renders "[object Object]". */
+export function scopeLabel(v: ScopeValue | null | undefined): string {
+  if (v == null) return "";
+  if (typeof v === "string") return v;
+  if (!isScopeRef(v)) return "";
+  switch (v.level) {
+    case "any": return "any";
+    case "category": return v.category;
+    case "instance": return v.label;
+  }
+}
+
+/** Platform instance id, when the value is an instance ref. */
+export function scopeInstanceId(v: ScopeValue | null | undefined): string | null {
+  return v != null && isScopeRef(v) && v.level === "instance" ? v.id : null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Scope allocations — which tokens support which levels (Phase 2 §4.2)       */
+/* -------------------------------------------------------------------------- */
+
+export interface ScopeSpec {
+  /** Category chips offered in the "By type" section (static source). */
+  categories: string[];
+  /** Which live registry feeds the "Specific" section. */
+  instanceSource: "templates" | "retailers" | "users" | "stages" | "authorities" | "customers" | null;
+  /** Present when the instance level ships disabled (no live endpoint yet). */
+  instancesDisabledHint?: string;
+  /** Field key whose value carries the category attribute at evaluation time. */
+  categoryAttribute?: string;
+}
+
+/** Condition fields that take scoped values. */
+export const SCOPED_FIELDS: Record<string, ScopeSpec> = {
+  template: {
+    categories: ["Loan Application", "Origination", "Covenant"],
+    instanceSource: "templates",
+    categoryAttribute: "reqtype",
+  },
+  retailer: {
+    categories: [],
+    instanceSource: "retailers",
+  },
+  customer_name: {
+    categories: ["Business", "Individual"],
+    instanceSource: null,
+    instancesDisabledHint: "Specific customers need the customer API — pick a type or enter a name.",
+    categoryAttribute: "custtype",
+  },
+  stage: {
+    categories: ["Initiated", "Processing", "Approved", "Closed"],
+    instanceSource: "stages",
+    categoryAttribute: "stage",
+  },
+  team_member: {
+    categories: ["Underwriting Team", "Booking Team", "Escalation Team", "Operations Team"],
+    instanceSource: "users",
+  },
+};
+
+/** Action params that take scoped values (keyed by action key). */
+export const SCOPED_PARAMS: Record<string, ScopeSpec> = {
+  assign_user: { categories: ["Underwriting Team", "Booking Team", "Escalation Team", "Operations Team"], instanceSource: "users" },
+  notify: { categories: ["Underwriting Team", "Booking Team", "Escalation Team", "Operations Team"], instanceSource: "users" },
+  change_stage: { categories: ["Initiated", "Processing", "Approved", "Closed"], instanceSource: "stages", categoryAttribute: "stage" },
+  assign_authority: { categories: [], instanceSource: "authorities" },
+};
+
 export interface RuleCondition {
   field: ConditionFieldRef;
   operator: string;
-  value: string;
+  /** Legacy/free-text string, or a structured ScopeRef on instance-shaped fields. */
+  value: ScopeValue;
 }
 
 export interface RuleOutput {
   action: string;
-  params: Record<string, string>;
+  params: Record<string, ScopeValue>;
   /** Optional per-action gate (same node type as the root conditions). Persisted;
    *  the evaluator ignores it until the executor honors it (Phase 4). */
   when?: ConditionGroup;
@@ -1126,7 +1231,9 @@ export function walkLeaves(group: ConditionGroup): ConditionLeaf[] {
 
 export interface TriggerRef {
   event: string; // EventDef.key
-  // scope?: ScopeRef;  // Phase 2 — instance scope (deferred)
+  /** Optional instance scope — e.g. only requests from one template (Phase 2).
+   *  Only `any` (default, same as absent) and template `instance` ship now. */
+  scope?: ScopeRef;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1198,12 +1305,20 @@ function isValidFieldRef(f: unknown): f is ConditionFieldRef {
   );
 }
 
+/** Preserve well-formed ScopeRef objects; stringify everything else. */
+function coerceValue(raw: unknown): ScopeValue {
+  if (raw == null) return "";
+  if (isScopeRef(raw)) return raw;
+  if (typeof raw === "object") return ""; // malformed object — never "[object Object]"
+  return String(raw);
+}
+
 function coerceLeaf(raw: Record<string, unknown>): ConditionLeaf | null {
   if (!isValidFieldRef(raw.field)) return null;
   return {
     field: raw.field as ConditionFieldRef,
     operator: typeof raw.operator === "string" ? raw.operator : "is",
-    value: raw.value == null ? "" : String(raw.value),
+    value: coerceValue(raw.value),
   };
 }
 
@@ -1242,10 +1357,10 @@ function normalizeActions(raw: unknown): RuleOutput[] {
   for (const a0 of arr) {
     const a = (a0 ?? {}) as Record<string, unknown>;
     if (typeof a.action !== "string") continue;
-    const action: RuleOutput = {
-      action: a.action,
-      params: a.params && typeof a.params === "object" ? (a.params as Record<string, string>) : {},
-    };
+    const paramsRaw = a.params && typeof a.params === "object" ? (a.params as Record<string, unknown>) : {};
+    const params: Record<string, ScopeValue> = {};
+    for (const [k, v] of Object.entries(paramsRaw)) params[k] = coerceValue(v);
+    const action: RuleOutput = { action: a.action, params };
     if (a.when) action.when = normalizeGroup(a.when);
     if (typeof a.delayMinutes === "number") action.delayMinutes = a.delayMinutes;
     if (a.onFailure === "retry" || a.onFailure === "skip" || a.onFailure === "halt") action.onFailure = a.onFailure;
@@ -1272,7 +1387,10 @@ function triggersFrom(raw: unknown): TriggerRef[] {
   const out: TriggerRef[] = [];
   for (const t0 of raw) {
     const t = (t0 ?? {}) as Record<string, unknown>;
-    if (typeof t.event === "string") out.push({ event: t.event });
+    if (typeof t.event !== "string") continue;
+    const trigger: TriggerRef = { event: t.event };
+    if (isScopeRef(t.scope)) trigger.scope = t.scope; // malformed scopes dropped
+    out.push(trigger);
   }
   return out;
 }

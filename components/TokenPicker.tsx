@@ -22,6 +22,8 @@ interface TokenPickerProps {
   freeTextPlaceholder?: string;
   /** Restrict the free-text input to digits (numeric fields). */
   numeric?: boolean;
+  /** Author-time validation for free-text values: return an error string to block (C5). */
+  validate?: (value: string) => string | null;
   onSelect: (value: string) => void;
   onClose: () => void;
 }
@@ -34,6 +36,7 @@ export default function TokenPicker({
   freeText = false,
   freeTextPlaceholder = "Type a value…",
   numeric = false,
+  validate,
   onSelect,
   onClose,
 }: TokenPickerProps) {
@@ -73,6 +76,8 @@ export default function TokenPicker({
     : options;
   const grouped = options.some((o) => o.group);
   const showSearch = freeText || options.length > 6;
+  // C5: block invalid free-text at author time — never save a value that can't match.
+  const validationError = freeText && query.trim() && validate ? validate(query.trim()) : null;
 
   // Preserve group order as first-seen.
   const groupOrder: string[] = [];
@@ -140,15 +145,26 @@ export default function TokenPicker({
             inputMode={numeric ? "numeric" : "text"}
             placeholder={freeText ? freeTextPlaceholder : "Search…"}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && freeText && query.trim()) onSelect(query.trim());
+              if (e.key === "Enter" && freeText && query.trim() && !validationError) {
+                onSelect(query.trim());
+              }
             }}
             className="ring-accent w-full rounded-lg px-2.5 py-1.5 text-sm"
-            style={{ background: "var(--panel-solid)", border: "1px solid var(--panel-border)", color: "var(--fg)" }}
+            style={{
+              background: "var(--panel-solid)",
+              border: `1px solid ${validationError ? "var(--danger-fg)" : "var(--panel-border)"}`,
+              color: "var(--fg)",
+            }}
           />
+          {validationError && (
+            <p className="mt-1 px-1 text-[11px]" style={{ color: "var(--danger-fg)" }} role="alert">
+              {validationError}
+            </p>
+          )}
         </div>
       )}
 
-      {freeText && query.trim() && !filtered.some((o) => o.label.toLowerCase() === query.toLowerCase()) && (
+      {freeText && query.trim() && !validationError && !filtered.some((o) => o.label.toLowerCase() === query.toLowerCase()) && (
         <button
           type="button"
           onClick={() => onSelect(query.trim())}

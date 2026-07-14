@@ -1,11 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { parseInstruction } from "@/lib/nlParser";
+import {
+  parseInstruction,
+  ParseAmbiguity,
+  ParseOptions,
+  UnresolvedSlot,
+} from "@/lib/nlParser";
 import { WorkflowRule } from "@/lib/vocabulary";
 
+/** Parser honesty sidecar handed to the canvas along with the draft. */
+export interface ChatDraftMeta {
+  unresolved: UnresolvedSlot[];
+  uncovered: string[];
+}
+
 interface ChatBoxProps {
-  onDraft: (rule: WorkflowRule) => void;
+  onDraft: (rule: WorkflowRule, meta: ChatDraftMeta) => void;
+  /** Live option lists so the parser resolves against real vocabulary. */
+  parserOptions?: Omit<ParseOptions, "forceEvent">;
 }
 
 /** Full instruction fed to the parser, plus a short pill label for the UI. */
@@ -20,14 +33,22 @@ const EXAMPLES: { label: string; text: string }[] = [
  * Plain-language input that drafts the same WHEN/IF/THEN rule object the token
  * builder edits. Deterministic parse (no LLM) so the demo path never surprises.
  */
-export default function ChatBox({ onDraft }: ChatBoxProps) {
+export default function ChatBox({ onDraft, parserOptions }: ChatBoxProps) {
   const [input, setInput] = useState("");
   const [notes, setNotes] = useState<string[]>([]);
+  const [uncovered, setUncovered] = useState<string[]>([]);
+  const [ambiguities, setAmbiguities] = useState<ParseAmbiguity[]>([]);
+  const [lastText, setLastText] = useState("");
 
-  function run(text: string) {
-    const result = parseInstruction(text);
+  function run(text: string, forceEvent?: string) {
+    const result = parseInstruction(text, { ...parserOptions, forceEvent });
+    setLastText(text);
     setNotes(result.notes);
-    if (result.rule) onDraft(result.rule);
+    setUncovered(result.uncovered);
+    setAmbiguities(result.ambiguities);
+    if (result.rule) {
+      onDraft(result.rule, { unresolved: result.unresolved, uncovered: result.uncovered });
+    }
   }
 
   return (
@@ -81,6 +102,46 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
           </svg>
         </button>
       </div>
+
+      {/* N2: a partial parse must LOOK partial — amber, prominent, per fragment */}
+      {uncovered.map((frag, i) => (
+        <div
+          key={i}
+          className="mt-3 flex items-start gap-2 rounded-xl border px-3 py-2 text-sm"
+          style={{ background: "var(--warn-bg)", color: "var(--warn-fg)", borderColor: "var(--warn-br)" }}
+          role="alert"
+        >
+          <span aria-hidden>⚠</span>
+          <span>
+            I didn&apos;t understand: <span className="font-semibold">&quot;{frag}&quot;</span> — the
+            drafted rule does <span className="font-bold">not</span> include this.
+          </span>
+        </div>
+      ))}
+
+      {/* N3: competing readings become a question, never a silent guess */}
+      {ambiguities.map((amb, i) => (
+        <div
+          key={i}
+          className="mt-3 rounded-xl border px-3 py-2.5"
+          style={{ borderColor: "var(--panel-border)", background: "var(--panel-solid)" }}
+        >
+          <p className="mb-2 text-sm font-medium" style={{ color: "var(--fg)" }}>{amb.question}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {amb.options.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => run(lastText, opt)}
+                className="ring-accent rounded-full border px-3 py-1 text-xs font-semibold transition-colors hover:bg-[var(--accent-soft)]"
+                style={{ borderColor: "var(--panel-border)", color: "var(--fg)" }}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
 
       {notes.length > 0 && (
         <ul className="mt-3 space-y-1 px-2 text-xs" style={{ color: "var(--fg-muted)" }}>

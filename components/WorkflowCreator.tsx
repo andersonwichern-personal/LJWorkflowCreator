@@ -14,7 +14,11 @@ import {
   condFieldLabel,
   condFieldKind,
   condFieldDef,
+  isValuelessOperator,
+  ASSIGNEES,
 } from "@/lib/vocabulary";
+import { UnresolvedSlot } from "@/lib/nlParser";
+import { ChatDraftMeta } from "@/components/ChatBox";
 import {
   WorkflowRecord,
   listWorkflows,
@@ -98,6 +102,9 @@ export default function WorkflowCreator() {
     refresh();
   }, [refresh]);
 
+  // Parser slots that still need a human pick (N1) — saving is blocked until empty.
+  const [unresolved, setUnresolved] = useState<UnresolvedSlot[]>([]);
+
   function loadIntoEditor(wf: WorkflowRecord) {
     setActiveId(wf.id);
     setName(wf.name);
@@ -105,6 +112,7 @@ export default function WorkflowCreator() {
     setRule(normalizeRule(wf.ruleJson));
     setEnabled(wf.enabled);
     setDirty(false);
+    setUnresolved([]);
   }
 
   function newWorkflow() {
@@ -114,6 +122,7 @@ export default function WorkflowCreator() {
     setRule(emptyRule());
     setEnabled(true);
     setDirty(false);
+    setUnresolved([]);
   }
 
   function applyStarter(n: string, d: string, r: WorkflowRule) {
@@ -123,21 +132,48 @@ export default function WorkflowCreator() {
     setRule(r);
     setEnabled(true);
     setDirty(true);
+    setUnresolved([]);
     pushToast("ok", "Template loaded — tweak the tokens and save.");
   }
 
   function onRuleChange(next: WorkflowRule) {
     setRule(next);
     setDirty(true);
+    // Re-validate slots against the edited rule: a slot survives only while its
+    // target still exists and still lacks a value (deleting the token or
+    // filling it manually must unblock save — indexes shift on removal).
+    setUnresolved((u) =>
+      u.filter((s) => {
+        if (s.where === "condition-value") {
+          const c = next.conditions.rules[s.conditionIndex ?? -1];
+          return !!c && !c.value && !isValuelessOperator(c.operator);
+        }
+        if (s.where === "action-param") {
+          const a = next.actions[s.actionIndex ?? -1];
+          return !!a && !a.params[s.param ?? ""];
+        }
+        return true;
+      })
+    );
   }
-  function onDraftFromChat(next: WorkflowRule) {
+  function onDraftFromChat(next: WorkflowRule, meta: ChatDraftMeta) {
     setRule(next);
     setDirty(true);
-    pushToast("ok", "Drafted from your instruction — review the tokens below.");
+    setUnresolved(meta.unresolved);
+    pushToast(
+      meta.unresolved.length ? "err" : "ok",
+      meta.unresolved.length
+        ? "Drafted — resolve the highlighted values before saving."
+        : "Drafted from your instruction — review the tokens below."
+    );
   }
 
   async function save() {
     if (!name.trim()) return pushToast("err", "Give the workflow a name first.");
+    // N1 hard gate: unresolved parser slots must be picked before persistence.
+    if (unresolved.length > 0) {
+      return pushToast("err", "Resolve the highlighted values before saving.");
+    }
     if (rule.actions.length === 0) return pushToast("err", "Add at least one action (THEN) before saving.");
     setSaving(true);
     try {
@@ -321,8 +357,14 @@ export default function WorkflowCreator() {
             </div>
           </div>
 
-          {/* 2. Focal AI console */}
-          <ChatBox onDraft={onDraftFromChat} />
+          {/* 2. Focal AI console — parser resolves against the live vocabulary */}
+          <ChatBox
+            onDraft={onDraftFromChat}
+            parserOptions={{
+              assignees: overlay?.actionParamOptions.assign_user ?? ASSIGNEES,
+              instanceOptions: overlay?.fieldOptions,
+            }}
+          />
 
           {isBlank && (
             <div className="glass rounded-2xl p-5">
@@ -355,7 +397,13 @@ export default function WorkflowCreator() {
               </h3>
             </div>
 
-            <RuleSentence rule={rule} onChange={onRuleChange} overlay={overlay} />
+            <RuleSentence
+              rule={rule}
+              onChange={onRuleChange}
+              overlay={overlay}
+              unresolved={unresolved}
+              onResolve={(slot) => setUnresolved((u) => u.filter((s) => s !== slot))}
+            />
 
             <div className="mt-6 rounded-xl p-4" style={{ background: "var(--panel-solid)", border: "1px solid var(--panel-border)" }}>
               <div className="mb-1 text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--fg-subtle)" }}>
@@ -426,6 +474,7 @@ function plainSummary(rule: WorkflowRule): string {
       const label = condFieldLabel(c.field);
       const kind = condFieldKind(c.field);
       const op = opLabel(kind, c.operator);
+      if (isValuelessOperator(c.operator)) return `${label} ${op}`;
       let val = c.value || "…";
       if (kind === "numeric" && c.value && !isNaN(Number(c.value))) {
         val = `${condFieldDef(c.field)?.unit ?? ""}${Number(c.value).toLocaleString("en-US")}`;

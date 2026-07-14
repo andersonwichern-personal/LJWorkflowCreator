@@ -11,11 +11,14 @@
 import {
   WorkflowRule,
   RuleCondition,
+  FieldKind,
   getAction,
   paramKeyFor,
   condFieldKey,
   condFieldLabel,
   condFieldKind,
+  condFieldDef,
+  isValuelessOperator,
 } from "./vocabulary";
 import { PlatformRequest } from "./platformData";
 import { requestMatchesEvent, resolveField } from "./ruleEngine";
@@ -42,13 +45,31 @@ export interface SimulationTrace {
   actions: string[];
 }
 
-/** Operator evaluation per the spec (§2), plus array membership for tags. */
+/**
+ * The single operator implementation (hardening plan §2.6 — ruleEngine
+ * delegates here). Semantics:
+ * - `is_empty` / `is_not_empty` run BEFORE the null guard: a *known* field
+ *   whose value is null/""/[] IS empty. Unknown fields never reach this
+ *   function (callers gate on `known`) — unknown ≠ empty.
+ * - `worse_than` / `better_than` compare positions in the field's ranked
+ *   options (best→worst); values not in the list rank worst, matching
+ *   authorityEngine.gradeIndex semantics.
+ */
 export function evaluateCondition(
   fieldValue: string | number | string[] | null,
   operator: string,
   ruleValue: string,
-  numeric: boolean
+  kind: FieldKind,
+  options?: string[]
 ): boolean {
+  if (isValuelessOperator(operator)) {
+    const empty =
+      fieldValue === null ||
+      fieldValue === "" ||
+      (Array.isArray(fieldValue) && fieldValue.length === 0);
+    return operator === "is_empty" ? empty : !empty;
+  }
+
   if (fieldValue === null) return false;
 
   if (Array.isArray(fieldValue)) {
@@ -56,7 +77,7 @@ export function evaluateCondition(
     return operator === "is_not" ? !has : has;
   }
 
-  if (numeric) {
+  if (kind === "numeric") {
     const a = Number(fieldValue);
     const b = Number(ruleValue);
     if (isNaN(a) || isNaN(b)) return false;
@@ -67,6 +88,16 @@ export function evaluateCondition(
       case "lte": return a <= b;
       default: return a === b;
     }
+  }
+
+  if (kind === "orderedEnum" && (operator === "worse_than" || operator === "better_than")) {
+    const rank = (v: string) => {
+      const i = (options ?? []).findIndex((o) => eq(o, v));
+      return i === -1 ? (options ?? []).length : i; // unknown ranks worst
+    };
+    const a = rank(String(fieldValue));
+    const b = rank(ruleValue);
+    return operator === "worse_than" ? a > b : a < b;
   }
 
   const s = String(fieldValue);
@@ -85,8 +116,10 @@ function eq(a: string, b: string): boolean {
 function traceCondition(r: PlatformRequest, c: RuleCondition): ConditionTrace {
   const key = condFieldKey(c.field);
   const { known, value } = resolveField(r, key);
-  const numeric = condFieldKind(c.field) === "numeric";
-  const matched = known && evaluateCondition(value, c.operator, c.value, numeric);
+  const kind = condFieldKind(c.field);
+  const options = condFieldDef(c.field)?.options;
+  // Unknown fields never match — including is_empty (unknown ≠ empty, §2.4).
+  const matched = known && evaluateCondition(value, c.operator, c.value, kind, options);
   return {
     field: key,
     label: condFieldLabel(c.field),

@@ -22,9 +22,11 @@ import {
   condFieldLabel,
   condFieldKind,
   condFieldDef,
+  isValuelessOperator,
 } from "@/lib/vocabulary";
 import TokenPicker, { PickerOption } from "./TokenPicker";
 import { VocabOverlay, fieldKindForType } from "@/lib/liveVocabulary";
+import { UnresolvedSlot } from "@/lib/nlParser";
 
 type Open =
   | { kind: "event" }
@@ -36,10 +38,11 @@ type Open =
   | { kind: "add-cond" }
   | { kind: "add-action" };
 
-type Palette = "when" | "if" | "then" | "op";
+type Palette = "when" | "if" | "then" | "op" | "danger";
 
 function paletteStyle(p: Palette): React.CSSProperties {
   if (p === "op") return { background: "var(--tok-op-bg)", color: "var(--tok-op-fg)", borderColor: "transparent" };
+  if (p === "danger") return { background: "var(--danger-bg)", color: "var(--danger-fg)", borderColor: "var(--danger-br)" };
   return { background: `var(--tok-${p}-bg)`, color: `var(--tok-${p}-fg)`, borderColor: `var(--tok-${p}-br)` };
 }
 
@@ -133,9 +136,13 @@ interface RuleSentenceProps {
   onChange: (rule: WorkflowRule) => void;
   /** Live platform values overlaid on the static picker options (demo bridge). */
   overlay?: VocabOverlay | null;
+  /** Parser slots awaiting a human pick (N1) — rendered as danger pills. */
+  unresolved?: UnresolvedSlot[];
+  /** Called when the user resolves a slot by picking a value. */
+  onResolve?: (slot: UnresolvedSlot) => void;
 }
 
-export default function RuleSentence({ rule, onChange, overlay }: RuleSentenceProps) {
+export default function RuleSentence({ rule, onChange, overlay, unresolved, onResolve }: RuleSentenceProps) {
   const [open, setOpen] = useState<Open | null>(null);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
@@ -153,6 +160,19 @@ export default function RuleSentence({ rule, onChange, overlay }: RuleSentencePr
   const conds = rule.conditions.rules;
   const logic = rule.conditions.logic;
   const actions = rule.actions;
+
+  // Parser slots awaiting a pick (N1) — index-matched to conditions/actions.
+  const condSlot = (i: number) =>
+    unresolved?.find((s) => s.where === "condition-value" && s.conditionIndex === i);
+  const actionSlot = (i: number) =>
+    unresolved?.find((s) => s.where === "action-param" && s.actionIndex === i);
+
+  /** Suggestions-first option list for a slot's picker. */
+  function slotOptions(slot: UnresolvedSlot, base: PickerOption[]): PickerOption[] {
+    const suggested = slot.suggestions.map((s) => ({ value: s, label: s }));
+    const seen = new Set(slot.suggestions.map((s) => s.toLowerCase()));
+    return [...suggested, ...base.filter((o) => !seen.has(o.label.toLowerCase()))];
+  }
 
   /* ---- mutators ---- */
   function setEvent(newEvent: string) {
@@ -268,9 +288,17 @@ export default function RuleSentence({ rule, onChange, overlay }: RuleSentencePr
                 >
                   {opLabel(condFieldKind(c.field), c.operator)}
                 </button>
-                <Pill palette="if" onClick={(el) => openPicker({ kind: "cond-value", i }, el)}>
-                  {displayValue(c)}
-                </Pill>
+                {/* Valueless ops (is empty / is not empty) need no value pill. */}
+                {!isValuelessOperator(c.operator) &&
+                  (condSlot(i) && !c.value ? (
+                    <Pill palette="danger" onClick={(el) => openPicker({ kind: "cond-value", i }, el)}>
+                      needs your pick
+                    </Pill>
+                  ) : (
+                    <Pill palette="if" onClick={(el) => openPicker({ kind: "cond-value", i }, el)}>
+                      {displayValue(c)}
+                    </Pill>
+                  ))}
                 <button
                   type="button"
                   onClick={() => removeCond(i)}
@@ -301,11 +329,16 @@ export default function RuleSentence({ rule, onChange, overlay }: RuleSentencePr
                 <Pill palette="then" unconfirmed={action?.confidence === "unconfirmed"} onClick={(el) => openPicker({ kind: "action", i }, el)}>
                   {action?.label ?? o.action}
                 </Pill>
-                {hasParam && (
-                  <Pill palette="then" onClick={(el) => openPicker({ kind: "action-param", i }, el)}>
-                    {paramVal || action?.paramLabel || "value"}
-                  </Pill>
-                )}
+                {hasParam &&
+                  (actionSlot(i) && !paramVal ? (
+                    <Pill palette="danger" onClick={(el) => openPicker({ kind: "action-param", i }, el)}>
+                      needs your pick
+                    </Pill>
+                  ) : (
+                    <Pill palette="then" onClick={(el) => openPicker({ kind: "action-param", i }, el)}>
+                      {paramVal || action?.paramLabel || "value"}
+                    </Pill>
+                  ))}
                 <button
                   type="button"
                   onClick={() => removeAction(i)}
@@ -359,34 +392,56 @@ export default function RuleSentence({ rule, onChange, overlay }: RuleSentencePr
           const kind = condFieldKind(conds[open.i]?.field ?? "");
           const opts: PickerOption[] = OPERATORS[kind].map((o) => ({ value: o.value, label: o.label }));
           return (
-            <TokenPicker anchor={anchor} title="Operator" options={opts} value={conds[open.i]?.operator} onSelect={(v) => { updateCond(open.i, { operator: v }); close(); }} onClose={close} />
+            <TokenPicker
+              anchor={anchor}
+              title="Operator"
+              options={opts}
+              value={conds[open.i]?.operator}
+              onSelect={(v) => {
+                // Empty-ops take no value; clear it so summaries/eval stay clean.
+                updateCond(open.i, { operator: v, ...(isValuelessOperator(v) ? { value: "" } : {}) });
+                close();
+              }}
+              onClose={close}
+            />
           );
         })()}
 
       {open?.kind === "cond-value" &&
         (() => {
           const cond = conds[open.i];
+          const slot = condSlot(open.i);
           const kind = condFieldKind(cond?.field ?? "");
           const def = condFieldDef(cond?.field ?? "");
           const label = condFieldLabel(cond?.field ?? "");
-          const isEnum = kind === "enum" && !!def; // live form-field enums have unknown options → free text
+          const isEnum = (kind === "enum" || kind === "orderedEnum") && !!def; // live form-field enums have unknown options → free text
           const isNum = kind === "numeric";
           // Live platform values take precedence over the static demo list.
           const values =
             (typeof cond?.field === "string" ? overlay?.fieldOptions[cond.field] : undefined) ??
             def?.options ??
             [];
-          const opts: PickerOption[] = values.map((o) => ({ value: o, label: o }));
+          let opts: PickerOption[] = values.map((o) => ({ value: o, label: o }));
+          if (slot) opts = slotOptions(slot, opts); // suggestions first (N1)
           return (
             <TokenPicker
               anchor={anchor}
-              title={label || "Value"}
+              title={slot ? `${label} — you wrote "${slot.heard}"` : label || "Value"}
               options={opts}
               value={cond?.value}
               freeText={!isEnum}
               numeric={isNum}
+              validate={
+                isNum
+                  ? (v) => (isNaN(Number(v.replace(/,/g, ""))) ? "Enter a number — this condition would never match." : null)
+                  : undefined
+              }
               freeTextPlaceholder={isNum ? "Enter an amount…" : `Enter ${label || "value"}…`}
-              onSelect={(v) => { updateCond(open.i, { value: v }); close(); }}
+              onSelect={(v) => {
+                updateCond(open.i, { value: v });
+                if (slot) onResolve?.(slot);
+                close();
+              }}
               onClose={close}
             />
           );
@@ -410,21 +465,27 @@ export default function RuleSentence({ rule, onChange, overlay }: RuleSentencePr
       {open?.kind === "action-param" &&
         (() => {
           const output = actions[open.i];
+          const slot = actionSlot(open.i);
           const action = getAction(output?.action);
           const isEnum = action?.paramKind === "enum";
           // Live platform values (real users, stages) take precedence.
           const values = overlay?.actionParamOptions[output?.action] ?? action?.paramOptions ?? [];
-          const opts: PickerOption[] = values.map((o) => ({ value: o, label: o }));
+          let opts: PickerOption[] = values.map((o) => ({ value: o, label: o }));
+          if (slot) opts = slotOptions(slot, opts); // suggestions first (N1)
           const key = paramKeyFor(output?.action ?? "");
           return (
             <TokenPicker
               anchor={anchor}
-              title={action?.paramLabel ?? "Value"}
+              title={slot ? `${action?.paramLabel ?? "Value"} — you wrote "${slot.heard}"` : action?.paramLabel ?? "Value"}
               options={opts}
               value={output?.params[key]}
               freeText={!isEnum}
               freeTextPlaceholder={`Enter ${action?.paramLabel ?? "value"}…`}
-              onSelect={(v) => { updateAction(open.i, { params: { [key]: v } }); close(); }}
+              onSelect={(v) => {
+                updateAction(open.i, { params: { [key]: v } });
+                if (slot) onResolve?.(slot);
+                close();
+              }}
               onClose={close}
             />
           );

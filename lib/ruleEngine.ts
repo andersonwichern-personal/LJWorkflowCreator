@@ -15,7 +15,10 @@ import {
   paramKeyFor,
   condFieldKey,
   condFieldKind,
+  condFieldDef,
 } from "./vocabulary";
+// Circular at module level only; both modules dereference at call time.
+import { evaluateCondition } from "./ruleEvaluator";
 import {
   PlatformRequest,
   SystemEvent,
@@ -64,44 +67,16 @@ export function resolveField(
   return { known: true, value: v };
 }
 
-function eq(a: string, b: string): boolean {
-  return a.trim().toLowerCase() === b.trim().toLowerCase();
-}
-
+/**
+ * Delegates to the single operator implementation in lib/ruleEvaluator.ts
+ * (hardening plan §2.6 — no operator drift between the list-match engine and
+ * the traced simulator). Unknown fields (incl. ff:<form>:<field> refs absent
+ * from the seed data) never match — including is_empty (unknown ≠ empty).
+ */
 function evalCondition(r: PlatformRequest, c: RuleCondition): boolean {
-  // ID-bound form-field refs resolve to ff:<form>:<field> keys — not present in
-  // the demo seed data, so they fall through to UNKNOWN (honest no-match).
-  const actual = fieldValue(r, condFieldKey(c.field));
-  if (actual === UNKNOWN || actual === null) return false;
-
-  const kind = condFieldKind(c.field);
-
-  if (kind === "numeric") {
-    const a = Number(actual);
-    const b = Number(c.value);
-    if (isNaN(a) || isNaN(b)) return false;
-    switch (c.operator) {
-      case "gt": return a > b;
-      case "gte": return a >= b;
-      case "lt": return a < b;
-      case "lte": return a <= b;
-      default: return a === b;
-    }
-  }
-
-  // Array field (tags): "is"/"contains" mean membership; "is_not" means absence.
-  if (Array.isArray(actual)) {
-    const has = actual.some((v) => eq(v, c.value));
-    return c.operator === "is_not" ? !has : has;
-  }
-
-  const s = String(actual);
-  switch (c.operator) {
-    case "is": return eq(s, c.value);
-    case "is_not": return !eq(s, c.value);
-    case "contains": return s.toLowerCase().includes(c.value.toLowerCase());
-    default: return eq(s, c.value);
-  }
+  const { known, value } = resolveField(r, condFieldKey(c.field));
+  if (!known) return false;
+  return evaluateCondition(value, c.operator, c.value, condFieldKind(c.field), condFieldDef(c.field)?.options);
 }
 
 /** Does a request's current state correspond to the rule's trigger event? */

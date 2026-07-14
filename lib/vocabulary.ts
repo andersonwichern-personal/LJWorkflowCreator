@@ -16,21 +16,42 @@
 
 export type Confidence = "verified" | "unconfirmed";
 
-export type FieldKind = "enum" | "text" | "numeric";
+/** orderedEnum = enum whose options are ranked (best→worst), e.g. risk grades. */
+export type FieldKind = "enum" | "text" | "numeric" | "orderedEnum";
 
 /* -------------------------------------------------------------------------- */
 /* Operators                                                                  */
 /* -------------------------------------------------------------------------- */
 
+/** Presence operators available on every kind (hardening plan §2.4 / C6). */
+const EMPTY_OPS = [
+  { value: "is_empty", label: "is empty" },
+  { value: "is_not_empty", label: "is not empty" },
+];
+
+/** Operators that take no value token (the value pill is hidden). */
+export function isValuelessOperator(operator: string): boolean {
+  return operator === "is_empty" || operator === "is_not_empty";
+}
+
 export const OPERATORS: Record<FieldKind, { value: string; label: string }[]> = {
   enum: [
     { value: "is", label: "is" },
     { value: "is_not", label: "is not" },
+    ...EMPTY_OPS,
+  ],
+  orderedEnum: [
+    { value: "is", label: "is" },
+    { value: "is_not", label: "is not" },
+    { value: "worse_than", label: "is worse than" },
+    { value: "better_than", label: "is better than" },
+    ...EMPTY_OPS,
   ],
   text: [
     { value: "is", label: "is" },
     { value: "is_not", label: "is not" },
     { value: "contains", label: "contains" },
+    ...EMPTY_OPS,
   ],
   numeric: [
     { value: "is", label: "is" },
@@ -38,6 +59,7 @@ export const OPERATORS: Record<FieldKind, { value: string; label: string }[]> = 
     { value: "gte", label: "is at least" },
     { value: "lt", label: "is less than" },
     { value: "lte", label: "is at most" },
+    ...EMPTY_OPS,
   ],
 };
 
@@ -239,7 +261,7 @@ export const FIELDS: Record<string, FieldDef> = {
   risk_grade: {
     key: "risk_grade",
     label: "risk grade",
-    kind: "enum",
+    kind: "orderedEnum", // options ranked best→worst; enables worse_than/better_than
     confidence: "verified",
     group: "Underwriting",
     options: ["A", "B", "C", "D", "E"],
@@ -1115,7 +1137,9 @@ export function ruleUsesUnconfirmed(rule: WorkflowRule): boolean {
 
 /** Default value for a freshly added condition on a field. */
 export function defaultValueFor(field: FieldDef): string {
-  if (field.kind === "enum" && field.options?.length) return field.options[0];
+  if ((field.kind === "enum" || field.kind === "orderedEnum") && field.options?.length) {
+    return field.options[0];
+  }
   return "";
 }
 

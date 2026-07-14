@@ -172,7 +172,7 @@ export default function SimulationPanel({
                 {result.logError ? ` · log failed: ${result.logError}` : ""}
               </span>
             </div>
-            <TraceView trace={result.trace} actions={result.actions} />
+            <TraceView trace={result.trace} actions={result.actions} elseActions={result.elseActions} alerts={result.alerts} />
           </div>
         )}
       </div>

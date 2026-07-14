@@ -187,10 +187,19 @@ export interface ConditionTraceRecord {
   expected: string;
   actual: string | null;
   matched: boolean;
+  /** Nesting depth for indented rendering (0 = a leaf of the root group). */
+  depth: number;
+}
+
+export interface TriggerTraceRecord {
+  event: string;
+  matched: boolean;
 }
 
 export interface EvaluationTrace {
-  trigger: { event: string; matched: boolean; actual: string | null };
+  /** Every trigger (OR-combined); `matchedTrigger` is the first that matched. */
+  triggers: TriggerTraceRecord[];
+  matchedTrigger: string | null;
   conditions: ConditionTraceRecord[];
 }
 
@@ -198,6 +207,10 @@ export interface SimulateResult {
   matched: boolean;
   trace: EvaluationTrace;
   actions: string[];
+  /** Otherwise-branch descriptors when a trigger matched but conditions failed. */
+  elseActions: string[];
+  /** missingData:"alert" fields absent from the request (fail-closed). */
+  alerts: string[];
   request: { id: string; name: string };
   logged: boolean;
   logError?: string;

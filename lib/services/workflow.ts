@@ -1,12 +1,21 @@
 import { prisma } from "@/lib/prisma";
 import { Workflow, Prisma } from "@prisma/client";
+import { validateRule } from "@/lib/ruleValidation";
 
 /**
  * The versioned rule JSON contract lives in `@/lib/vocabulary` (the single
- * source of truth). The service treats `ruleJson` as opaque JSON and validates
- * its structure at runtime (supporting both the v2 and legacy shapes), so it
- * intentionally does not re-declare the rule type here.
+ * source of truth). The service validates + normalizes `ruleJson` through the
+ * one validator (`validateRule`) — the same code the client runs pre-save — and
+ * persists the normalized v3 rule. Legacy v1/v2 rows upgrade on write.
  */
+function assertValidRule(raw: unknown): Prisma.InputJsonValue {
+  const { rule, issues } = validateRule(raw);
+  if (!rule) {
+    const errs = issues.filter((i) => i.severity === "error").map((i) => i.message).join("; ");
+    throw new Error(`Invalid rule: ${errs || "unknown validation error"}`);
+  }
+  return rule as unknown as Prisma.InputJsonValue;
+}
 
 export class WorkflowService {
   /**
@@ -59,30 +68,15 @@ export class WorkflowService {
       throw new Error("Workflow rule JSON is required");
     }
 
-    // Validate the minimum structure of the rule JSON.
-    // Supports both the versioned live schema (v2) and the legacy mockup shape.
-    const rule = data.ruleJson as any;
-    const isNewSchema = rule.schemaVersion !== undefined;
-    if (isNewSchema) {
-      if (!rule.trigger?.event || !Array.isArray(rule.conditions?.rules) || !Array.isArray(rule.actions)) {
-        throw new Error(
-          "Invalid rule JSON structure (v2). Must contain 'schemaVersion', " +
-          "'trigger.event', 'conditions.rules', and 'actions'."
-        );
-      }
-    } else if (!rule.event || !Array.isArray(rule.conds) || !Array.isArray(rule.outputs)) {
-      throw new Error(
-        "Invalid rule JSON structure. Must contain 'event' (string), " +
-        "'conds' (array), and 'outputs' (array)."
-      );
-    }
+    // Validate + normalize through the single validator (throws on errors).
+    const ruleJson = assertValidRule(data.ruleJson);
 
     return prisma.workflow.create({
       data: {
         orgId: data.orgId,
         name: data.name.trim(),
         description: data.description || null,
-        ruleJson: rule as Prisma.InputJsonValue,
+        ruleJson,
         enabled: data.enabled !== undefined ? data.enabled : true,
       },
     });
@@ -134,24 +128,7 @@ export class WorkflowService {
     }
 
     if (updates.ruleJson !== undefined) {
-      const rule = updates.ruleJson as any;
-      if (rule) {
-        const isNewSchema = rule.schemaVersion !== undefined;
-        if (isNewSchema) {
-          if (!rule.trigger?.event || !Array.isArray(rule.conditions?.rules) || !Array.isArray(rule.actions)) {
-            throw new Error(
-              "Invalid rule JSON structure (v2). Must contain 'schemaVersion', " +
-              "'trigger.event', 'conditions.rules', and 'actions'."
-            );
-          }
-        } else if (!rule.event || !Array.isArray(rule.conds) || !Array.isArray(rule.outputs)) {
-          throw new Error(
-            "Invalid rule JSON structure. Must contain 'event' (string), " +
-            "'conds' (array), and 'outputs' (array)."
-          );
-        }
-      }
-      data.ruleJson = rule as Prisma.InputJsonValue;
+      data.ruleJson = assertValidRule(updates.ruleJson);
     }
 
     return prisma.workflow.update({

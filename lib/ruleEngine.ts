@@ -10,15 +10,11 @@
 
 import {
   WorkflowRule,
-  RuleCondition,
   getAction,
   paramKeyFor,
-  condFieldKey,
-  condFieldKind,
-  condFieldDef,
 } from "./vocabulary";
 // Circular at module level only; both modules dereference at call time.
-import { evaluateCondition } from "./ruleEvaluator";
+import { ruleMatches } from "./ruleEvaluator";
 import {
   PlatformRequest,
   SystemEvent,
@@ -67,18 +63,6 @@ export function resolveField(
   return { known: true, value: v };
 }
 
-/**
- * Delegates to the single operator implementation in lib/ruleEvaluator.ts
- * (hardening plan §2.6 — no operator drift between the list-match engine and
- * the traced simulator). Unknown fields (incl. ff:<form>:<field> refs absent
- * from the seed data) never match — including is_empty (unknown ≠ empty).
- */
-function evalCondition(r: PlatformRequest, c: RuleCondition): boolean {
-  const { known, value } = resolveField(r, condFieldKey(c.field));
-  if (!known) return false;
-  return evaluateCondition(value, c.operator, c.value, condFieldKind(c.field), condFieldDef(c.field)?.options);
-}
-
 /** Does a request's current state correspond to the rule's trigger event? */
 export function requestMatchesEvent(r: PlatformRequest, eventKey: string): boolean {
   switch (eventKey) {
@@ -94,13 +78,13 @@ export function requestMatchesEvent(r: PlatformRequest, eventKey: string): boole
   }
 }
 
-/** Evaluate a full rule (event + conditions) against a request. */
+/**
+ * Evaluate a full rule (multi-trigger OR + recursive condition groups) against a
+ * request. Delegates to the single traced engine in lib/ruleEvaluator.ts so the
+ * list-match path and the simulator can never disagree (§2.6, §3.3).
+ */
 export function evaluateRule(rule: WorkflowRule, r: PlatformRequest): boolean {
-  if (!requestMatchesEvent(r, rule.trigger.event)) return false;
-  const conds = rule.conditions.rules;
-  if (conds.length === 0) return true;
-  const results = conds.map((c) => evalCondition(r, c));
-  return rule.conditions.logic === "OR" ? results.some(Boolean) : results.every(Boolean);
+  return ruleMatches(rule, r);
 }
 
 /** All demo requests a rule would match right now. */
@@ -113,12 +97,12 @@ export function workflowsForRequest(r: PlatformRequest, workflows: WorkflowRecor
   return workflows.filter((w) => w.enabled && evaluateRule(w.ruleJson, r));
 }
 
-/** Saved workflows that would fire on a given system event. */
+/** Saved workflows that would fire on a given system event (multi-trigger OR). */
 export function workflowsForEvent(evt: SystemEvent, workflows: WorkflowRecord[]): WorkflowRecord[] {
   const req = REQUESTS.find((r) => r.id === evt.requestId);
   return workflows.filter((w) => {
-    if (!w.enabled || w.ruleJson.trigger.event !== evt.type) return false;
-    return req ? evaluateRule(w.ruleJson, req) : w.ruleJson.conditions.rules.length === 0;
+    if (!w.enabled || !w.ruleJson.triggers.some((t) => t.event === evt.type)) return false;
+    return req ? evaluateRule(w.ruleJson, req) : w.ruleJson.conditions.children.length === 0;
   });
 }
 

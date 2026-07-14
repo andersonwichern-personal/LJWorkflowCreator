@@ -57,7 +57,11 @@ export default function WorkflowSidebar({
 
         {workflows.map((wf) => {
           const active = wf.id === activeId;
-          const ev = getEvent(wf.ruleJson?.trigger?.event);
+          const triggers = wf.ruleJson?.triggers ?? [];
+          const triggerLabel = triggers.length
+            ? triggers.map((t) => getEvent(t.event)?.label ?? t.event).join(" or ")
+            : "—";
+          const mode = wf.ruleJson?.controls?.mode ?? "shadow";
           return (
             <div
               key={wf.id}
@@ -80,7 +84,7 @@ export default function WorkflowSidebar({
                     className="mt-0.5 truncate text-[11px] uppercase tracking-wide"
                     style={{ color: "var(--fg-subtle)" }}
                   >
-                    {ev?.label ?? wf.ruleJson?.trigger?.event ?? "—"}
+                    {triggerLabel}
                   </div>
                 </div>
                 <div onClick={(e) => e.stopPropagation()}>
@@ -94,15 +98,28 @@ export default function WorkflowSidebar({
               </div>
 
               <div className="mt-2 flex items-center justify-between">
-                <span
-                  className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase"
-                  style={{
-                    background: wf.enabled ? "var(--tok-if-bg)" : "var(--tok-op-bg)",
-                    color: wf.enabled ? "var(--tok-if-fg)" : "var(--fg-subtle)",
-                  }}
-                >
-                  {wf.enabled ? "Enabled" : "Off"}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase"
+                    style={{
+                      background: wf.enabled ? "var(--tok-if-bg)" : "var(--tok-op-bg)",
+                      color: wf.enabled ? "var(--tok-if-fg)" : "var(--fg-subtle)",
+                    }}
+                  >
+                    {wf.enabled ? "Enabled" : "Off"}
+                  </span>
+                  <span
+                    className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase"
+                    title={mode === "armed" ? "Armed — dispatches actions" : "Shadow — observes without acting"}
+                    style={
+                      mode === "armed"
+                        ? { background: "var(--tok-then-bg)", color: "var(--tok-then-fg)" }
+                        : { background: "var(--tok-op-bg)", color: "var(--fg-subtle)" }
+                    }
+                  >
+                    {mode}
+                  </span>
+                </div>
                 <button
                   type="button"
                   onClick={(e) => {

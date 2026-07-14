@@ -531,6 +531,12 @@ export interface EventDef {
   /** Field keys this event may constrain on (the P1 binding). */
   condFields: string[];
   blurb: string;
+  /**
+   * Whether ID-bound live form-field refs (ff:<form>:<field>) are offerable on
+   * this event — true only for the events that carry application data
+   * (§3.1). Form fields survive a multi-trigger set iff EVERY trigger allows them.
+   */
+  allowsFormFields?: boolean;
 }
 
 /** Fields most lifecycle events can filter on. */
@@ -562,6 +568,7 @@ export const EVENTS: EventDef[] = [
     key: "LOAN APPROVED",
     label: "LOAN APPROVED",
     confidence: "verified",
+    allowsFormFields: true,
     condFields: [
       "uwstatus",
       "queue",
@@ -584,6 +591,7 @@ export const EVENTS: EventDef[] = [
     key: "LOAN REJECTED",
     label: "LOAN REJECTED",
     confidence: "verified",
+    allowsFormFields: true,
     condFields: [
       "uwstatus",
       "queue",
@@ -660,6 +668,7 @@ export const EVENTS: EventDef[] = [
     key: "REQUEST SUBMITTED",
     label: "REQUEST SUBMITTED",
     confidence: "unconfirmed",
+    allowsFormFields: true,
     condFields: ["role", "main_borrower", ...APP_DATA, ...COMMON],
     blurb: "A borrower completes intake (Intake Link / Staff Wizard) — not confirmed as an emitted event.",
   },
@@ -767,10 +776,33 @@ export function getEvent(key: string): EventDef | undefined {
   return EVENTS.find((e) => e.key === key);
 }
 
+/**
+ * Attribute fields offerable across a SET of triggers (multi-trigger, §3.1):
+ * the set-intersection of each event's `condFields`. A field is only offered if
+ * EVERY selected trigger supports it, so a rule can never condition on a field
+ * one of its triggers can't carry. Unknown events contribute nothing (the
+ * validator flags them separately).
+ */
+export function allowedFieldsForTriggers(events: string[]): FieldDef[] {
+  const known = events.map((e) => getEvent(e)).filter((d): d is EventDef => !!d);
+  if (known.length === 0) return [];
+  let keys = new Set(known[0].condFields);
+  for (const d of known.slice(1)) {
+    const s = new Set(d.condFields);
+    keys = new Set([...keys].filter((k) => s.has(k)));
+  }
+  return [...keys].map((k) => FIELDS[k]).filter(Boolean);
+}
+
+/** Single-event wrapper (unchanged behavior). */
 export function allowedFieldsForEvent(eventKey: string): FieldDef[] {
-  const ev = getEvent(eventKey);
-  if (!ev) return [];
-  return ev.condFields.map((k) => FIELDS[k]).filter(Boolean);
+  return allowedFieldsForTriggers([eventKey]);
+}
+
+/** Are ID-bound live form fields offerable across ALL of these triggers? */
+export function triggersAllowFormFields(events: string[]): boolean {
+  const known = events.map((e) => getEvent(e)).filter((d): d is EventDef => !!d);
+  return known.length > 0 && known.every((d) => d.allowsFormFields === true);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1048,90 +1080,266 @@ export interface RuleCondition {
 export interface RuleOutput {
   action: string;
   params: Record<string, string>;
+  /** Optional per-action gate (same node type as the root conditions). Persisted;
+   *  the evaluator ignores it until the executor honors it (Phase 4). */
+  when?: ConditionGroup;
+  /** Reserved for the timer engine (Phase 5). Persisted, ignored by the evaluator. */
+  delayMinutes?: number;
+  /** Failure policy for the executor (Phase 4). Default "retry". */
+  onFailure?: "retry" | "skip" | "halt";
 }
 
 export type CondLogic = "AND" | "OR";
 
+/* -------------------------------------------------------------------------- */
+/* Conditions — recursive AND/OR groups (schema v3)                           */
+/* -------------------------------------------------------------------------- */
+
+/** A single comparison. Assignment-compatible with the legacy RuleCondition. */
+export type ConditionLeaf = RuleCondition;
+
+export interface ConditionGroup {
+  logic: CondLogic;
+  children: ConditionNode[];
+}
+
+export type ConditionNode = ConditionLeaf | ConditionGroup;
+
+/** Type guard: a node is a group iff it carries a `children` array. */
+export function isGroup(n: ConditionNode): n is ConditionGroup {
+  return Array.isArray((n as ConditionGroup).children);
+}
+
+/** Recursively collect every leaf under a group (evaluators, linter, audit). */
+export function walkLeaves(group: ConditionGroup): ConditionLeaf[] {
+  const out: ConditionLeaf[] = [];
+  for (const child of group.children) {
+    if (isGroup(child)) out.push(...walkLeaves(child));
+    else out.push(child);
+  }
+  return out;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Triggers                                                                   */
+/* -------------------------------------------------------------------------- */
+
+export interface TriggerRef {
+  event: string; // EventDef.key
+  // scope?: ScopeRef;  // Phase 2 — instance scope (deferred)
+}
+
+/* -------------------------------------------------------------------------- */
+/* Controls — the safety rails that live inside the rule                      */
+/* -------------------------------------------------------------------------- */
+
+export interface RuleControls {
+  mode: "shadow" | "armed";          // default "shadow" — observe before acting
+  oncePerRequest: boolean;           // default true (T2 idempotency)
+  maxFiresPerHour: number;           // default 25 (A2 circuit breaker)
+  missingData: "no_match" | "alert"; // default "no_match" (C2)
+  priority: number;                  // default 100; lower runs first (T4)
+}
+
+export function defaultControls(): RuleControls {
+  return { mode: "shadow", oncePerRequest: true, maxFiresPerHour: 25, missingData: "no_match", priority: 100 };
+}
+
 /**
- * Versioned, live-compatible rule schema (v2).
- *
- * The nested `trigger` / `conditions` / `actions` structure leaves room to store
- * stable platform references (template/field IDs) in production instead of
- * hard-coding the mockup shape. Legacy `{ event, conds, outputs, condLogic }`
- * records persisted before this migration are upgraded on read by normalizeRule().
+ * Generation-scoped idempotency key for `controls.oncePerRequest`
+ * (edge-cases doc §10a / Amendment 1). The dedupe key is
+ * `(workflowId, requestId, generation)` — NOT `(workflowId, requestId)` — so a
+ * request that is closed and later reopened (which bumps its generation) is
+ * eligible to be automated on again; old firings stay in the audit log.
+ * `generation` starts at 1. Phase 4's fire route reads the latest generation
+ * before its duplicate check; this codifies the key shape now so that check is
+ * written against the correct contract.
  */
-export const RULE_SCHEMA_VERSION = 2;
+export function oncePerRequestKey(workflowId: string, requestId: string, generation = 1): string {
+  return `${workflowId}:${requestId}:${generation}`;
+}
+
+/* -------------------------------------------------------------------------- */
+/* The rule (schema v3)                                                       */
+/* -------------------------------------------------------------------------- */
+
+export const RULE_SCHEMA_VERSION = 3;
 
 export interface WorkflowRule {
-  schemaVersion: number;
-  trigger: {
-    event: string;
-  };
-  conditions: {
-    logic: CondLogic;
-    rules: RuleCondition[];
-  };
+  schemaVersion: number;             // 3
+  triggers: TriggerRef[];            // ≥1; OR semantics across triggers
+  conditions: ConditionGroup;        // root group; children may nest
   actions: RuleOutput[];
+  else?: RuleOutput[];               // fires when triggers match but conditions don't
+  controls: RuleControls;
 }
 
 export function emptyRule(): WorkflowRule {
   return {
     schemaVersion: RULE_SCHEMA_VERSION,
-    trigger: { event: EVENTS[0].key },
-    conditions: { logic: "AND", rules: [] },
+    triggers: [{ event: EVENTS[0].key }],
+    conditions: { logic: "AND", children: [] },
     actions: [],
+    controls: defaultControls(),
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Normalization — v1 | v2 | v3 → v3 (idempotent)                             */
+/* -------------------------------------------------------------------------- */
+
+/** Structurally valid condition-field ref (attribute key or ID-bound form field)? */
+function isValidFieldRef(f: unknown): f is ConditionFieldRef {
+  if (typeof f === "string") return true;
+  return (
+    isFormFieldRef(f as ConditionFieldRef) &&
+    !!(f as FormFieldRef).formTemplateId &&
+    !!(f as FormFieldRef).fieldId
+  );
+}
+
+function coerceLeaf(raw: Record<string, unknown>): ConditionLeaf | null {
+  if (!isValidFieldRef(raw.field)) return null;
+  return {
+    field: raw.field as ConditionFieldRef,
+    operator: typeof raw.operator === "string" ? raw.operator : "is",
+    value: raw.value == null ? "" : String(raw.value),
+  };
+}
+
+/** Normalize a raw group node, recursing into sub-groups (depth preserved). */
+function normalizeGroup(raw: unknown): ConditionGroup {
+  const g = (raw ?? {}) as Record<string, unknown>;
+  const logic: CondLogic = g.logic === "OR" ? "OR" : "AND";
+  const childrenRaw = Array.isArray(g.children) ? g.children : [];
+  const children: ConditionNode[] = [];
+  for (const ch of childrenRaw) {
+    const c = (ch ?? {}) as Record<string, unknown>;
+    if (Array.isArray(c.children)) {
+      children.push(normalizeGroup(c)); // recurse — never alters depth
+    } else {
+      const leaf = coerceLeaf(c);
+      if (leaf) children.push(leaf); // malformed leaves are dropped
+    }
+  }
+  return { logic, children };
+}
+
+/** Turn a flat v2 `conditions.rules[]` (or v1 `conds[]`) into a root group. */
+function leavesToGroup(rulesRaw: unknown, logic: CondLogic): ConditionGroup {
+  const arr = Array.isArray(rulesRaw) ? rulesRaw : [];
+  const children: ConditionNode[] = [];
+  for (const c0 of arr) {
+    const leaf = coerceLeaf((c0 ?? {}) as Record<string, unknown>);
+    if (leaf) children.push(leaf);
+  }
+  return { logic, children };
+}
+
+function normalizeActions(raw: unknown): RuleOutput[] {
+  const arr = Array.isArray(raw) ? raw : [];
+  const out: RuleOutput[] = [];
+  for (const a0 of arr) {
+    const a = (a0 ?? {}) as Record<string, unknown>;
+    if (typeof a.action !== "string") continue;
+    const action: RuleOutput = {
+      action: a.action,
+      params: a.params && typeof a.params === "object" ? (a.params as Record<string, string>) : {},
+    };
+    if (a.when) action.when = normalizeGroup(a.when);
+    if (typeof a.delayMinutes === "number") action.delayMinutes = a.delayMinutes;
+    if (a.onFailure === "retry" || a.onFailure === "skip" || a.onFailure === "halt") action.onFailure = a.onFailure;
+    out.push(action);
+  }
+  return out;
+}
+
+function coerceControls(raw: unknown): RuleControls {
+  const d = defaultControls();
+  const c = (raw ?? {}) as Record<string, unknown>;
+  return {
+    mode: c.mode === "armed" ? "armed" : "shadow",
+    oncePerRequest: typeof c.oncePerRequest === "boolean" ? c.oncePerRequest : d.oncePerRequest,
+    maxFiresPerHour:
+      typeof c.maxFiresPerHour === "number" && !Number.isNaN(c.maxFiresPerHour) ? c.maxFiresPerHour : d.maxFiresPerHour,
+    missingData: c.missingData === "alert" ? "alert" : "no_match",
+    priority: typeof c.priority === "number" && !Number.isNaN(c.priority) ? c.priority : d.priority,
+  };
+}
+
+function triggersFrom(raw: unknown): TriggerRef[] {
+  if (!Array.isArray(raw)) return [];
+  const out: TriggerRef[] = [];
+  for (const t0 of raw) {
+    const t = (t0 ?? {}) as Record<string, unknown>;
+    if (typeof t.event === "string") out.push({ event: t.event });
+  }
+  return out;
 }
 
 /**
- * Coerce any persisted rule JSON — legacy mockup shape or versioned v2 — into a
- * well-formed v2 WorkflowRule. Safe to call on API results and builder state.
+ * Coerce any persisted rule JSON — legacy v1, v2, or v3 — into a well-formed v3
+ * WorkflowRule. Idempotent. Shape-only: never alters group depth or drops valid
+ * nodes (depth policy belongs to the validator, §3.2). Empty/all-invalid triggers
+ * are preserved so the validator can flag them. Safe on API results + builder state.
  */
 export function normalizeRule(raw: unknown): WorkflowRule {
   const r = (raw ?? {}) as Record<string, unknown>;
-  const fallback = emptyRule();
 
-  // Prefer v2 nested fields, then fall back to legacy flat fields.
-  const trigger = r.trigger as { event?: string } | undefined;
-  const conditions = r.conditions as { logic?: string; rules?: unknown } | undefined;
+  // v3 — has a triggers[] array.
+  if (Array.isArray(r.triggers)) {
+    const rule: WorkflowRule = {
+      schemaVersion: RULE_SCHEMA_VERSION,
+      triggers: triggersFrom(r.triggers),
+      conditions: normalizeGroup(r.conditions),
+      actions: normalizeActions(r.actions),
+      controls: coerceControls(r.controls),
+    };
+    if (r.else !== undefined) rule.else = normalizeActions(r.else);
+    return rule;
+  }
 
-  const event = trigger?.event ?? (r.event as string | undefined) ?? fallback.trigger.event;
+  // v2 — nested trigger/conditions objects (conditions.rules is a flat list).
+  const hasV2Nest =
+    (r.trigger !== null && typeof r.trigger === "object") ||
+    (r.conditions !== null && typeof r.conditions === "object");
+  if (hasV2Nest) {
+    const trigger = r.trigger as { event?: string } | undefined;
+    const conditions = r.conditions as { logic?: string; rules?: unknown } | undefined;
+    const event = typeof trigger?.event === "string" ? trigger.event : EVENTS[0].key;
+    const logic: CondLogic = conditions?.logic === "OR" ? "OR" : "AND";
+    return {
+      schemaVersion: RULE_SCHEMA_VERSION,
+      triggers: [{ event }],
+      conditions: leavesToGroup(conditions?.rules, logic),
+      actions: normalizeActions(r.actions),
+      controls: defaultControls(),
+    };
+  }
 
-  const logicRaw = conditions?.logic ?? (r.condLogic as string | undefined);
-  const logic: CondLogic = logicRaw === "OR" ? "OR" : "AND";
+  // v1 — legacy flat { event, conds, outputs, condLogic }.
+  if (typeof r.event === "string" || Array.isArray(r.conds) || Array.isArray(r.outputs)) {
+    const event = typeof r.event === "string" ? r.event : EVENTS[0].key;
+    const logic: CondLogic = r.condLogic === "OR" ? "OR" : "AND";
+    return {
+      schemaVersion: RULE_SCHEMA_VERSION,
+      triggers: [{ event }],
+      conditions: leavesToGroup(r.conds, logic),
+      actions: normalizeActions(r.outputs),
+      controls: defaultControls(),
+    };
+  }
 
-  const rulesRaw = Array.isArray(conditions?.rules)
-    ? (conditions!.rules as RuleCondition[])
-    : Array.isArray(r.conds)
-    ? (r.conds as RuleCondition[])
-    : [];
-
-  // Coerce condition field refs: plain attribute keys and well-formed
-  // ID-bound form-field refs pass through; malformed refs are dropped.
-  const rulesSrc = rulesRaw.filter((c) => {
-    if (typeof c?.field === "string") return true;
-    return isFormFieldRef(c?.field) && !!c.field.formTemplateId && !!c.field.fieldId;
-  });
-
-  const actions = Array.isArray(r.actions)
-    ? (r.actions as RuleOutput[])
-    : Array.isArray(r.outputs)
-    ? (r.outputs as RuleOutput[])
-    : [];
-
-  return {
-    schemaVersion: RULE_SCHEMA_VERSION,
-    trigger: { event },
-    conditions: { logic, rules: rulesSrc },
-    actions,
-  };
+  // Unrecognizable → a safe empty v3 rule.
+  return emptyRule();
 }
 
 export function ruleUsesUnconfirmed(rule: WorkflowRule): boolean {
-  if (getEvent(rule.trigger.event)?.confidence === "unconfirmed") return true;
+  if (rule.triggers.some((t) => getEvent(t.event)?.confidence === "unconfirmed")) return true;
   // ID-bound form-field refs come from live platform data — treated as verified.
-  if (rule.conditions.rules.some((c) => condFieldDef(c.field)?.confidence === "unconfirmed")) return true;
-  if (rule.actions.some((o) => getAction(o.action)?.confidence === "unconfirmed")) return true;
+  if (walkLeaves(rule.conditions).some((c) => condFieldDef(c.field)?.confidence === "unconfirmed")) return true;
+  const allActions = [...rule.actions, ...(rule.else ?? [])];
+  if (allActions.some((o) => getAction(o.action)?.confidence === "unconfirmed")) return true;
   return false;
 }
 
@@ -1168,9 +1376,10 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
     icon: "🚨",
     rule: {
       schemaVersion: RULE_SCHEMA_VERSION,
-      trigger: { event: "SYSTEM ERROR" },
-      conditions: { logic: "AND", rules: [{ field: "bookstatus", operator: "is", value: "Error" }] },
+      triggers: [{ event: "SYSTEM ERROR" }],
+      conditions: { logic: "AND", children: [{ field: "bookstatus", operator: "is", value: "Error" }] },
       actions: [{ action: "assign_user", params: { assignee: "Escalation Team" } }],
+      controls: defaultControls(),
     },
   },
   {
@@ -1179,9 +1388,10 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
     icon: "✅",
     rule: {
       schemaVersion: RULE_SCHEMA_VERSION,
-      trigger: { event: "LOAN APPROVED" },
-      conditions: { logic: "AND", rules: [{ field: "uwstatus", operator: "is", value: "Approved" }] },
+      triggers: [{ event: "LOAN APPROVED" }],
+      conditions: { logic: "AND", children: [{ field: "uwstatus", operator: "is", value: "Approved" }] },
       actions: [{ action: "assign_user", params: { assignee: "Underwriting Team" } }],
+      controls: defaultControls(),
     },
   },
   {
@@ -1190,9 +1400,10 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
     icon: "💰",
     rule: {
       schemaVersion: RULE_SCHEMA_VERSION,
-      trigger: { event: "LOAN APPROVED" },
-      conditions: { logic: "AND", rules: [{ field: "loan_amount", operator: "gte", value: "250000" }] },
+      triggers: [{ event: "LOAN APPROVED" }],
+      conditions: { logic: "AND", children: [{ field: "loan_amount", operator: "gte", value: "250000" }] },
       actions: [{ action: "assign_user", params: { assignee: "Wael" } }],
+      controls: defaultControls(),
     },
   },
   {
@@ -1201,12 +1412,13 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
     icon: "🏦",
     rule: {
       schemaVersion: RULE_SCHEMA_VERSION,
-      trigger: { event: "FISERV LOAN" },
-      conditions: { logic: "AND", rules: [{ field: "bookstatus", operator: "is", value: "Error" }] },
+      triggers: [{ event: "FISERV LOAN" }],
+      conditions: { logic: "AND", children: [{ field: "bookstatus", operator: "is", value: "Error" }] },
       actions: [
         { action: "assign_user", params: { assignee: "Booking Team" } },
         { action: "add_tag", params: { value: "booking-failed" } },
       ],
+      controls: defaultControls(),
     },
   },
 ];

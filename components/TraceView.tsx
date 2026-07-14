@@ -4,40 +4,57 @@ import { EvaluationTrace } from "@/lib/api";
 import { opLabel, FIELDS } from "@/lib/vocabulary";
 
 /**
- * Colored evaluation-trace tree (simulator spec §3A): trigger check, each
- * condition's expected vs actual (green pass / red fail), dispatched actions
- * as blue badges. Shared by the Simulation panel and the Audit Logs detail.
+ * Colored evaluation-trace tree (schema v3): the OR-combined trigger line, each
+ * condition's expected vs actual (green pass / red fail, indented by group
+ * depth), dispatched actions, Otherwise actions, and missing-data alerts.
+ * Shared by the Simulation panel and the Audit Logs detail (defensive against
+ * legacy single-trigger audit rows).
  */
 export default function TraceView({
   trace,
   actions,
+  elseActions,
+  alerts,
 }: {
   trace: EvaluationTrace;
   actions: string[];
+  elseActions?: string[];
+  alerts?: string[];
 }) {
+  // Back-compat: older audit rows stored a single `trigger` object.
+  const legacy = trace as unknown as { trigger?: { event: string; matched: boolean } };
+  const triggers = trace.triggers ?? (legacy.trigger ? [legacy.trigger] : []);
+  const anyTrigger = triggers.some((t) => t.matched);
+
   return (
     <div className="flex flex-col gap-1.5 text-sm">
-      {/* Trigger */}
+      {/* Triggers (OR) */}
       <div
         className="flex items-start gap-2 rounded-lg px-3 py-2"
         style={{
-          background: trace.trigger.matched ? "var(--tok-if-bg)" : "var(--danger-bg)",
-          color: trace.trigger.matched ? "var(--tok-if-fg)" : "var(--danger-fg)",
+          background: anyTrigger ? "var(--tok-if-bg)" : "var(--danger-bg)",
+          color: anyTrigger ? "var(--tok-if-fg)" : "var(--danger-fg)",
         }}
       >
-        <span aria-hidden className="font-bold">{trace.trigger.matched ? "✓" : "✗"}</span>
-        <span>
-          Trigger <span className="font-semibold">[{trace.trigger.event}]</span>{" "}
-          {trace.trigger.matched ? "matched" : "did not match this request"}
+        <span aria-hidden className="font-bold">{anyTrigger ? "✓" : "✗"}</span>
+        <span className="min-w-0">
+          {triggers.length > 1 ? "Any trigger " : "Trigger "}
+          <span className="font-semibold">
+            [{triggers.map((t) => t.event).join(" or ")}]
+          </span>{" "}
+          {anyTrigger
+            ? `matched${triggers.length > 1 && trace.matchedTrigger ? ` (${trace.matchedTrigger})` : ""}`
+            : "did not match this request"}
         </span>
       </div>
 
-      {/* Conditions */}
+      {/* Conditions (depth-indented) */}
       {trace.conditions.map((c, i) => (
         <div
           key={i}
           className="flex items-start gap-2 rounded-lg px-3 py-2"
           style={{
+            marginLeft: (c.depth ?? 0) * 16,
             background: c.matched ? "var(--tok-if-bg)" : "var(--danger-bg)",
             color: c.matched ? "var(--tok-if-fg)" : "var(--danger-fg)",
           }}
@@ -61,6 +78,15 @@ export default function TraceView({
         </div>
       )}
 
+      {/* Missing-data alerts (fail-closed) */}
+      {alerts && alerts.length > 0 && (
+        <div className="mt-1 flex flex-col gap-1 rounded-lg px-3 py-2 text-xs" style={{ background: "var(--warn-bg)", color: "var(--warn-fg)" }}>
+          {alerts.map((a, i) => (
+            <span key={i}>⚠ {a}</span>
+          ))}
+        </div>
+      )}
+
       {/* Dispatched actions */}
       {actions.length > 0 ? (
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -78,6 +104,22 @@ export default function TraceView({
       ) : (
         <div className="mt-1 text-xs" style={{ color: "var(--fg-subtle)" }}>
           No actions dispatched.
+        </div>
+      )}
+
+      {/* Otherwise (else) actions */}
+      {elseActions && elseActions.length > 0 && (
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          <span className="text-xs" style={{ color: "var(--fg-subtle)" }}>Otherwise would run:</span>
+          {elseActions.map((a, i) => (
+            <span
+              key={i}
+              className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
+              style={{ background: "var(--tok-op-bg)", color: "var(--fg-muted)" }}
+            >
+              {a}
+            </span>
+          ))}
         </div>
       )}
     </div>

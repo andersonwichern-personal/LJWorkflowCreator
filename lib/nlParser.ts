@@ -28,6 +28,7 @@ import {
   opLabel,
   paramKeyFor,
   RULE_SCHEMA_VERSION,
+  defaultControls,
   condFieldLabel,
   condFieldKind,
   isValuelessOperator,
@@ -565,9 +566,10 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
   return {
     rule: {
       schemaVersion: RULE_SCHEMA_VERSION,
-      trigger: { event: eventKey },
-      conditions: { logic: condLogic, rules: conds },
+      triggers: [{ event: eventKey }],
+      conditions: { logic: condLogic, children: conds },
       actions: outputs,
+      controls: defaultControls(),
     },
     notes,
     unresolved,

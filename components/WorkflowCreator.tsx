@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   WorkflowRule,
+  RuleOutput,
+  ConditionGroup,
   emptyRule,
   normalizeRule,
   ruleUsesUnconfirmed,
@@ -15,6 +17,8 @@ import {
   condFieldKind,
   condFieldDef,
   isValuelessOperator,
+  isGroup,
+  walkLeaves,
   ASSIGNEES,
 } from "@/lib/vocabulary";
 import { UnresolvedSlot } from "@/lib/nlParser";
@@ -142,10 +146,11 @@ export default function WorkflowCreator() {
     // Re-validate slots against the edited rule: a slot survives only while its
     // target still exists and still lacks a value (deleting the token or
     // filling it manually must unblock save — indexes shift on removal).
-    setUnresolved((u) =>
-      u.filter((s) => {
+    setUnresolved((u) => {
+      const leaves = walkLeaves(next.conditions);
+      return u.filter((s) => {
         if (s.where === "condition-value") {
-          const c = next.conditions.rules[s.conditionIndex ?? -1];
+          const c = leaves[s.conditionIndex ?? -1];
           return !!c && !c.value && !isValuelessOperator(c.operator);
         }
         if (s.where === "action-param") {
@@ -153,8 +158,8 @@ export default function WorkflowCreator() {
           return !!a && !a.params[s.param ?? ""];
         }
         return true;
-      })
-    );
+      });
+    });
   }
   function onDraftFromChat(next: WorkflowRule, meta: ChatDraftMeta) {
     setRule(next);
@@ -174,7 +179,10 @@ export default function WorkflowCreator() {
     if (unresolved.length > 0) {
       return pushToast("err", "Resolve the highlighted values before saving.");
     }
-    if (rule.actions.length === 0) return pushToast("err", "Add at least one action (THEN) before saving.");
+    // Armed rules must act; shadow rules may observe action-less (§3.5).
+    if (rule.controls.mode === "armed" && rule.actions.length === 0) {
+      return pushToast("err", "Add at least one action, or switch the rule to shadow mode to observe.");
+    }
     setSaving(true);
     try {
       if (activeId) {
@@ -231,7 +239,7 @@ export default function WorkflowCreator() {
   const summary = useMemo(() => plainSummary(rule), [rule]);
   const unconfirmed = useMemo(() => ruleUsesUnconfirmed(rule), [rule]);
   const enabledCount = workflows.filter((w) => w.enabled).length;
-  const isBlank = !activeId && rule.conditions.rules.length === 0 && rule.actions.length === 0;
+  const isBlank = !activeId && rule.conditions.children.length === 0 && rule.actions.length === 0;
 
   return (
     <div>
@@ -465,35 +473,53 @@ function toastId(): number {
 function errMsg(e: unknown, fallback: string): string {
   return e instanceof Error ? e.message : fallback;
 }
-function plainSummary(rule: WorkflowRule): string {
-  const evLabel = getEvent(rule.trigger.event)?.label ?? rule.trigger.event;
-  let s = `When ${evLabel} fires`;
-  const conds = rule.conditions.rules;
-  if (conds.length) {
-    const parts = conds.map((c) => {
-      const label = condFieldLabel(c.field);
-      const kind = condFieldKind(c.field);
-      const op = opLabel(kind, c.operator);
-      if (isValuelessOperator(c.operator)) return `${label} ${op}`;
-      let val = c.value || "…";
-      if (kind === "numeric" && c.value && !isNaN(Number(c.value))) {
-        val = `${condFieldDef(c.field)?.unit ?? ""}${Number(c.value).toLocaleString("en-US")}`;
-      }
-      return `${label} ${op} ${val}`;
-    });
-    s += ` and ${parts.join(` ${rule.conditions.logic.toLowerCase()} `)}`;
+function summarizeLeaf(c: ReturnType<typeof walkLeaves>[number]): string {
+  const label = condFieldLabel(c.field);
+  const kind = condFieldKind(c.field);
+  const op = opLabel(kind, c.operator);
+  if (isValuelessOperator(c.operator)) return `${label} ${op}`;
+  let val = c.value || "…";
+  if (kind === "numeric" && c.value && !isNaN(Number(c.value))) {
+    val = `${condFieldDef(c.field)?.unit ?? ""}${Number(c.value).toLocaleString("en-US")}`;
   }
-  if (rule.actions.length) {
-    const parts = rule.actions.map((o) => {
+  return `${label} ${op} ${val}`;
+}
+
+function summarizeGroup(group: ConditionGroup): string {
+  return group.children
+    .map((child) => (isGroup(child) ? `(${summarizeGroup(child)})` : summarizeLeaf(child)))
+    .join(` ${group.logic.toLowerCase()} `);
+}
+
+function describeActionList(list: RuleOutput[]): string {
+  return list
+    .map((o) => {
       const action = getAction(o.action);
       const label = action?.label ?? o.action;
       if (action?.paramKind === "none") return label;
       const val = o.params[paramKeyFor(o.action)] || "…";
       return `${label} ${val}`;
-    });
-    s += `, then ${parts.join(" and ")}`;
-  } else {
-    s += ", then … (add an action)";
+    })
+    .join(" and ");
+}
+
+function plainSummary(rule: WorkflowRule): string {
+  const evLabels = rule.triggers.map((t) => getEvent(t.event)?.label ?? t.event);
+  let s = `When ${evLabels.join(" or ")} fires`;
+  if (rule.conditions.children.length) {
+    s += `, if ${summarizeGroup(rule.conditions)}`;
   }
-  return s + ".";
+  if (rule.actions.length) {
+    s += `, then ${describeActionList(rule.actions)}`;
+  } else if (rule.controls.mode === "armed") {
+    s += ", then … (add an action)";
+  } else {
+    s += " (observing)";
+  }
+  if (rule.else && rule.else.length) {
+    s += `; otherwise ${describeActionList(rule.else)}`;
+  }
+  s += ".";
+  if (rule.controls.mode === "shadow") s += " [shadow]";
+  return s;
 }

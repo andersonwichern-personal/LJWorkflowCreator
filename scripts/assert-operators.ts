@@ -5,7 +5,7 @@
 import { evaluateCondition, simulateRule } from "../lib/ruleEvaluator";
 import { matchingRequests } from "../lib/ruleEngine";
 import { REQUESTS } from "../lib/platformData";
-import { OPERATORS, FIELDS, WorkflowRule } from "../lib/vocabulary";
+import { OPERATORS, FIELDS, WorkflowRule, normalizeRule } from "../lib/vocabulary";
 
 let failures = 0;
 function t(name: string, cond: boolean, detail?: string) {
@@ -44,14 +44,16 @@ t("tags membership", evaluateCondition(["priority", "large-loan"], "is", "priori
 t("tags is_not absence", evaluateCondition(["a"], "is_not", "b", "text") === true);
 t("tags is_empty", evaluateCondition([], "is_empty", "", "text") === true);
 
-/* ---- Parity: list engine (ruleEngine) vs traced simulator (§2.6) ----------- */
+/* ---- Parity: list engine (ruleEngine) vs traced simulator (§2.6) -----------
+   Authored as legacy v2 literals and upgraded through normalizeRule → exercises
+   the v2→v3 conversion path at the same time. */
 const CASES: WorkflowRule[] = [
   { schemaVersion: 2, trigger: { event: "SYSTEM ERROR" }, conditions: { logic: "AND", rules: [{ field: "bookstatus", operator: "is", value: "Error" }] }, actions: [] },
   { schemaVersion: 2, trigger: { event: "LOAN APPROVED" }, conditions: { logic: "AND", rules: [{ field: "loan_amount", operator: "gte", value: "250000" }] }, actions: [] },
   { schemaVersion: 2, trigger: { event: "LOAN APPROVED" }, conditions: { logic: "OR", rules: [{ field: "risk_grade", operator: "worse_than", value: "B" }, { field: "tags", operator: "is", value: "priority" }] }, actions: [] },
   { schemaVersion: 2, trigger: { event: "LOAN APPROVED" }, conditions: { logic: "AND", rules: [{ field: "team_member", operator: "is_not_empty", value: "" }] }, actions: [] },
   { schemaVersion: 2, trigger: { event: "LOAN APPROVED" }, conditions: { logic: "AND", rules: [{ field: "risk_grade", operator: "is_empty", value: "" }] }, actions: [] },
-];
+].map(normalizeRule);
 CASES.forEach((rule, i) => {
   const listed = new Set(matchingRequests(rule).map((r) => r.id));
   const simulated = new Set(REQUESTS.filter((r) => simulateRule(rule, r).matched).map((r) => r.id));

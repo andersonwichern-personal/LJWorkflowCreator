@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
       riskGrade: body.riskGrade,
       product: body.product,
       userIds: Array.isArray(body.userIds) ? body.userIds : [],
+      requirement: body.requirement ?? null,
       escalationId: body.escalationId ?? null,
       autoApprove: Boolean(body.autoApprove),
     });

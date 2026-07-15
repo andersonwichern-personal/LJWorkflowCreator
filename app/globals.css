@@ -122,12 +122,11 @@ body {
 /* Focal AI console pill — soft, neutral, elevated; gentle ring on focus */
 .command-bar {
   background: var(--panel-solid);
-  border: 1px solid var(--command-border);
+  border: none;
   box-shadow: var(--command-shadow);
-  transition: box-shadow 0.18s ease, border-color 0.18s ease;
+  transition: box-shadow 0.18s ease;
 }
 .command-bar:focus-within {
-  border-color: var(--ring);
   box-shadow: var(--command-shadow), 0 0 0 4px var(--command-ring);
 }
 

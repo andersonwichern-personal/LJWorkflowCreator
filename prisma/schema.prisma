@@ -47,6 +47,7 @@ model ApprovalAuthority {
   riskGrade    String   @map("risk_grade") // Minimum risk grade, e.g. "A", "B", "C", "D", "E"
   product      String   @map("product") // "Term Loan" | "Line of Credit" | "All"
   userIds      Json     @map("user_ids") // JSON array of user names/IDs assigned
+  requirement  Json?    @map("requirement") // ApprovalRequirement topology (quorum/sequence); null → legacy any-of userIds
   escalationId String?  @map("escalation_id")
   autoApprove  Boolean  @default(false) @map("auto_approve")
   createdAt    DateTime @default(now()) @map("created_at")
@@ -54,6 +55,38 @@ model ApprovalAuthority {
 
   escalation  ApprovalAuthority?  @relation("EscalationRelation", fields: [escalationId], references: [id], onDelete: SetNull)
   escalatedBy ApprovalAuthority[] @relation("EscalationRelation")
+  tasks       ApprovalTask[]
 
   @@map("approval_authorities")
+}
+
+model ApprovalTask {
+  id          String   @id @default(uuid())
+  orgId       String   @map("org_id")
+  authorityId String   @map("authority_id")
+  requestId   String   @map("request_id")
+  requirement Json // envelope: { requirement: ApprovalRequirement, exclusions: string[] }
+  status      String // "open" | "approved" | "declined" | "expired"
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  decisions ApprovalDecision[]
+  authority ApprovalAuthority  @relation(fields: [authorityId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, requestId])
+  @@map("approval_tasks")
+}
+
+model ApprovalDecision {
+  id            String   @id @default(uuid())
+  taskId        String   @map("task_id")
+  approverId    String   @map("approver_id")
+  approverLabel String   @map("approver_label")
+  verdict       String // "approve" | "decline" | "abstain"
+  note          String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  task ApprovalTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, approverId])
+  @@map("approval_decisions")
 }

@@ -43,6 +43,8 @@ import { fuzzyMatches } from "./fuzzy";
 
 export interface UnresolvedSlot {
   where: "action-param" | "condition-value" | "event";
+  /** Action lane; omitted by legacy/parser slots where "then" is implied. */
+  lane?: "then" | "else";
   actionIndex?: number;
   conditionIndex?: number;
   param?: string;

@@ -1,9 +1,48 @@
 import { prisma } from "@/lib/prisma";
 import { ApprovalAuthority, Prisma } from "@prisma/client";
+import {
+  ApprovalRequirement,
+  MAX_SEQUENCE_STEPS,
+  normalizeRequirement,
+  requirementApprovers,
+} from "@/lib/authorityEngine";
 
 /** Allowed values for the authority matrix dimensions (Option C: Amount + Risk Grade + Product). */
 export const RISK_GRADES = ["A", "B", "C", "D", "E"] as const;
 export const AUTHORITY_PRODUCTS = ["All", "Term Loan", "Line of Credit"] as const;
+
+/**
+ * Validate and normalize a configured approval topology. Null clears the
+ * requirement (level falls back to legacy any-of userIds).
+ */
+function normalizeRequirementInput(raw: unknown): ApprovalRequirement | null {
+  if (raw == null) return null;
+  const rawSteps = (raw as { type?: unknown; steps?: unknown }).type === "sequence"
+    ? (raw as { steps?: unknown }).steps
+    : null;
+  if (Array.isArray(rawSteps) && rawSteps.length > MAX_SEQUENCE_STEPS) {
+    throw new Error(`Sequences must have at most ${MAX_SEQUENCE_STEPS} steps`);
+  }
+  const requirement = normalizeRequirement(raw);
+  const seats = requirementApprovers(requirement);
+  if (seats.length === 0) {
+    throw new Error("Requirement must name at least one approver");
+  }
+  if (requirement.type === "n_of" && requirement.count > requirement.approvers.length) {
+    throw new Error("Quorum count cannot exceed the number of approvers");
+  }
+  if (requirement.type === "sequence") {
+    for (const step of requirement.steps) {
+      if (requirementApprovers(step).length === 0) {
+        throw new Error("Every sequence step must name at least one approver");
+      }
+      if (step.type === "n_of" && step.count > step.approvers.length) {
+        throw new Error("Quorum count cannot exceed the number of approvers in a step");
+      }
+    }
+  }
+  return requirement;
+}
 
 /** List rows carry the escalation target's name for display. */
 export type AuthorityWithEscalation = ApprovalAuthority & {
@@ -46,6 +85,7 @@ export class ApprovalAuthorityService {
     riskGrade: string;
     product: string;
     userIds?: string[];
+    requirement?: unknown;
     escalationId?: string | null;
     autoApprove?: boolean;
   }): Promise<AuthorityWithEscalation> {
@@ -56,6 +96,7 @@ export class ApprovalAuthorityService {
       throw new Error("Authority name is required");
     }
     validateMatrix(data);
+    const requirement = normalizeRequirementInput(data.requirement);
 
     if (data.escalationId) {
       await this.assertEscalationTarget(data.escalationId, data.orgId);
@@ -69,6 +110,9 @@ export class ApprovalAuthorityService {
         riskGrade: data.riskGrade,
         product: data.product,
         userIds: (data.userIds ?? []) as Prisma.InputJsonValue,
+        requirement: requirement === null
+          ? Prisma.DbNull
+          : (requirement as unknown as Prisma.InputJsonValue),
         escalationId: data.escalationId || null,
         autoApprove: data.autoApprove ?? false,
       },
@@ -86,6 +130,7 @@ export class ApprovalAuthorityService {
       riskGrade: string;
       product: string;
       userIds: string[];
+      requirement: unknown;
       escalationId: string | null;
       autoApprove: boolean;
     }>
@@ -119,6 +164,12 @@ export class ApprovalAuthorityService {
     if (updates.riskGrade !== undefined) data.riskGrade = updates.riskGrade;
     if (updates.product !== undefined) data.product = updates.product;
     if (updates.userIds !== undefined) data.userIds = updates.userIds as Prisma.InputJsonValue;
+    if (updates.requirement !== undefined) {
+      const requirement = normalizeRequirementInput(updates.requirement);
+      data.requirement = requirement === null
+        ? Prisma.DbNull
+        : (requirement as unknown as Prisma.InputJsonValue);
+    }
     if (updates.autoApprove !== undefined) data.autoApprove = updates.autoApprove;
     if (updates.escalationId !== undefined) {
       data.escalation = updates.escalationId

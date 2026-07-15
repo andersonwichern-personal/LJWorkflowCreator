@@ -36,6 +36,7 @@ export async function PATCH(
     if (body.userIds !== undefined) {
       updates.userIds = Array.isArray(body.userIds) ? body.userIds : [];
     }
+    if (body.requirement !== undefined) updates.requirement = body.requirement;
     if (body.escalationId !== undefined) updates.escalationId = body.escalationId;
     if (body.autoApprove !== undefined) updates.autoApprove = Boolean(body.autoApprove);
 

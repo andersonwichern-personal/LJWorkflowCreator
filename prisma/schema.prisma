@@ -28,7 +28,8 @@ model RuleExecution {
   requestId         String   @map("request_id")
   requestName       String   @map("request_name")
   eventName         String   @map("event_name")
-  status            String // "FIRED" | "CONDITIONS_NOT_MET" | "ERROR"
+  status            String // "FIRED" | "CONDITIONS_NOT_MET" | "ERROR" | "SHADOW" | "PAUSED_ORG" | "SKIPPED_DUPLICATE" | "PAUSED_RATE_LIMIT"
+  mode              String   @default("shadow") // "shadow" | "armed" — enforcement mode at fire time
   evaluationTrace   Json     @map("evaluation_trace")
   actionsDispatched Json     @map("actions_dispatched")
   createdAt         DateTime @default(now()) @map("created_at")
@@ -37,6 +38,14 @@ model RuleExecution {
 
   @@index([orgId, requestId])
   @@map("rule_executions")
+}
+
+model WorkflowOrgControls {
+  orgId             String   @id @map("org_id")
+  automationsPaused Boolean  @default(false) @map("automations_paused")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("workflow_org_controls")
 }
 
 model ApprovalAuthority {

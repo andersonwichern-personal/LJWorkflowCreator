@@ -114,9 +114,10 @@ body {
 }
 
 /* Focus ring */
-.ring-accent:focus-visible {
+.ring-accent:focus-visible,
+.ring-accent:focus {
   outline: none;
-  box-shadow: 0 0 0 3px var(--ring);
+  box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px rgba(148, 163, 184, 0.4);
 }
 
 /* Focal AI console pill — soft, neutral, elevated; gentle ring on focus */
@@ -137,8 +138,16 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid var(--ring);
+  outline: 2px solid rgba(148, 163, 184, 0.5);
   outline-offset: 2px;
+}
+
+/* Soft neutral focus borders on text inputs */
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: #cbd5e1 !important; /* soft slate-300 focus border instead of neon */
 }
 
 /* Skip-to-content link (visible only on keyboard focus) */

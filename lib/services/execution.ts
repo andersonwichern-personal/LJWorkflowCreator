@@ -1,8 +1,21 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma, RuleExecution } from "@prisma/client";
 
-/** Allowed audit statuses (prompt §1 — stored as String, validated here). */
-export const EXECUTION_STATUSES = ["FIRED", "CONDITIONS_NOT_MET", "ERROR"] as const;
+/**
+ * Allowed audit statuses (stored as String, validated here).
+ * Phase 1: FIRED / CONDITIONS_NOT_MET / ERROR.
+ * Phase 4 (fire route): SHADOW (matched but observe-only), and the guardrail
+ * outcomes PAUSED_ORG / SKIPPED_DUPLICATE / PAUSED_RATE_LIMIT.
+ */
+export const EXECUTION_STATUSES = [
+  "FIRED",
+  "CONDITIONS_NOT_MET",
+  "ERROR",
+  "SHADOW",
+  "PAUSED_ORG",
+  "SKIPPED_DUPLICATE",
+  "PAUSED_RATE_LIMIT",
+] as const;
 export type ExecutionStatus = (typeof EXECUTION_STATUSES)[number];
 
 /** List rows carry the workflow's name for the audit table. */
@@ -19,6 +32,7 @@ export class RuleExecutionService {
     requestName: string;
     eventName: string;
     status: string;
+    mode?: string;
     trace: Prisma.InputJsonValue;
     actions: Prisma.InputJsonValue;
   }): Promise<RuleExecution> {
@@ -48,9 +62,33 @@ export class RuleExecutionService {
         requestName: data.requestName,
         eventName: data.eventName,
         status: data.status,
+        mode: data.mode === "armed" ? "armed" : "shadow",
         evaluationTrace: data.trace,
         actionsDispatched: data.actions,
       },
+    });
+  }
+
+  /**
+   * Has this workflow already FIRED for this request? (`oncePerRequest` gate.)
+   * Only real firings dedupe — shadow/guardrail rows never block a later arm.
+   */
+  static async hasFired(orgId: string, workflowId: string, requestId: string): Promise<boolean> {
+    const existing = await prisma.ruleExecution.findFirst({
+      where: { orgId, workflowId, requestId, status: "FIRED" },
+      select: { id: true },
+    });
+    return existing !== null;
+  }
+
+  /** Count FIRED rows for a workflow in the trailing `windowMs` (rate cap). */
+  static async countFiredSince(
+    orgId: string,
+    workflowId: string,
+    since: Date
+  ): Promise<number> {
+    return prisma.ruleExecution.count({
+      where: { orgId, workflowId, status: "FIRED", createdAt: { gte: since } },
     });
   }
 

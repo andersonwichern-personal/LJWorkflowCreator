@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Link2 } from "lucide-react";
 import { WorkflowRecord } from "@/lib/api";
 import { getEvent } from "@/lib/vocabulary";
 import type { RefAuditResult } from "@/lib/refAudit";
@@ -176,7 +177,9 @@ function ReferencesPanel({ refreshKey }: { refreshKey: number }) {
         className="ring-accent flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--accent-soft)]"
         style={{ color: "var(--fg-muted)" }}
       >
-        <span>🔗 References</span>
+        <span className="flex items-center gap-1.5">
+          <Link2 size={13} strokeWidth={2} /> References
+        </span>
         <span
           className="rounded-full px-1.5 py-0.5 text-[10px] font-bold"
           title={

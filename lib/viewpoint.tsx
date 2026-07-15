@@ -44,6 +44,8 @@ interface ViewpointValue {
   setViewMode: (m: ViewMode) => void;
   /** Only the Admin viewpoint may edit the canvas and authority settings. */
   canEdit: boolean;
+  /** The Committee viewpoint may draft rules that save as `proposed` drafts. */
+  canPropose: boolean;
   /** Presentation view hides dev logs, traces, lint panels, and raw JSON. */
   isPresentation: boolean;
 }
@@ -54,6 +56,7 @@ const ViewpointContext = createContext<ViewpointValue>({
   viewMode: "builder",
   setViewMode: () => {},
   canEdit: true,
+  canPropose: false,
   isPresentation: false,
 });
 
@@ -94,6 +97,7 @@ export function ViewpointProvider({ children }: { children: React.ReactNode }) {
         viewMode,
         setViewMode,
         canEdit: persona.role === "admin",
+        canPropose: persona.role === "approver",
         isPresentation: viewMode === "presentation",
       }}
     >

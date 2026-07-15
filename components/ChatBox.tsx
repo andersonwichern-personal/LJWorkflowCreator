@@ -1,8 +1,24 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { AlertTriangle, ArrowDown, ArrowRight, Filter, Play, Zap } from "lucide-react";
 import { ParseAmbiguity, ParseOptions, UnresolvedSlot } from "@/lib/nlParser";
-import { WorkflowRule, EVENTS, FIELDS, ASSIGNEES } from "@/lib/vocabulary";
+import {
+  WorkflowRule,
+  EVENTS,
+  FIELDS,
+  ASSIGNEES,
+  getEvent,
+  getAction,
+  opLabel,
+  paramKeyFor,
+  condFieldLabel,
+  condFieldKind,
+  isValuelessOperator,
+  scopeLabel,
+  isGroup,
+  walkLeaves,
+} from "@/lib/vocabulary";
 import { loadLiveVocabulary, buildOverlay, type VocabOverlay } from "@/lib/liveVocabulary";
 
 export interface ChatDraftMeta {
@@ -32,6 +48,8 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
   const [engine, setEngine] = useState<"gemini" | "heuristic">("heuristic");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Last drafted rule, rendered as a Trigger → Condition → Action flowchart card.
+  const [draft, setDraft] = useState<WorkflowRule | null>(null);
 
   // Real-time Autocomplete States
   const [vocab, setVocab] = useState<VocabOverlay | null>(null);
@@ -119,6 +137,7 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
       setAmbiguities(data.ambiguities || []);
       setEngine(data.engine || "heuristic");
       if (data.rule) {
+        setDraft(data.rule);
         onDraft(data.rule, { unresolved: data.unresolved || [], uncovered: data.uncovered || [] });
       }
     } catch (e) {
@@ -282,7 +301,7 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
           style={{ background: "var(--warn-bg)", color: "var(--warn-fg)", borderColor: "var(--warn-br)" }}
           role="alert"
         >
-          <span aria-hidden>⚠</span>
+          <AlertTriangle size={15} strokeWidth={2} className="mt-px shrink-0" aria-hidden />
           <span>
             I didn&apos;t understand: <span className="font-semibold">&quot;{frag}&quot;</span> — the
             drafted rule does <span className="font-bold">not</span> include this.
@@ -314,16 +333,8 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
         </div>
       ))}
 
-      {notes.length > 0 && (
-        <ul className="mt-3 space-y-1 px-2 text-xs" style={{ color: "var(--fg-muted)" }}>
-          {notes.map((n, i) => (
-            <li key={i} className="flex gap-1.5">
-              <span style={{ color: "var(--accent)" }}>·</span>
-              <span>{n}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+      {/* Drafted rule as a clean Trigger → Condition → Action flowchart card. */}
+      {draft && <FlowchartCard rule={draft} notes={notes} />}
 
       {/* Subtle template suggestions */}
       <div className="mt-4 flex flex-wrap justify-center gap-1.5">
@@ -343,5 +354,139 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
         ))}
       </div>
     </section>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Flowchart card — the drafted rule as Trigger → Condition → Action.         */
+/* -------------------------------------------------------------------------- */
+
+function triggerText(rule: WorkflowRule): string {
+  const labels = rule.triggers.map((t) => getEvent(t.event)?.label ?? t.event);
+  return labels.length ? labels.join(" or ") : "Any event";
+}
+
+function leafText(c: ReturnType<typeof walkLeaves>[number]): string {
+  const label = condFieldLabel(c.field);
+  const op = opLabel(condFieldKind(c.field), c.operator);
+  if (isValuelessOperator(c.operator)) return `${label} ${op}`;
+  return `${label} ${op} ${scopeLabel(c.value) || "…"}`;
+}
+
+function conditionLines(rule: WorkflowRule): string[] {
+  if (!rule.conditions.children.length) return [];
+  return rule.conditions.children.map((child) =>
+    isGroup(child) ? `(${walkLeaves(child).map(leafText).join(` ${child.logic.toLowerCase()} `)})` : leafText(child)
+  );
+}
+
+function actionLines(rule: WorkflowRule): string[] {
+  return rule.actions.map((o) => {
+    const action = getAction(o.action);
+    const label = action?.label ?? o.action;
+    if (action?.paramKind === "none") return label;
+    return `${label} ${scopeLabel(o.params[paramKeyFor(o.action)]) || "…"}`;
+  });
+}
+
+function FlowchartCard({ rule, notes }: { rule: WorkflowRule; notes: string[] }) {
+  const conditions = conditionLines(rule);
+  const actions = actionLines(rule);
+  const armed = rule.controls?.mode === "armed";
+
+  const nodes: {
+    stage: string;
+    Icon: typeof Zap;
+    tone: { bg: string; fg: string; br: string };
+    lines: string[];
+    empty: string;
+  }[] = [
+    {
+      stage: "When",
+      Icon: Zap,
+      tone: { bg: "var(--tok-when-bg)", fg: "var(--tok-when-fg)", br: "var(--tok-when-br)" },
+      lines: [triggerText(rule)],
+      empty: "Any event",
+    },
+    {
+      stage: "If",
+      Icon: Filter,
+      tone: { bg: "var(--tok-if-bg)", fg: "var(--tok-if-fg)", br: "var(--tok-if-br)" },
+      lines: conditions,
+      empty: "No conditions — always",
+    },
+    {
+      stage: "Then",
+      Icon: Play,
+      tone: { bg: "var(--tok-then-bg)", fg: "var(--tok-then-fg)", br: "var(--tok-then-br)" },
+      lines: actions,
+      empty: armed ? "Add an action" : "Observing (shadow)",
+    },
+  ];
+
+  return (
+    <div
+      className="animate-fade-in mt-4 rounded-2xl border p-4"
+      style={{ borderColor: "var(--panel-border)", background: "var(--panel-solid)" }}
+    >
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--fg-subtle)" }}>
+          Drafted flow
+        </span>
+        <span
+          className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase"
+          style={
+            armed
+              ? { background: "var(--tok-then-bg)", color: "var(--tok-then-fg)" }
+              : { background: "var(--tok-op-bg)", color: "var(--fg-subtle)" }
+          }
+        >
+          {armed ? "armed" : "shadow"}
+        </span>
+      </div>
+
+      <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-stretch">
+        {nodes.map((node, i) => (
+          <div key={node.stage} className="flex flex-col items-stretch sm:flex-1 sm:flex-row sm:items-center">
+            <div
+              className="flex-1 rounded-xl border p-3"
+              style={{ background: node.tone.bg, borderColor: node.tone.br }}
+            >
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <node.Icon size={14} strokeWidth={2.25} style={{ color: node.tone.fg }} />
+                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: node.tone.fg }}>
+                  {node.stage}
+                </span>
+              </div>
+              {node.lines.length ? (
+                <ul className="space-y-0.5">
+                  {node.lines.map((line, j) => (
+                    <li key={j} className="text-xs font-medium leading-snug" style={{ color: "var(--fg)" }}>
+                      {line}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs italic" style={{ color: "var(--fg-subtle)" }}>
+                  {node.empty}
+                </p>
+              )}
+            </div>
+            {i < nodes.length - 1 && (
+              <span className="flex shrink-0 items-center justify-center py-1 sm:px-1.5 sm:py-0" style={{ color: "var(--fg-subtle)" }}>
+                <ArrowDown size={16} strokeWidth={2} className="sm:hidden" />
+                <ArrowRight size={16} strokeWidth={2} className="hidden sm:block" />
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {notes.length > 0 && (
+        <p className="mt-3 border-t pt-2.5 text-[11px]" style={{ borderColor: "var(--panel-border)", color: "var(--fg-subtle)" }}>
+          {notes.join(" · ")}
+        </p>
+      )}
+    </div>
   );
 }

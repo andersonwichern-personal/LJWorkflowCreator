@@ -1,13 +1,14 @@
 import Link from "next/link";
+import { Zap } from "lucide-react";
 
 export default function NotFound() {
   return (
     <div className="glass mx-auto max-w-md rounded-2xl p-10 text-center">
       <div
-        className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl text-2xl font-bold text-white"
+        className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl text-white"
         style={{ background: "linear-gradient(135deg, var(--accent), #a855f7)" }}
       >
-        ⚡
+        <Zap size={26} strokeWidth={2} />
       </div>
       <h1 className="mt-4 text-2xl font-semibold" style={{ color: "var(--fg)" }}>Page not found</h1>
       <p className="mt-1.5 text-sm" style={{ color: "var(--fg-subtle)" }}>

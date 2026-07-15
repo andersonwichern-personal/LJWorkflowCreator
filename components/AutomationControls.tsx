@@ -9,6 +9,7 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { PauseCircle, Play } from "lucide-react";
 import { getOrgControls, setAutomationsPaused } from "@/lib/api";
 
 interface AutomationValue {
@@ -58,7 +59,7 @@ export function useAutomation(): AutomationValue {
   return useContext(AutomationContext);
 }
 
-/** Header toggle — ⏸ Pause all automations / ▶ Resume automations. */
+/** Kill switch — Pause all automations / Resume automations. */
 export function PauseAutomationsButton() {
   const { paused, saving, toggle } = useAutomation();
   return (
@@ -68,14 +69,15 @@ export function PauseAutomationsButton() {
       disabled={saving}
       aria-pressed={paused}
       title={paused ? "Automations are paused org-wide" : "Pause all automations org-wide"}
-      className="ring-accent rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all disabled:opacity-50"
+      className="ring-accent flex w-full items-center justify-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all disabled:opacity-50"
       style={
         paused
           ? { background: "var(--warn-fg)", borderColor: "var(--warn-fg)", color: "#fff" }
           : { borderColor: "var(--panel-border)", color: "var(--fg-muted)" }
       }
     >
-      {paused ? "▶ Resume automations" : "⏸ Pause all automations"}
+      {paused ? <Play size={13} strokeWidth={2.5} /> : <PauseCircle size={13} strokeWidth={2} />}
+      {paused ? "Resume automations" : "Pause all automations"}
     </button>
   );
 }
@@ -91,7 +93,7 @@ export function AutomationPausedBanner() {
       role="status"
     >
       <span className="flex items-center gap-2">
-        <span aria-hidden>⏸</span>
+        <PauseCircle size={16} strokeWidth={2} aria-hidden />
         Automations are paused for this organization — matched rules are logged as
         <code className="rounded bg-black/10 px-1">PAUSED_ORG</code> and take no action.
       </span>

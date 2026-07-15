@@ -1,5 +1,6 @@
 "use client";
 
+import { AlertTriangle } from "lucide-react";
 import { EvaluationTrace } from "@/lib/api";
 import { opLabel, FIELDS } from "@/lib/vocabulary";
 
@@ -82,7 +83,9 @@ export default function TraceView({
       {alerts && alerts.length > 0 && (
         <div className="mt-1 flex flex-col gap-1 rounded-lg px-3 py-2 text-xs" style={{ background: "var(--warn-bg)", color: "var(--warn-fg)" }}>
           {alerts.map((a, i) => (
-            <span key={i}>⚠ {a}</span>
+            <span key={i} className="flex items-center gap-1.5">
+              <AlertTriangle size={13} strokeWidth={2} /> {a}
+            </span>
           ))}
         </div>
       )}

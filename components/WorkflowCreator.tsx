@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, PencilLine, Send, Eye, Zap, AlertTriangle } from "lucide-react";
 import {
   WorkflowRule,
   RuleOutput,
@@ -50,13 +51,38 @@ import {
   loadLiveVocabulary,
 } from "@/lib/liveVocabulary";
 import { useViewpoint } from "@/lib/viewpoint";
+import { markProposed, clearProposed } from "@/lib/proposals";
 
 type Toast = { id: number; kind: "ok" | "err"; text: string };
 
-export default function WorkflowCreator() {
+/** How the creator was opened from the dashboard (drives write permission). */
+export type CreatorIntent = "edit" | "propose" | "view";
+
+interface WorkflowCreatorProps {
+  /** edit → Admin full save · propose → Committee draft · view → read-only. */
+  intent?: CreatorIntent;
+  /** Workflow id to open on mount (null → start a blank draft). */
+  initialWorkflowId?: string | null;
+  /** Return to the dashboard. */
+  onExit?: () => void;
+}
+
+export default function WorkflowCreator({
+  intent = "edit",
+  initialWorkflowId = null,
+  onExit,
+}: WorkflowCreatorProps) {
   // Phase 3 viewpoints: only the Admin persona edits the canvas; Presentation
   // view hides the dev surface (simulation traces, lint warnings, raw JSON).
-  const { persona, canEdit, isPresentation } = useViewpoint();
+  // Phase 5: the dashboard opens this in one of three intents — an Admin edit,
+  // a Committee proposal (saves as a `proposed` draft), or a read-only view.
+  const { persona, canEdit, canPropose, isPresentation } = useViewpoint();
+  const proposing = intent === "propose" && canPropose;
+  // May this viewpoint write in the current intent?
+  const canWrite = intent === "edit" ? canEdit : intent === "propose" ? canPropose : false;
+  // The internal saved-rule sidebar is an Admin-only convenience; the dashboard
+  // is the list surface for everyone else (and it avoids a propose/edit leak).
+  const showSidebar = canEdit && intent === "edit";
   const [workflows, setWorkflows] = useState<WorkflowRecord[]>([]);
   const [loadingList, setLoadingList] = useState(true);
 
@@ -119,6 +145,19 @@ export default function WorkflowCreator() {
 
   // Parser slots that still need a human pick (N1) — saving is blocked until empty.
   const [unresolved, setUnresolved] = useState<UnresolvedSlot[]>([]);
+
+  // Open the workflow the dashboard handed us (once the list has loaded), or a
+  // blank draft when none was requested. Runs a single time on entry.
+  const didInit = useRef(false);
+  useEffect(() => {
+    if (didInit.current || loadingList) return;
+    didInit.current = true;
+    if (initialWorkflowId) {
+      const wf = workflows.find((w) => w.id === initialWorkflowId);
+      if (wf) loadIntoEditor(wf);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingList, initialWorkflowId, workflows]);
 
   function loadIntoEditor(wf: WorkflowRecord) {
     setActiveId(wf.id);
@@ -186,8 +225,8 @@ export default function WorkflowCreator() {
   }
 
   async function save() {
-    if (!canEdit) {
-      return pushToast("err", `${persona.name} (${persona.roleLabel}) has read-only access — switch to the Admin viewpoint to edit.`);
+    if (!canWrite) {
+      return pushToast("err", `${persona.name} (${persona.roleLabel}) has read-only access here.`);
     }
     if (!name.trim()) return pushToast("err", "Give the workflow a name first.");
     // N1 hard gate: unresolved parser slots must be picked before persistence.
@@ -205,6 +244,22 @@ export default function WorkflowCreator() {
     }
     setSaving(true);
     try {
+      if (proposing) {
+        // Committee draft → persist disabled and register as a `proposed` draft
+        // that an Admin must approve before it can act (§1 role gating).
+        const created = await createWorkflow({
+          name: name.trim(),
+          description: description.trim() || undefined,
+          ruleJson: rule,
+          enabled: false,
+        });
+        markProposed(created.id);
+        setActiveId(created.id);
+        setDirty(false);
+        pushToast("ok", "Proposed — sent to an Admin for approval.");
+        setTimeout(() => onExit?.(), 800);
+        return;
+      }
       if (activeId) {
         const updated = await updateWorkflow(activeId, {
           name: name.trim(),
@@ -254,6 +309,7 @@ export default function WorkflowCreator() {
     if (!confirm(`Delete “${wf.name}”? This can't be undone.`)) return;
     try {
       await deleteWorkflow(wf.id);
+      clearProposed(wf.id);
       setWorkflows((list) => list.filter((w) => w.id !== wf.id));
       if (wf.id === activeId) newWorkflow();
       pushToast("ok", "Workflow deleted.");
@@ -286,9 +342,24 @@ export default function WorkflowCreator() {
 
   return (
     <div>
+      {/* Phase 5: dashboard entry — back navigation + intent context. */}
+      {onExit && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={onExit}
+            className="ring-accent inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors hover:bg-[var(--accent-soft)]"
+            style={{ color: "var(--fg-muted)" }}
+          >
+            <ArrowLeft size={16} strokeWidth={2} /> Back to workflows
+          </button>
+          <IntentBadge intent={intent} canWrite={canWrite} />
+        </div>
+      )}
+
       <PageHeader
-        title="Workflows"
-        icon="⚡"
+        title={proposing ? "Propose a workflow" : intent === "view" ? "View workflow" : "Workflows"}
+        icon={<Zap size={20} strokeWidth={2} style={{ color: "var(--accent)" }} />}
         actions={
           <>
             <span
@@ -316,19 +387,22 @@ export default function WorkflowCreator() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[280px_1fr]">
-        {/* Saved workflows */}
-        <div className="lg:sticky lg:top-[84px] lg:h-[calc(100vh-160px)]">
-          <WorkflowSidebar
-            workflows={workflows}
-            activeId={activeId}
-            loading={loadingList}
-            onSelect={loadIntoEditor}
-            onNew={newWorkflow}
-            onToggle={onToggleWorkflow}
-            onDelete={onDeleteWorkflow}
-          />
-        </div>
+      <div className={showSidebar ? "grid grid-cols-1 gap-5 lg:grid-cols-[280px_1fr]" : "grid grid-cols-1 gap-5"}>
+        {/* Saved workflows — Admin-only quick switcher; the dashboard is the
+            list surface for everyone else. */}
+        {showSidebar && (
+          <div className="lg:sticky lg:top-[84px] lg:h-[calc(100vh-160px)]">
+            <WorkflowSidebar
+              workflows={workflows}
+              activeId={activeId}
+              loading={loadingList}
+              onSelect={loadIntoEditor}
+              onNew={newWorkflow}
+              onToggle={onToggleWorkflow}
+              onDelete={onDeleteWorkflow}
+            />
+          </div>
+        )}
 
         {/* Designer canvas — hierarchy: title bar → AI console → tokens → simulation */}
         <div className="flex flex-col gap-5">
@@ -338,7 +412,7 @@ export default function WorkflowCreator() {
               <div className="flex-1">
                 <input
                   value={name}
-                  disabled={!canEdit}
+                  disabled={!canWrite}
                   onChange={(e) => { setName(e.target.value); setDirty(true); }}
                   placeholder="Workflow name"
                   className="ring-accent w-full rounded-lg bg-transparent px-1 py-0.5 text-2xl font-semibold tracking-tight outline-none disabled:opacity-70"
@@ -346,7 +420,7 @@ export default function WorkflowCreator() {
                 />
                 <input
                   value={description}
-                  disabled={!canEdit}
+                  disabled={!canWrite}
                   onChange={(e) => { setDescription(e.target.value); setDirty(true); }}
                   placeholder="Add a short description…"
                   className="ring-accent mt-1 w-full rounded-lg bg-transparent px-1 py-0.5 text-sm outline-none disabled:opacity-70"
@@ -354,7 +428,7 @@ export default function WorkflowCreator() {
                 />
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                {!canEdit && (
+                {!canWrite && (
                   <span
                     className="rounded-full px-2.5 py-1 text-[11px] font-medium"
                     style={{ background: "var(--warn-bg)", color: "var(--warn-fg)" }}
@@ -367,7 +441,7 @@ export default function WorkflowCreator() {
                   <Toggle
                     size="sm"
                     checked={enabled}
-                    disabled={!canEdit}
+                    disabled={!canWrite}
                     onChange={(v) => { setEnabled(v); setDirty(true); }}
                     label="Workflow enabled"
                   />
@@ -386,8 +460,9 @@ export default function WorkflowCreator() {
                     {dirty ? "Unsaved changes" : "Saved"}
                   </span>
                 )}
-                {canEdit && (
+                {canWrite && (
                   <>
+                    {showSidebar && (
                     <button
                       type="button"
                       onClick={newWorkflow}
@@ -396,6 +471,7 @@ export default function WorkflowCreator() {
                     >
                       New
                     </button>
+                    )}
                     {activeId && (
                       <button
                         type="button"
@@ -417,7 +493,15 @@ export default function WorkflowCreator() {
                       className="ring-accent rounded-xl px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:brightness-110 disabled:opacity-50"
                       style={{ background: "var(--accent)" }}
                     >
-                      {saving ? "Saving…" : lintBlocked ? "Fix errors to save" : activeId ? "Update" : "Save workflow"}
+                      {saving
+                        ? "Saving…"
+                        : lintBlocked
+                          ? "Fix errors to save"
+                          : proposing
+                            ? "Send proposal"
+                            : activeId
+                              ? "Update"
+                              : "Save workflow"}
                     </button>
                   </>
                 )}
@@ -426,7 +510,7 @@ export default function WorkflowCreator() {
           </div>
 
           {/* 2. Focal AI console — parser resolves against the live vocabulary */}
-          {canEdit && (
+          {canWrite && (
             <ChatBox
               onDraft={onDraftFromChat}
               parserOptions={{
@@ -447,7 +531,7 @@ export default function WorkflowCreator() {
             />
           )}
 
-          {isBlank && canEdit && (
+          {isBlank && canWrite && (
             <div className="glass rounded-2xl p-5">
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--fg-subtle)" }}>
                 Start from a template
@@ -480,8 +564,8 @@ export default function WorkflowCreator() {
 
             {/* Read-only viewpoints get a frozen (non-interactive) canvas. */}
             <div
-              className={canEdit ? undefined : "pointer-events-none select-none opacity-80"}
-              aria-disabled={!canEdit}
+              className={canWrite ? undefined : "pointer-events-none select-none opacity-80"}
+              aria-disabled={!canWrite}
             >
               <RuleSentence
                 rule={rule}
@@ -507,7 +591,7 @@ export default function WorkflowCreator() {
                 className="mt-3 flex items-start gap-2 rounded-xl px-3 py-2.5 text-xs"
                 style={{ background: "var(--warn-bg)", color: "var(--warn-fg)", border: "1px solid var(--warn-br)" }}
               >
-                <span aria-hidden>⚠</span>
+                <AlertTriangle size={14} strokeWidth={2} className="mt-px shrink-0" aria-hidden />
                 <span>
                   This rule uses vocabulary that isn&apos;t yet confirmed against the live platform.
                   It will save, but the engine may not be able to emit or execute it.
@@ -547,6 +631,24 @@ export default function WorkflowCreator() {
         ))}
       </div>
     </div>
+  );
+}
+
+/** Small context chip shown when the creator is opened from the dashboard. */
+function IntentBadge({ intent, canWrite }: { intent: CreatorIntent; canWrite: boolean }) {
+  const map = {
+    edit: { Icon: PencilLine, label: "Editing", bg: "var(--tok-if-bg)", fg: "var(--tok-if-fg)" },
+    propose: { Icon: Send, label: "Proposing — needs Admin approval", bg: "var(--warn-bg)", fg: "var(--warn-fg)" },
+    view: { Icon: Eye, label: "Read-only view", bg: "var(--tok-op-bg)", fg: "var(--fg-muted)" },
+  } as const;
+  const { Icon, label, bg, fg } = map[!canWrite && intent !== "view" ? "view" : intent];
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold"
+      style={{ background: bg, color: fg }}
+    >
+      <Icon size={13} strokeWidth={2} /> {label}
+    </span>
   );
 }
 

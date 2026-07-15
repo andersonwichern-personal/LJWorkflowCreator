@@ -48,6 +48,7 @@ import {
   nodeAt,
   emptyGroup,
 } from "@/lib/conditionTree";
+import { SlidersHorizontal } from "lucide-react";
 import TokenPicker, { PickerOption, ScopedOptions } from "./TokenPicker";
 import { VocabOverlay, ScopedInstances, fieldKindForType } from "@/lib/liveVocabulary";
 import { UnresolvedSlot } from "@/lib/nlParser";
@@ -591,7 +592,7 @@ export default function RuleSentence({ rule, onChange, overlay, unresolved, onRe
           className="ring-accent inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium"
           style={{ borderColor: "var(--panel-border)", color: "var(--fg-muted)" }}
         >
-          ⚙ controls
+          <SlidersHorizontal size={13} strokeWidth={2} /> controls
         </button>
         <span
           className="rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide"

@@ -10,7 +10,9 @@ import {
   SCOPED_PARAMS,
   WorkflowRule,
   defaultControls,
+  getAction,
   normalizeRule,
+  paramKeyFor,
 } from "@/lib/vocabulary";
 import { fetchLiveVocabulary, platformConfigured } from "@/lib/platform";
 import { buildOverlay, fieldKindForType, type VocabOverlay, type VocabularySource } from "@/lib/liveVocabulary";
@@ -39,8 +41,21 @@ type GeminiResponse = {
   }>;
 };
 
-const GEMINI_MODEL = "gemini-2.5-flash";
-const GEMINI_TIMEOUT_MS = 12_000;
+/**
+ * Model selection: `GEMINI_MODEL` env override, else the `gemini-flash-latest`
+ * alias — Google retires pinned model names for new users (the spec's
+ * gemini-2.5-flash now 404s), and the alias tracks the current flash model,
+ * mirroring this repo's anti-rot stance. On a model-level 404 we retry once
+ * with a recent pinned fallback before degrading to the heuristic parser.
+ */
+const GEMINI_MODELS = [
+  ...(process.env.GEMINI_MODEL?.trim() ? [process.env.GEMINI_MODEL.trim()] : []),
+  "gemini-3.1-flash-lite",
+  "gemini-3.1-flash-lite-preview",
+  "gemini-flash-latest",
+  "gemini-3-flash-preview",
+];
+const GEMINI_TIMEOUT_MS = 60_000; // JSON-mode rule drafts measured 12-40s live
 
 export async function POST(req: NextRequest) {
   let body: ParseAiBody;
@@ -116,8 +131,40 @@ function heuristicResponse(
   };
 }
 
+/**
+ * Try each candidate model in order. Fall through to the next model on
+ * MODEL-LEVEL unavailability — 404 (retired/renamed, e.g. gemini-2.5-flash for
+ * new users), 429 (per-model rate cap), 503 ("high demand" — observed live on
+ * gemini-flash-latest). Every other failure propagates so the caller's
+ * heuristic degrade handles it.
+ */
 async function callGemini(
   apiKey: string,
+  instruction: string,
+  forceEvent: string | undefined,
+  context: PromptContext
+): Promise<ParseAiResponse> {
+  const models = [...new Set(GEMINI_MODELS)];
+  let lastUnavailable: Error | null = null;
+  for (const model of models) {
+    try {
+      return await callGeminiModel(apiKey, model, instruction, forceEvent, context);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (/^Gemini HTTP (404|429|503)\b/.test(message)) {
+        console.warn(`Gemini model "${model}" unavailable (${message.slice(12, 15)}); trying next candidate.`);
+        lastUnavailable = error as Error;
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastUnavailable ?? new Error("No Gemini model candidates configured.");
+}
+
+async function callGeminiModel(
+  apiKey: string,
+  model: string,
   instruction: string,
   forceEvent: string | undefined,
   context: PromptContext
@@ -125,7 +172,7 @@ async function callGemini(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -142,7 +189,6 @@ async function callGemini(
                 text: JSON.stringify({
                   instruction,
                   forceEvent: forceEvent ?? null,
-                  activeVocabulary: context,
                 }),
               },
             ],
@@ -162,6 +208,7 @@ async function callGemini(
 
     const data = (await res.json()) as GeminiResponse;
     const text = extractGeminiText(data);
+    if (process.env.PARSE_AI_DEBUG === "1") console.log("[parse-ai raw]", text.slice(0, 2000));
     const parsed = JSON.parse(stripJsonFence(text)) as unknown;
     return coerceGeminiPayload(parsed);
   } finally {
@@ -190,7 +237,7 @@ function coerceGeminiPayload(raw: unknown): ParseAiResponse {
 
   let rule: WorkflowRule | null = null;
   if (obj.rule !== null && obj.rule !== undefined) {
-    const normalized = normalizeRule(obj.rule);
+    const normalized = normalizeRule(massageGeminiRule(obj.rule));
     const validation = validateRule(normalized);
     rule = validation.rule;
     for (const issue of validation.issues.filter((i) => i.severity === "error")) {
@@ -207,6 +254,74 @@ function coerceGeminiPayload(raw: unknown): ParseAiResponse {
     ambiguities,
     engine: "gemini",
   };
+}
+
+/**
+ * Tolerate common LLM shape drift before normalizeRule (observed live):
+ * the vocabulary snapshot names events/actions by `key`, and models mirror it —
+ * `triggers:[{key}]` for `[{event}]`, `actions:[{key,value}]` for
+ * `[{action, params}]`, lowercase logic (which normalize would flip OR→AND).
+ * Purely additive: well-formed rules pass through untouched.
+ */
+function massageGeminiRule(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object") return raw;
+  const rule = { ...(raw as Record<string, unknown>) };
+
+  // triggers: accept "EVENT", {key}, {name} → {event}; keep scope when present.
+  if (Array.isArray(rule.triggers)) {
+    rule.triggers = rule.triggers.map((t) => {
+      if (typeof t === "string") return { event: t };
+      if (t && typeof t === "object") {
+        const o = t as Record<string, unknown>;
+        const event = o.event ?? o.key ?? o.name;
+        if (typeof event === "string") return { ...o, event };
+      }
+      return t;
+    });
+  }
+
+  // conditions: uppercase logic recursively ("or" must not silently become AND).
+  rule.conditions = fixGroupLogic(rule.conditions);
+
+  // actions/else: accept {key} → action; {value}/{param}/string params → params map.
+  for (const lane of ["actions", "else"] as const) {
+    const list = rule[lane];
+    if (!Array.isArray(list)) continue;
+    rule[lane] = list.map((a) => {
+      if (!a || typeof a !== "object") return a;
+      const o = { ...(a as Record<string, unknown>) };
+      const action = o.action ?? o.key ?? o.name;
+      if (typeof action !== "string") return a;
+      o.action = action;
+      delete o.key;
+      const pk = getAction(action) ? paramKeyFor(action) : "value";
+      if (o.params == null || typeof o.params !== "object") {
+        const inline = o.params ?? o.value ?? o.param ?? o.target ?? o.assignee;
+        o.params = inline != null && inline !== "" ? { [pk]: inline } : {};
+        delete o.value;
+        delete o.param;
+        delete o.target;
+        delete o.assignee;
+      }
+      return o;
+    });
+  }
+
+  return rule;
+}
+
+function fixGroupLogic(node: unknown): unknown {
+  if (!node || typeof node !== "object") return node;
+  const g = { ...(node as Record<string, unknown>) };
+  if (typeof g.logic === "string") g.logic = g.logic.toUpperCase();
+  if (Array.isArray(g.children)) {
+    g.children = g.children.map((c) =>
+      c && typeof c === "object" && Array.isArray((c as Record<string, unknown>).children)
+        ? fixGroupLogic(c)
+        : c
+    );
+  }
+  return g;
 }
 
 function stringArray(value: unknown): string[] {
@@ -297,7 +412,6 @@ function buildPromptContext({ live, overlay }: LoadedVocab) {
       options: f.options ?? [],
       operators: OPERATORS[f.kind],
     })),
-    operators: OPERATORS,
     actions: ACTIONS.map((a) => ({
       key: a.key,
       label: a.label,
@@ -334,6 +448,22 @@ function buildSystemInstruction(context: PromptContext): string {
     "Convert the user's plain-English instruction into structured JSON only. Do not include markdown or commentary outside JSON.",
     "Return exactly this top-level shape: {\"rule\": WorkflowRule | null, \"notes\": string[], \"suggestions\": string[], \"unresolved\": UnresolvedSlot[], \"uncovered\": string[]}.",
     "WorkflowRule must use schemaVersion 3: triggers[], conditions {logic, children}, actions[], optional else[], and controls.",
+    "Use EXACTLY these field names (do NOT copy the vocabulary snapshot's 'key' naming into the rule). Example rule:",
+    JSON.stringify({
+      schemaVersion: 3,
+      triggers: [{ event: "LOAN APPROVED" }, { event: "LOAN REJECTED" }],
+      conditions: { logic: "AND", children: [
+        { field: "loan_amount", operator: "gte", value: "250000" },
+        { logic: "OR", children: [
+          { field: "retailer", operator: "is", value: { level: "instance", id: "<id-from-vocabulary>", label: "Growmark" } },
+          { field: "customer_name", operator: "is", value: { level: "category", category: "Business" } },
+        ] },
+      ] },
+      actions: [{ action: "assign_user", params: { assignee: "Wael" } }],
+      else: [{ action: "add_tag", params: { value: "review-skipped" } }],
+      controls: { mode: "shadow", oncePerRequest: true, maxFiresPerHour: 25, missingData: "no_match", priority: 100 },
+    }),
+    "Triggers use {event}. Actions use {action, params}. The assign_user param key is 'assignee'; every other action's param key is 'value'. Logic is uppercase AND/OR.",
     "Default controls to shadow mode, oncePerRequest true, maxFiresPerHour 25, missingData no_match, priority 100 unless the user clearly asks otherwise.",
     "Use only event keys, field keys, operators, action keys, and enum values from activeVocabulary. Never invent platform IDs.",
     "When a user or stage/template/retailer exactly matches an id-bearing activeVocabulary record, emit a ScopeRef instance {level:'instance', id, label}.",

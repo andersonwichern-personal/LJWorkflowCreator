@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, PencilLine, Send, Eye, Zap, AlertTriangle } from "lucide-react";
+import { ArrowLeft, PencilLine, Send, Eye, Zap, AlertTriangle, Circle, CircleDot } from "lucide-react";
+import VocabIcon from "@/components/ui/VocabIcon";
 import {
   WorkflowRule,
   RuleOutput,
@@ -375,7 +376,14 @@ export default function WorkflowCreator({
                     }
               }
             >
-              {vocabSource?.source === "live" ? "● Live vocabulary" : "○ Demo vocabulary"}
+              <span className="inline-flex items-center gap-1.5">
+                {vocabSource?.source === "live" ? (
+                  <CircleDot size={11} strokeWidth={2.5} />
+                ) : (
+                  <Circle size={11} strokeWidth={2.5} />
+                )}
+                {vocabSource?.source === "live" ? "Live vocabulary" : "Demo vocabulary"}
+              </span>
             </span>
             <span
               className="rounded-full px-3 py-1.5 text-xs font-medium"
@@ -545,8 +553,8 @@ export default function WorkflowCreator({
                     className="ring-accent group flex items-center gap-3 rounded-xl border p-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-md"
                     style={{ borderColor: "var(--panel-border)", background: "var(--panel-solid)" }}
                   >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lg" style={{ background: "var(--accent-soft)" }}>
-                      {t.icon}
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ background: "var(--accent-soft)" }}>
+                      <VocabIcon name={t.icon} size={18} style={{ color: "var(--accent)" }} />
                     </span>
                     <span className="min-w-0 truncate text-sm font-semibold" style={{ color: "var(--fg)" }}>{t.name}</span>
                   </button>
@@ -600,8 +608,10 @@ export default function WorkflowCreator({
             )}
           </div>
 
-          {/* Builder-only dev surface: simulation traces + persisted contract */}
-          {!isPresentation && <SimulationPanel rule={rule} workflowId={activeId} />}
+          {/* Simulation: available in Builder view, and always to the Admin
+              viewpoint (a legitimate admin tool, not just a dev surface). The
+              raw JSON contract below stays Builder-only. */}
+          {(!isPresentation || canEdit) && <SimulationPanel rule={rule} workflowId={activeId} />}
 
           {!isPresentation && (
             <details className="glass rounded-2xl p-4">

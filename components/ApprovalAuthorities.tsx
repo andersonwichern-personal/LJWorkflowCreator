@@ -20,6 +20,7 @@ import {
   normalizeRequirement,
   requirementApprovers,
 } from "@/lib/authorityEngine";
+import { Check, Landmark, X } from "lucide-react";
 import { approverIdFor, makerCheckerExclusions, useViewpoint } from "@/lib/viewpoint";
 import { formatCurrency, REQUESTS } from "@/lib/platformData";
 import PageHeader from "@/components/ui/PageHeader";
@@ -259,7 +260,7 @@ export default function ApprovalAuthorities() {
     <div>
       <PageHeader
         title="Approval Authorities"
-        icon="🏛️"
+        icon={<Landmark size={20} strokeWidth={2} style={{ color: "var(--accent)" }} />}
         actions={
           <>
             <span
@@ -525,10 +526,10 @@ export default function ApprovalAuthorities() {
                 type="button"
                 onClick={closeDrawer}
                 aria-label="Close"
-                className="ring-accent flex h-8 w-8 items-center justify-center rounded-lg text-lg transition-colors hover:bg-[var(--accent-soft)]"
+                className="ring-accent flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--accent-soft)]"
                 style={{ color: "var(--fg-subtle)" }}
               >
-                ×
+                <X size={17} strokeWidth={2} />
               </button>
             </div>
 
@@ -781,7 +782,7 @@ function TaskCard({
             className="ring-accent rounded-lg px-3 py-1.5 text-xs font-semibold transition-all hover:brightness-110 disabled:opacity-50"
             style={{ background: "var(--tok-if-bg)", color: "var(--tok-if-fg)" }}
           >
-            ✓ Approve
+            <span className="inline-flex items-center gap-1.5"><Check size={13} strokeWidth={2.5} /> Approve</span>
           </button>
           <button
             type="button"
@@ -790,7 +791,7 @@ function TaskCard({
             className="ring-accent rounded-lg px-3 py-1.5 text-xs font-semibold transition-all hover:bg-[var(--danger-bg)] disabled:opacity-50"
             style={{ background: "var(--danger-bg)", color: "var(--danger-fg)" }}
           >
-            ✕ Decline
+            <span className="inline-flex items-center gap-1.5"><X size={13} strokeWidth={2.5} /> Decline</span>
           </button>
         </div>
       )}

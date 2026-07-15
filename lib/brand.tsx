@@ -1,11 +1,13 @@
 "use client";
 
 /**
- * Phase 5: brand theming.
+ * Phase 5: brand theming (updated to the LandJourney brand).
  *
- * Lets a user pick a primary brand colour (hex) and a logo URL, persists both to
- * localStorage, and re-themes the whole app by writing HSL tokens onto
- * <html> (`--accent`, `--accent-soft`, `--ring`) on mount and on every change.
+ * Two brand colours plus a logo, persisted to localStorage:
+ *   - primary  (#133C14, dark green)  → chrome: the sidebar rail (--brand-primary)
+ *   - secondary(#1CBE73, bright green) → the interactive accent (--accent / -soft / -ring)
+ * On mount and on every change we convert the secondary to HSL accent tokens and
+ * write both onto <html> so the whole console re-themes live.
  *
  * Honesty guardrail: this is a client-side demo customiser. Nothing here changes
  * server behaviour — it only restyles the console for the person viewing it.
@@ -22,19 +24,25 @@ import {
 
 export const BRAND_KEY = "wf-brand";
 
-/** Landjourney admin teal — the shipped default when nothing is stored. */
-export const DEFAULT_BRAND_COLOR = "#4fc6a5";
+/** LandJourney brand defaults. */
+export const DEFAULT_PRIMARY_COLOR = "#133c14"; // dark forest green — chrome
+export const DEFAULT_SECONDARY_COLOR = "#1cbe73"; // bright green — accent
+export const DEFAULT_LOGO_URL =
+  "https://landjourney.ai/images/BYCZrp4YIVakhtkfw0tOCj9bSY.png";
 
 export interface BrandConfig {
-  /** Primary brand colour as a `#rrggbb` hex string. */
-  color: string;
-  /** Optional logo image URL rendered in the sidebar header. */
+  /** Primary brand colour (`#rrggbb`) — drives chrome (sidebar rail). */
+  primary: string;
+  /** Secondary brand colour (`#rrggbb`) — drives the interactive accent. */
+  secondary: string;
+  /** Logo image URL rendered in the sidebar header. */
   logoUrl: string;
 }
 
 export const DEFAULT_BRAND: BrandConfig = {
-  color: DEFAULT_BRAND_COLOR,
-  logoUrl: "",
+  primary: DEFAULT_PRIMARY_COLOR,
+  secondary: DEFAULT_SECONDARY_COLOR,
+  logoUrl: DEFAULT_LOGO_URL,
 };
 
 /* -------------------------------------------------------------------------- */
@@ -103,20 +111,23 @@ export function accentTokensFor(hex: string): Record<string, string> | null {
   };
 }
 
-/** Imperatively write (or clear) the accent tokens on the document root. */
-export function applyBrandColor(hex: string) {
+/** Imperatively write the brand tokens (accent + chrome primary) on <html>. */
+export function applyBrand(brand: BrandConfig) {
   if (typeof document === "undefined") return;
-  const tokens = accentTokensFor(hex);
   const root = document.documentElement;
-  if (!tokens) {
+
+  const accent = accentTokensFor(brand.secondary);
+  if (accent) {
+    for (const [key, value] of Object.entries(accent)) root.style.setProperty(key, value);
+  } else {
     root.style.removeProperty("--accent");
     root.style.removeProperty("--accent-soft");
     root.style.removeProperty("--ring");
-    return;
   }
-  for (const [key, value] of Object.entries(tokens)) {
-    root.style.setProperty(key, value);
-  }
+
+  const primary = normalizeHex(brand.primary);
+  if (primary) root.style.setProperty("--brand-primary", primary);
+  else root.style.removeProperty("--brand-primary");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -125,14 +136,16 @@ export function applyBrandColor(hex: string) {
 
 interface BrandValue {
   brand: BrandConfig;
-  setColor: (hex: string) => void;
+  setPrimary: (hex: string) => void;
+  setSecondary: (hex: string) => void;
   setLogoUrl: (url: string) => void;
   reset: () => void;
 }
 
 const BrandContext = createContext<BrandValue>({
   brand: DEFAULT_BRAND,
-  setColor: () => {},
+  setPrimary: () => {},
+  setSecondary: () => {},
   setLogoUrl: () => {},
   reset: () => {},
 });
@@ -141,10 +154,13 @@ function readStored(): BrandConfig {
   try {
     const raw = localStorage.getItem(BRAND_KEY);
     if (!raw) return DEFAULT_BRAND;
-    const parsed = JSON.parse(raw) as Partial<BrandConfig>;
+    const parsed = JSON.parse(raw) as Partial<BrandConfig> & { color?: string };
     return {
-      color: normalizeHex(parsed.color ?? "") ?? DEFAULT_BRAND_COLOR,
-      logoUrl: typeof parsed.logoUrl === "string" ? parsed.logoUrl : "",
+      // Migrate the legacy single-colour shape ({ color }) → secondary.
+      secondary:
+        normalizeHex(parsed.secondary ?? parsed.color ?? "") ?? DEFAULT_SECONDARY_COLOR,
+      primary: normalizeHex(parsed.primary ?? "") ?? DEFAULT_PRIMARY_COLOR,
+      logoUrl: typeof parsed.logoUrl === "string" ? parsed.logoUrl : DEFAULT_LOGO_URL,
     };
   } catch {
     return DEFAULT_BRAND;
@@ -158,12 +174,12 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const stored = readStored();
     setBrand(stored);
-    if (stored.color !== DEFAULT_BRAND_COLOR) applyBrandColor(stored.color);
+    applyBrand(stored);
   }, []);
 
   // Keep tokens + storage in lockstep with state on every change.
   useEffect(() => {
-    applyBrandColor(brand.color);
+    applyBrand(brand);
     try {
       localStorage.setItem(BRAND_KEY, JSON.stringify(brand));
     } catch {
@@ -171,9 +187,12 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
     }
   }, [brand]);
 
-  const setColor = useCallback((hex: string) => {
-    const norm = normalizeHex(hex);
-    setBrand((b) => ({ ...b, color: norm ?? hex }));
+  const setPrimary = useCallback((hex: string) => {
+    setBrand((b) => ({ ...b, primary: normalizeHex(hex) ?? hex }));
+  }, []);
+
+  const setSecondary = useCallback((hex: string) => {
+    setBrand((b) => ({ ...b, secondary: normalizeHex(hex) ?? hex }));
   }, []);
 
   const setLogoUrl = useCallback((url: string) => {
@@ -185,8 +204,8 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<BrandValue>(
-    () => ({ brand, setColor, setLogoUrl, reset }),
-    [brand, setColor, setLogoUrl, reset]
+    () => ({ brand, setPrimary, setSecondary, setLogoUrl, reset }),
+    [brand, setPrimary, setSecondary, setLogoUrl, reset]
   );
 
   return <BrandContext.Provider value={value}>{children}</BrandContext.Provider>;

@@ -35,7 +35,12 @@ import {
   Wrench,
 } from "lucide-react";
 import { ACTIVE_ROLES, useActiveRole, type ActiveRole } from "@/components/RoleSwitcher";
-import { useBrand, DEFAULT_BRAND_COLOR, normalizeHex } from "@/lib/brand";
+import {
+  useBrand,
+  DEFAULT_PRIMARY_COLOR,
+  DEFAULT_SECONDARY_COLOR,
+  normalizeHex,
+} from "@/lib/brand";
 import { useViewpoint } from "@/lib/viewpoint";
 import { PauseAutomationsButton } from "@/components/AutomationControls";
 
@@ -73,7 +78,7 @@ const NAV: NavItem[] = [
   { key: "system", label: "System Events", icon: Activity },
 ];
 
-const RAIL = "#083344"; // dark teal — matches the admin console chrome
+const RAIL = "var(--brand-primary)"; // primary brand colour — the console chrome
 const RAIL_HOVER = "rgba(255,255,255,0.06)";
 const RAIL_ACTIVE = "rgba(255,255,255,0.12)";
 const TEXT = "rgba(255,255,255,0.74)";
@@ -90,10 +95,17 @@ export default function AdminSidebar({
 }) {
   const [hovered, setHovered] = useState(false);
   const [openPopover, setOpenPopover] = useState<null | "persona" | "settings">(null);
+  const [logoError, setLogoError] = useState(false);
   const asideRef = useRef<HTMLElement | null>(null);
   const { brand } = useBrand();
 
   const expanded = hovered || openPopover !== null;
+  const showLogo = !!brand.logoUrl && !logoError;
+
+  // A new logo URL gets a fresh chance to load.
+  useEffect(() => {
+    setLogoError(false);
+  }, [brand.logoUrl]);
 
   // Close popovers on outside click / Escape.
   useEffect(() => {
@@ -131,21 +143,19 @@ export default function AdminSidebar({
         boxShadow: expanded ? "8px 0 32px rgba(2, 20, 28, 0.35)" : "none",
       }}
     >
-      {/* Brand header — custom logo if set, else the mock BofA wheat mark. */}
+      {/* Brand header — the brand logo (falls back to a wheat mark on error). */}
       <div className="flex h-16 shrink-0 items-center gap-3 px-3">
         <div
           className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl"
-          style={{ background: "rgba(255,255,255,0.10)" }}
+          style={{ background: showLogo ? "#ffffff" : "rgba(255,255,255,0.10)" }}
         >
-          {brand.logoUrl ? (
+          {showLogo ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={brand.logoUrl}
-              alt="Brand logo"
-              className="h-full w-full object-cover"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = "none";
-              }}
+              alt="LandJourney"
+              className="h-full w-full object-contain p-1"
+              onError={() => setLogoError(true)}
             />
           ) : (
             <Wheat size={20} strokeWidth={1.75} style={{ color: "var(--accent)" }} />
@@ -156,10 +166,10 @@ export default function AdminSidebar({
           style={{ opacity: expanded ? 1 : 0, transition: "opacity 0.2s ease" }}
         >
           <div className="truncate text-sm font-semibold" style={{ color: TEXT_ACTIVE }}>
-            Organic Bank
+            LandJourney
           </div>
           <div className="truncate text-[11px]" style={{ color: "rgba(255,255,255,0.5)" }}>
-            of America
+            Admin Console
           </div>
         </div>
       </div>
@@ -312,19 +322,62 @@ function SettingsButton({
   );
 }
 
-function BrandSettingsPanel() {
-  const { brand, setColor, setLogoUrl, reset } = useBrand();
-  const { viewMode, setViewMode } = useViewpoint();
-  const [hexDraft, setHexDraft] = useState(brand.color);
-
+function ColorField({
+  label,
+  value,
+  fallback,
+  placeholder,
+  onCommit,
+}: {
+  label: string;
+  value: string;
+  fallback: string;
+  placeholder: string;
+  onCommit: (hex: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
   useEffect(() => {
-    setHexDraft(brand.color);
-  }, [brand.color]);
+    setDraft(value);
+  }, [value]);
 
-  const commitHex = (v: string) => {
-    setHexDraft(v);
-    if (normalizeHex(v)) setColor(v);
+  const commit = (v: string) => {
+    setDraft(v);
+    if (normalizeHex(v)) onCommit(v);
   };
+
+  return (
+    <>
+      <label
+        className="mb-1 block text-[11px] font-semibold uppercase tracking-wide"
+        style={{ color: "var(--fg-subtle)" }}
+      >
+        {label}
+      </label>
+      <div className="mb-3 flex items-center gap-2">
+        <input
+          type="color"
+          aria-label={`Pick ${label.toLowerCase()}`}
+          value={normalizeHex(draft) ?? fallback}
+          onChange={(e) => commit(e.target.value)}
+          className="h-9 w-10 shrink-0 cursor-pointer rounded-lg border-0 bg-transparent p-0"
+        />
+        <input
+          type="text"
+          aria-label={`${label} hex`}
+          value={draft}
+          onChange={(e) => commit(e.target.value)}
+          placeholder={placeholder}
+          className="ring-accent w-full rounded-lg border px-2.5 py-1.5 text-sm outline-none"
+          style={{ borderColor: "var(--panel-border)", background: "var(--panel)", color: "var(--fg)" }}
+        />
+      </div>
+    </>
+  );
+}
+
+function BrandSettingsPanel() {
+  const { brand, setPrimary, setSecondary, setLogoUrl, reset } = useBrand();
+  const { viewMode, setViewMode } = useViewpoint();
 
   return (
     <div
@@ -343,31 +396,20 @@ function BrandSettingsPanel() {
         <h3 className="text-sm font-semibold">Brand customizer</h3>
       </div>
 
-      {/* Primary colour */}
-      <label
-        className="mb-1 block text-[11px] font-semibold uppercase tracking-wide"
-        style={{ color: "var(--fg-subtle)" }}
-      >
-        Primary brand color
-      </label>
-      <div className="mb-3 flex items-center gap-2">
-        <input
-          type="color"
-          aria-label="Pick brand color"
-          value={normalizeHex(hexDraft) ?? DEFAULT_BRAND_COLOR}
-          onChange={(e) => commitHex(e.target.value)}
-          className="h-9 w-10 shrink-0 cursor-pointer rounded-lg border-0 bg-transparent p-0"
-        />
-        <input
-          type="text"
-          aria-label="Brand color hex"
-          value={hexDraft}
-          onChange={(e) => commitHex(e.target.value)}
-          placeholder="#00A88F"
-          className="ring-accent w-full rounded-lg border px-2.5 py-1.5 text-sm outline-none"
-          style={{ borderColor: "var(--panel-border)", background: "var(--panel)", color: "var(--fg)" }}
-        />
-      </div>
+      <ColorField
+        label="Primary brand color"
+        value={brand.primary}
+        fallback={DEFAULT_PRIMARY_COLOR}
+        placeholder="#133C14"
+        onCommit={setPrimary}
+      />
+      <ColorField
+        label="Secondary brand color"
+        value={brand.secondary}
+        fallback={DEFAULT_SECONDARY_COLOR}
+        placeholder="#1CBE73"
+        onCommit={setSecondary}
+      />
 
       {/* Logo URL */}
       <label

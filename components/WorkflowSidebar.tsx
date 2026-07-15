@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Link2 } from "lucide-react";
+import { Check, Link2 } from "lucide-react";
 import { WorkflowRecord } from "@/lib/api";
 import { getEvent } from "@/lib/vocabulary";
 import type { RefAuditResult } from "@/lib/refAudit";
@@ -181,7 +181,7 @@ function ReferencesPanel({ refreshKey }: { refreshKey: number }) {
           <Link2 size={13} strokeWidth={2} /> References
         </span>
         <span
-          className="rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+          className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-bold"
           title={
             audit.verified
               ? `${audit.counts.ok} ok · ${audit.counts.missing} missing · ${audit.counts.legacyUnresolved} legacy`
@@ -193,7 +193,7 @@ function ReferencesPanel({ refreshKey }: { refreshKey: number }) {
               : { background: "var(--tok-if-bg)", color: "var(--tok-if-fg)" }
           }
         >
-          {problems > 0 ? problems : "✓"}
+          {problems > 0 ? problems : <Check size={11} strokeWidth={3} />}
         </span>
       </button>
 

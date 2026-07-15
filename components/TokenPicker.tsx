@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Check } from "lucide-react";
 import { ScopeRef } from "@/lib/vocabulary";
+import VocabIcon from "@/components/ui/VocabIcon";
 
 export interface PickerOption {
   value: string;
@@ -149,7 +151,7 @@ export default function TokenPicker({
               unconfirmed
             </span>
           )}
-          {selected && <span style={{ color: "var(--accent)" }}>✓</span>}
+          {selected && <Check size={13} strokeWidth={2.5} style={{ color: "var(--accent)" }} />}
         </span>
       </button>
     );
@@ -291,7 +293,7 @@ export default function TokenPicker({
                       className="flex items-center gap-1.5 px-2.5 pb-0.5 pt-1.5 text-[10px] font-bold uppercase tracking-wider"
                       style={{ color: "var(--fg-subtle)" }}
                     >
-                      {icon && <span aria-hidden>{icon}</span>}
+                      {icon && <VocabIcon name={icon} size={12} />}
                       {g}
                     </div>
                     <div className="flex flex-col gap-0.5">{opts.map((o) => renderOption(o))}</div>

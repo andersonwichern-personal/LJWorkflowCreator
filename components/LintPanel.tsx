@@ -1,5 +1,6 @@
 "use client";
 
+import { CircleCheck } from "lucide-react";
 import { RuleIssue } from "@/lib/ruleLinter";
 
 /**
@@ -17,7 +18,7 @@ export default function LintPanel({ issues, className }: { issues: RuleIssue[]; 
         className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs ${className ?? ""}`}
         style={{ background: "var(--tok-if-bg)", color: "var(--tok-if-fg)" }}
       >
-        <span aria-hidden>✓</span>
+        <CircleCheck size={14} strokeWidth={2} aria-hidden />
         <span>No lint issues — this rule looks sound.</span>
       </div>
     );

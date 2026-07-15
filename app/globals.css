@@ -14,15 +14,16 @@
   --fg: #0f172a;
   --fg-muted: #56607a;
   --fg-subtle: #8b93a7;
-  /* Landjourney admin teal (alignment doc §9 — brand accent #4FC6A5) */
-  --accent: #4fc6a5;
-  --accent-soft: rgba(79, 198, 165, 0.12);
-  --ring: rgba(79, 198, 165, 0.4);
+  /* LandJourney brand — primary (dark green) chrome + secondary (green) accent */
+  --brand-primary: #133c14;
+  --accent: #1cbe73;
+  --accent-soft: rgba(28, 190, 115, 0.12);
+  --ring: rgba(28, 190, 115, 0.4);
 
   /* Focal AI console (input pill) surface */
   --command-border: #e2e8f0;
   --command-shadow: 0 4px 16px -6px rgba(15, 23, 42, 0.12);
-  --command-ring: rgba(79, 198, 165, 0.18);
+  --command-ring: rgba(28, 190, 115, 0.18);
 
   /* Token pill palettes (WHEN / IF / THEN) */
   --tok-when-bg: #eef2ff;
@@ -55,15 +56,16 @@
   --fg: #e8ecf6;
   --fg-muted: #9aa5bd;
   --fg-subtle: #6b7690;
-  /* Landjourney admin teal, brightened slightly for dark surfaces */
-  --accent: #5cd3b2;
-  --accent-soft: rgba(92, 211, 178, 0.14);
-  --ring: rgba(92, 211, 178, 0.45);
+  /* LandJourney green, brightened slightly for dark surfaces */
+  --brand-primary: #133c14;
+  --accent: #2fd188;
+  --accent-soft: rgba(47, 209, 136, 0.16);
+  --ring: rgba(47, 209, 136, 0.45);
 
   /* Focal AI console (input pill) surface */
   --command-border: #293548;
   --command-shadow: 0 4px 18px -6px rgba(0, 0, 0, 0.5);
-  --command-ring: rgba(92, 211, 178, 0.22);
+  --command-ring: rgba(47, 209, 136, 0.22);
 
   --tok-when-bg: rgba(99, 102, 241, 0.18);
   --tok-when-fg: #c7d2fe;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 
 export type ActiveRole = "admin" | "approver" | "preparer";
 
@@ -190,13 +191,13 @@ export default function RoleSwitcher() {
         }}
       >
         <span className="max-w-[12rem] truncate">{persona.badgeLabel}</span>
-        <span
+        <ChevronDown
+          size={16}
+          strokeWidth={2}
           aria-hidden
           className={`transition-transform ${open ? "rotate-180" : ""}`}
           style={{ color: "var(--fg-muted)" }}
-        >
-          ▾
-        </span>
+        />
       </button>
 
       {open && (

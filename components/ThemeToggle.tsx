@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Moon, Sun } from "lucide-react";
 
 /** Light/dark switch that persists to localStorage and flips [data-theme]. */
 export default function ThemeToggle() {
@@ -30,9 +31,10 @@ export default function ThemeToggle() {
       onClick={flip}
       aria-label="Toggle color theme"
       title={theme === "dark" ? "Switch to light" : "Switch to dark"}
-      className="ring-accent glass flex h-9 w-9 items-center justify-center rounded-xl text-base transition-transform duration-200 hover:scale-105"
+      className="ring-accent glass flex h-9 w-9 items-center justify-center rounded-xl transition-transform duration-200 hover:scale-105"
+      style={{ color: "var(--fg-muted)" }}
     >
-      <span aria-hidden>{theme === "dark" ? "☀️" : "🌙"}</span>
+      {theme === "dark" ? <Sun size={17} strokeWidth={2} aria-hidden /> : <Moon size={17} strokeWidth={2} aria-hidden />}
     </button>
   );
 }

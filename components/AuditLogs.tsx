@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ScrollText, X } from "lucide-react";
 import { ExecutionRecord, EvaluationTrace, listExecutions } from "@/lib/api";
 import PageHeader from "@/components/ui/PageHeader";
 import TraceView from "@/components/TraceView";
@@ -64,7 +65,7 @@ export default function AuditLogs() {
     <div>
       <PageHeader
         title="Audit Logs"
-        icon="🧾"
+        icon={<ScrollText size={20} strokeWidth={2} style={{ color: "var(--accent)" }} />}
         actions={
           <>
             <div
@@ -207,10 +208,10 @@ export default function AuditLogs() {
                 type="button"
                 onClick={() => setSelected(null)}
                 aria-label="Close"
-                className="ring-accent flex h-8 w-8 items-center justify-center rounded-lg text-lg transition-colors hover:bg-[var(--accent-soft)]"
+                className="ring-accent flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-[var(--accent-soft)]"
                 style={{ color: "var(--fg-subtle)" }}
               >
-                ×
+                <X size={17} strokeWidth={2} />
               </button>
             </div>
 

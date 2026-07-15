@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { FlaskConical } from "lucide-react";
 import { WorkflowRule, getAction, paramKeyFor, ActionExecution, scopeLabel } from "@/lib/vocabulary";
 import { formatCurrency, PlatformRequest, REQUESTS } from "@/lib/platformData";
 import { matchingRequests } from "@/lib/ruleEngine";
@@ -95,8 +96,8 @@ export default function SimulationPanel({
     <div className="glass rounded-2xl p-5">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="flex h-6 w-6 items-center justify-center rounded-lg text-sm" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
-            🧪
+          <span className="flex h-6 w-6 items-center justify-center rounded-lg" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
+            <FlaskConical size={14} strokeWidth={2} />
           </span>
           <h3 className="text-sm font-semibold" style={{ color: "var(--fg)" }}>Simulation</h3>
         </div>

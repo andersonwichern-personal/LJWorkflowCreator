@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Check, X } from "lucide-react";
 import { EvaluationTrace } from "@/lib/api";
 import { opLabel, FIELDS } from "@/lib/vocabulary";
 
@@ -37,7 +37,9 @@ export default function TraceView({
           color: anyTrigger ? "var(--tok-if-fg)" : "var(--danger-fg)",
         }}
       >
-        <span aria-hidden className="font-bold">{anyTrigger ? "✓" : "✗"}</span>
+        <span aria-hidden className="mt-0.5 shrink-0">
+          {anyTrigger ? <Check size={15} strokeWidth={2.5} /> : <X size={15} strokeWidth={2.5} />}
+        </span>
         <span className="min-w-0">
           {triggers.length > 1 ? "Any trigger " : "Trigger "}
           <span className="font-semibold">
@@ -60,7 +62,9 @@ export default function TraceView({
             color: c.matched ? "var(--tok-if-fg)" : "var(--danger-fg)",
           }}
         >
-          <span aria-hidden className="font-bold">{c.matched ? "✓" : "✗"}</span>
+          <span aria-hidden className="mt-0.5 shrink-0">
+            {c.matched ? <Check size={15} strokeWidth={2.5} /> : <X size={15} strokeWidth={2.5} />}
+          </span>
           <span className="min-w-0">
             Condition{" "}
             <span className="font-semibold">

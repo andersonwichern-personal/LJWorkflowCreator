@@ -84,18 +84,18 @@ export interface FieldDef {
   hint?: string;
 }
 
-/** Group display order + icon for the categorized picker. */
+/** Group display order + icon (Lucide name) for the categorized picker. */
 export const FIELD_GROUPS: { key: string; icon: string }[] = [
-  { key: "Request", icon: "📋" },
-  { key: "Customer", icon: "👤" },
-  { key: "Application Data", icon: "🌾" },
-  { key: "Underwriting", icon: "⚖️" },
-  { key: "Offer", icon: "✉️" },
-  { key: "Booking", icon: "🏦" },
-  { key: "Loan", icon: "💳" },
-  { key: "Retailer & Program", icon: "🏬" },
-  { key: "Tags", icon: "🔖" },
-  { key: "AI & Documents", icon: "🤖" },
+  { key: "Request", icon: "ClipboardList" },
+  { key: "Customer", icon: "User" },
+  { key: "Application Data", icon: "Wheat" },
+  { key: "Underwriting", icon: "Scale" },
+  { key: "Offer", icon: "Mail" },
+  { key: "Booking", icon: "Landmark" },
+  { key: "Loan", icon: "CreditCard" },
+  { key: "Retailer & Program", icon: "Store" },
+  { key: "Tags", icon: "Tag" },
+  { key: "AI & Documents", icon: "Bot" },
 ];
 
 export const FIELDS: Record<string, FieldDef> = {
@@ -1491,7 +1491,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
   {
     name: "Booking error → escalate",
     description: "When a booking hits an error, hand it to the escalation team.",
-    icon: "🚨",
+    icon: "Siren",
     rule: {
       schemaVersion: RULE_SCHEMA_VERSION,
       triggers: [{ event: "SYSTEM ERROR" }],
@@ -1503,7 +1503,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
   {
     name: "Auto-assign approved loans",
     description: "Route freshly approved loans to the underwriting team.",
-    icon: "✅",
+    icon: "CircleCheck",
     rule: {
       schemaVersion: RULE_SCHEMA_VERSION,
       triggers: [{ event: "LOAN APPROVED" }],
@@ -1515,7 +1515,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
   {
     name: "Large loan review",
     description: "Send high-value approvals to a senior reviewer.",
-    icon: "💰",
+    icon: "Banknote",
     rule: {
       schemaVersion: RULE_SCHEMA_VERSION,
       triggers: [{ event: "LOAN APPROVED" }],
@@ -1527,7 +1527,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
   {
     name: "Fiserv booking failure",
     description: "Flag failed Fiserv bookings and tag them for follow-up.",
-    icon: "🏦",
+    icon: "Landmark",
     rule: {
       schemaVersion: RULE_SCHEMA_VERSION,
       triggers: [{ event: "FISERV LOAN" }],

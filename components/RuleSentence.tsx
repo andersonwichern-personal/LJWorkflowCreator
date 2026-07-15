@@ -48,7 +48,7 @@ import {
   nodeAt,
   emptyGroup,
 } from "@/lib/conditionTree";
-import { SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal, Crosshair, CirclePlus, X } from "lucide-react";
 import TokenPicker, { PickerOption, ScopedOptions } from "./TokenPicker";
 import { VocabOverlay, ScopedInstances, fieldKindForType } from "@/lib/liveVocabulary";
 import { UnresolvedSlot } from "@/lib/nlParser";
@@ -181,7 +181,7 @@ function fieldOptionsFor(events: string[], overlay?: VocabOverlay | null): Picke
         label: f.label,
         confidence: "verified" as const,
         group: `${f.formName} (live)`,
-        groupIcon: "🌾",
+        groupIcon: "Wheat",
       }))
     : [];
   return [...staticOpts, ...liveOpts];
@@ -402,10 +402,10 @@ export default function RuleSentence({ rule, onChange, overlay, unresolved, onRe
           type="button"
           onClick={() => removeAt(path)}
           aria-label="Remove condition"
-          className="ring-accent mr-0.5 flex h-5 w-5 items-center justify-center rounded-full text-xs transition-colors hover:bg-[var(--accent-soft)]"
+          className="ring-accent mr-0.5 flex h-5 w-5 items-center justify-center rounded-full transition-colors hover:bg-[var(--accent-soft)]"
           style={{ color: "var(--fg-subtle)" }}
         >
-          ×
+          <X size={13} strokeWidth={2.5} />
         </button>
       </span>
     );
@@ -438,10 +438,10 @@ export default function RuleSentence({ rule, onChange, overlay, unresolved, onRe
                 type="button"
                 onClick={() => removeAt(path)}
                 aria-label="Remove group"
-                className="ring-accent flex h-5 w-5 items-center justify-center rounded-full text-xs transition-colors hover:bg-[var(--danger-bg)]"
+                className="ring-accent flex h-5 w-5 items-center justify-center rounded-full transition-colors hover:bg-[var(--danger-bg)]"
                 style={{ color: "var(--fg-subtle)" }}
               >
-                ×
+                <X size={13} strokeWidth={2.5} />
               </button>
               <span className="text-[13px] font-bold" style={{ color: "var(--fg-subtle)" }}>)</span>
             </span>
@@ -492,10 +492,10 @@ export default function RuleSentence({ rule, onChange, overlay, unresolved, onRe
               type="button"
               onClick={() => removeActionAt(lane, i)}
               aria-label="Remove action"
-              className="ring-accent mr-0.5 flex h-5 w-5 items-center justify-center rounded-full text-xs transition-colors hover:bg-[var(--accent-soft)]"
+              className="ring-accent mr-0.5 flex h-5 w-5 items-center justify-center rounded-full transition-colors hover:bg-[var(--accent-soft)]"
               style={{ color: "var(--fg-subtle)" }}
             >
-              ×
+              <X size={13} strokeWidth={2.5} />
             </button>
           </span>
         </span>
@@ -523,20 +523,21 @@ export default function RuleSentence({ rule, onChange, overlay, unresolved, onRe
                   type="button"
                   onClick={(e) => openPicker({ kind: "trigger-scope", ti }, e.currentTarget)}
                   title={t.scope ? `Scoped to ${scopeLabel(t.scope)}` : "Scope this trigger to a specific template"}
-                  className="ring-accent rounded-md px-1 text-[11px] font-medium transition-colors hover:bg-[var(--accent-soft)]"
+                  className="ring-accent inline-flex items-center gap-1 rounded-md px-1 text-[11px] font-medium transition-colors hover:bg-[var(--accent-soft)]"
                   style={{ color: t.scope ? "var(--accent)" : "var(--fg-subtle)" }}
                 >
-                  {t.scope ? `⌖ ${scopeLabel(t.scope)}` : "⌖ any"}
+                  <Crosshair size={11} strokeWidth={2} />
+                  {t.scope ? scopeLabel(t.scope) : "any"}
                 </button>
                 {triggers.length > 1 && (
                   <button
                     type="button"
                     onClick={() => removeTrigger(ti)}
                     aria-label="Remove trigger"
-                    className="ring-accent mr-0.5 flex h-5 w-5 items-center justify-center rounded-full text-xs transition-colors hover:bg-[var(--accent-soft)]"
+                    className="ring-accent mr-0.5 flex h-5 w-5 items-center justify-center rounded-full transition-colors hover:bg-[var(--accent-soft)]"
                     style={{ color: "var(--fg-subtle)" }}
                   >
-                    ×
+                    <X size={13} strokeWidth={2.5} />
                   </button>
                 )}
               </span>
@@ -556,7 +557,9 @@ export default function RuleSentence({ rule, onChange, overlay, unresolved, onRe
           {root.children.length ? "+ and" : "+ add condition"}
         </Pill>
         <Pill palette="if" dashed onClick={() => addSubGroup()}>
-          ⊕ group
+          <span className="inline-flex items-center gap-1">
+            <CirclePlus size={13} strokeWidth={2} /> group
+          </span>
         </Pill>
 
         {/* THEN */}

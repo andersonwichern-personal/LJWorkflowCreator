@@ -1,16 +1,17 @@
+import { readFile } from "node:fs/promises";
 import { NextRequest, NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
 
-export async function POST(req: NextRequest) {
+export const dynamic = "force-dynamic";
+
+const SCHEMA_PATH = new URL("../../../../../docs/2026-07-15_live_schema.json", import.meta.url);
+
+export async function POST(_req: NextRequest) {
   try {
-    const filePath = path.join(process.cwd(), "docs", "2026-07-15_live_schema.json");
-    const rawData = await fs.readFile(filePath, "utf-8");
-    const parsed = JSON.parse(rawData);
-    return NextResponse.json(parsed);
+    const raw = await readFile(SCHEMA_PATH, "utf8");
+    return NextResponse.json(JSON.parse(raw));
   } catch (error: unknown) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to load live schema" },
+      { error: error instanceof Error ? error.message : "Failed to sync vocabulary schema" },
       { status: 500 }
     );
   }

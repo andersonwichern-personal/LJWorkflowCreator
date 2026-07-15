@@ -17,6 +17,7 @@ import {
 import { fetchLiveVocabulary, platformConfigured } from "@/lib/platform";
 import { buildOverlay, fieldKindForType, type VocabOverlay, type VocabularySource } from "@/lib/liveVocabulary";
 import { validateRule } from "@/lib/ruleValidation";
+import { fuzzyMatches } from "@/lib/fuzzy";
 
 export const dynamic = "force-dynamic";
 
@@ -210,7 +211,7 @@ async function callGeminiModel(
     const text = extractGeminiText(data);
     if (process.env.PARSE_AI_DEBUG === "1") console.log("[parse-ai raw]", text.slice(0, 2000));
     const parsed = JSON.parse(stripJsonFence(text)) as unknown;
-    return coerceGeminiPayload(parsed);
+    return coerceGeminiPayload(parsed, context);
   } finally {
     clearTimeout(timeout);
   }
@@ -226,7 +227,7 @@ function stripJsonFence(text: string): string {
   return text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
 }
 
-function coerceGeminiPayload(raw: unknown): ParseAiResponse {
+function coerceGeminiPayload(raw: unknown, context: PromptContext): ParseAiResponse {
   if (!raw || typeof raw !== "object") throw new Error("Gemini JSON was not an object.");
   const obj = raw as Record<string, unknown>;
   const notes = stringArray(obj.notes);
@@ -238,6 +239,7 @@ function coerceGeminiPayload(raw: unknown): ParseAiResponse {
   let rule: WorkflowRule | null = null;
   if (obj.rule !== null && obj.rule !== undefined) {
     const normalized = normalizeRule(massageGeminiRule(obj.rule));
+    enforceKnownAssignees(normalized, context, unresolved, notes);
     const validation = validateRule(normalized);
     rule = validation.rule;
     for (const issue of validation.issues.filter((i) => i.severity === "error")) {
@@ -324,6 +326,63 @@ function fixGroupLogic(node: unknown): unknown {
   return g;
 }
 
+/**
+ * Enforce reject-don't-coerce at the LLM boundary. Unknown people or teams
+ * become unresolved slots instead of surviving as fabricated action params.
+ */
+function enforceKnownAssignees(
+  rule: WorkflowRule,
+  context: PromptContext,
+  unresolved: UnresolvedSlot[],
+  notes: string[]
+): void {
+  const known = [...context.users.map((u) => u.label), ...ASSIGNEES];
+  const knownIds = new Set(context.users.map((u) => u.id).filter(Boolean));
+  const knownLower = new Set(known.map((label) => label.trim().toLowerCase()));
+
+  const check = (lane: "actions" | "else", list: WorkflowRule["actions"]) => {
+    list.forEach((action, index) => {
+      if (action.action !== "assign_user" && action.action !== "notify") return;
+      const key = paramKeyFor(action.action);
+      const value = action.params[key];
+      if (value == null || value === "") return;
+
+      let heard: string | null = null;
+      if (typeof value === "string") {
+        if (!knownLower.has(value.trim().toLowerCase())) heard = value;
+      } else if (value.level === "instance") {
+        if (!knownIds.has(value.id) && !knownLower.has(value.label.trim().toLowerCase())) {
+          heard = value.label;
+        }
+      } else if (
+        value.level === "category" &&
+        !knownLower.has(value.category.trim().toLowerCase())
+      ) {
+        heard = value.category;
+      }
+      if (heard === null) return;
+
+      action.params[key] = "";
+      unresolved.push({
+        where: "action-param",
+        lane: lane === "else" ? "else" : "then",
+        actionIndex: index,
+        param: key,
+        heard,
+        suggestions: fuzzyMatches(heard, known),
+      });
+      notes.push(
+        `I don't know "${heard}" — pick a real person or team for that ${
+          action.action === "notify" ? "notification" : "assignment"
+        }.`
+      );
+    });
+  };
+
+  check("actions", rule.actions);
+  check("else", rule.else ?? []);
+}
+
 function stringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((v): v is string => typeof v === "string" && v.trim().length > 0).map((v) => v.trim());
@@ -339,6 +398,7 @@ function unresolvedArray(value: unknown): UnresolvedSlot[] {
     return [
       {
         where: s.where,
+        lane: s.lane === "then" || s.lane === "else" ? s.lane : undefined,
         actionIndex: typeof s.actionIndex === "number" ? s.actionIndex : undefined,
         conditionIndex: typeof s.conditionIndex === "number" ? s.conditionIndex : undefined,
         param: typeof s.param === "string" ? s.param : undefined,
@@ -465,6 +525,7 @@ function buildSystemInstruction(context: PromptContext): string {
     }),
     "Triggers use {event}. Actions use {action, params}. The assign_user param key is 'assignee'; every other action's param key is 'value'. Logic is uppercase AND/OR.",
     "Default controls to shadow mode, oncePerRequest true, maxFiresPerHour 25, missingData no_match, priority 100 unless the user clearly asks otherwise.",
+    "When the user explicitly says to arm, activate, or enable live actions (for example, 'arm this rule'), set controls.mode to 'armed' and explain that choice in notes.",
     "Use only event keys, field keys, operators, action keys, and enum values from activeVocabulary. Never invent platform IDs.",
     "When a user or stage/template/retailer exactly matches an id-bearing activeVocabulary record, emit a ScopeRef instance {level:'instance', id, label}.",
     "When the wording names a category like a request type, customer type, global stage, or team, emit {level:'category', category}. Use {level:'any'} only for explicit any/all scope language.",

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ParseAmbiguity, ParseOptions, UnresolvedSlot } from "@/lib/nlParser";
-import { WorkflowRule } from "@/lib/vocabulary";
+import { WorkflowRule, EVENTS, FIELDS, ASSIGNEES } from "@/lib/vocabulary";
+import { loadLiveVocabulary, buildOverlay, type VocabOverlay } from "@/lib/liveVocabulary";
 
 export interface ChatDraftMeta {
   unresolved: UnresolvedSlot[];
@@ -31,6 +32,73 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
   const [engine, setEngine] = useState<"gemini" | "heuristic">("heuristic");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Real-time Autocomplete States
+  const [vocab, setVocab] = useState<VocabOverlay | null>(null);
+  const [autocomplete, setAutocomplete] = useState<string[]>([]);
+  const [activeSelectionIndex, setActiveSelectionIndex] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    loadLiveVocabulary().then((liveSource) => {
+      const overlay = buildOverlay(liveSource);
+      setVocab(overlay);
+    });
+  }, []);
+
+  function handleInputChange(text: string) {
+    setInput(text);
+    if (!text.trim()) {
+      setAutocomplete([]);
+      return;
+    }
+
+    const words = text.split(/[\s,]+/);
+    const lastToken = words[words.length - 1] || "";
+    if (lastToken.length < 2) {
+      setAutocomplete([]);
+      return;
+    }
+
+    // Build flat vocabulary completion dictionary
+    const candidates: string[] = [];
+    EVENTS.forEach(e => {
+      candidates.push(e.label);
+      candidates.push(e.key);
+    });
+    Object.values(FIELDS).forEach(f => {
+      candidates.push(f.label);
+    });
+    ASSIGNEES.filter(a => /team$/i.test(a)).forEach(t => {
+      candidates.push(t);
+    });
+
+    if (vocab) {
+      vocab.instances.users.forEach(u => candidates.push(u.label));
+      vocab.instances.retailers.forEach(r => candidates.push(r.label));
+      vocab.instances.templates.forEach(t => candidates.push(t.label));
+      vocab.instances.stages.forEach(s => candidates.push(s.label));
+    }
+
+    const needle = lastToken.toLowerCase();
+    const matches = Array.from(new Set(candidates))
+      .filter(c => c && c.toLowerCase().includes(needle) && c.toLowerCase() !== needle)
+      .slice(0, 5);
+
+    setAutocomplete(matches);
+    setActiveSelectionIndex(0);
+  }
+
+  function acceptSuggestion(suggestion: string) {
+    const words = input.split(/[\s,]+/);
+    words[words.length - 1] = suggestion;
+    const joined = words.join(" ") + " ";
+    setInput(joined);
+    setAutocomplete([]);
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }
 
   async function run(text: string, forceEvent?: string) {
     if (!text.trim()) return;
@@ -102,10 +170,25 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
           </svg>
         </span>
         <textarea
+          ref={textareaRef}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => handleInputChange(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
+            if (autocomplete.length > 0) {
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setActiveSelectionIndex((prev) => (prev + 1) % autocomplete.length);
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setActiveSelectionIndex((prev) => (prev - 1 + autocomplete.length) % autocomplete.length);
+              } else if (e.key === "Enter" || e.key === "Tab") {
+                e.preventDefault();
+                acceptSuggestion(autocomplete[activeSelectionIndex]);
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                setAutocomplete([]);
+              }
+            } else if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               run(input);
             }
@@ -117,6 +200,35 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
           className="scroll-thin w-full resize-none bg-transparent py-2 text-base outline-none placeholder:text-[var(--fg-subtle)] sm:text-lg"
           style={{ color: "var(--fg)" }}
         />
+        {autocomplete.length > 0 && (
+          <div
+            className="absolute left-6 right-6 top-full mt-2 rounded-2xl p-1.5 z-50 shadow-xl flex flex-col gap-0.5"
+            style={{ background: "var(--panel-solid)", border: "none", boxShadow: "0 10px 30px rgba(0, 0, 0, 0.15)" }}
+          >
+            {autocomplete.map((match, idx) => {
+              const active = idx === activeSelectionIndex;
+              return (
+                <div
+                  key={match}
+                  onClick={() => acceptSuggestion(match)}
+                  onMouseEnter={() => setActiveSelectionIndex(idx)}
+                  className="flex items-center justify-between px-3 py-1.5 text-xs font-semibold rounded-xl cursor-pointer transition-colors"
+                  style={{
+                    background: active ? "var(--accent-soft)" : "transparent",
+                    color: active ? "var(--accent)" : "var(--fg)",
+                  }}
+                >
+                  <span>{match}</span>
+                  {active && (
+                    <span className="text-[9px] uppercase tracking-wider opacity-60">
+                      Press Tab/Enter to autocomplete
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
         {loading && (
           <div className="animate-spin rounded-full h-5 w-5 border-2 border-t-transparent mr-2" style={{ borderColor: "var(--accent)" }} />
         )}

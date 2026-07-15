@@ -47,10 +47,14 @@ import {
   describeSource,
   loadLiveVocabulary,
 } from "@/lib/liveVocabulary";
+import { useViewpoint } from "@/lib/viewpoint";
 
 type Toast = { id: number; kind: "ok" | "err"; text: string };
 
 export default function WorkflowCreator() {
+  // Phase 3 viewpoints: only the Admin persona edits the canvas; Presentation
+  // view hides the dev surface (simulation traces, lint warnings, raw JSON).
+  const { persona, canEdit, isPresentation } = useViewpoint();
   const [workflows, setWorkflows] = useState<WorkflowRecord[]>([]);
   const [loadingList, setLoadingList] = useState(true);
 
@@ -159,7 +163,8 @@ export default function WorkflowCreator() {
           return !!c && !c.value && !isValuelessOperator(c.operator);
         }
         if (s.where === "action-param") {
-          const a = next.actions[s.actionIndex ?? -1];
+          const actions = s.lane === "else" ? next.else ?? [] : next.actions;
+          const a = actions[s.actionIndex ?? -1];
           return !!a && !a.params[s.param ?? ""];
         }
         return true;

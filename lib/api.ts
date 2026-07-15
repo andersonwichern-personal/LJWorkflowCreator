@@ -7,6 +7,7 @@
  */
 
 import { WorkflowRule, normalizeRule } from "./vocabulary";
+import { ApprovalRequirement, ApprovalVerdict, RequirementStatus } from "./authorityEngine";
 
 /** Demo tenant used only when /api/platform/me can't resolve a real org. */
 const DEMO_FALLBACK_ORG_ID = "test-org-uuid-999";
@@ -120,6 +121,8 @@ export interface AuthorityRecord {
   riskGrade: string;
   product: string;
   userIds: string[];
+  /** Phase 3: configured approval topology (null → legacy any-of userIds). */
+  requirement: ApprovalRequirement | null;
   escalationId: string | null;
   autoApprove: boolean;
   createdAt: string;
@@ -133,6 +136,7 @@ export interface AuthorityInput {
   riskGrade: string;
   product: string;
   userIds: string[];
+  requirement: ApprovalRequirement | null;
   escalationId: string | null;
   autoApprove: boolean;
 }
@@ -174,6 +178,75 @@ export async function deleteAuthority(id: string): Promise<void> {
     method: "DELETE",
   });
   await handle<{ success: boolean }>(res);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Approval Tasks — /api/platform/authorities/tasks                           */
+/* -------------------------------------------------------------------------- */
+
+export interface DecisionRecord {
+  id: string;
+  taskId: string;
+  approverId: string;
+  approverLabel: string;
+  verdict: ApprovalVerdict;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface ApprovalTaskRecord {
+  id: string;
+  orgId: string;
+  authorityId: string;
+  requestId: string;
+  /** Envelope persisted server-side: topology + frozen maker-checker exclusions. */
+  requirement: {
+    requirement: ApprovalRequirement;
+    exclusions: string[];
+    delegations: { fromId: string; toId: string }[];
+  };
+  status: "open" | "approved" | "declined" | "expired";
+  createdAt: string;
+  decisions: DecisionRecord[];
+  authority: { id: string; name: string } | null;
+  /** Server-evaluated quorum/sequence progress at read time. */
+  requirementStatus: RequirementStatus;
+}
+
+export async function listApprovalTasks(requestId?: string): Promise<ApprovalTaskRecord[]> {
+  const orgId = await getOrgId();
+  const qs = new URLSearchParams({ orgId });
+  if (requestId) qs.set("requestId", requestId);
+  const res = await fetch(`/api/platform/authorities/tasks?${qs}`, { cache: "no-store" });
+  return handle<ApprovalTaskRecord[]>(res);
+}
+
+export async function createApprovalTask(input: {
+  authorityId: string;
+  requestId: string;
+  requirement?: ApprovalRequirement;
+  exclusions?: string[];
+}): Promise<ApprovalTaskRecord> {
+  const orgId = await getOrgId();
+  const res = await fetch(`/api/platform/authorities/tasks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ orgId, ...input }),
+  });
+  return handle<ApprovalTaskRecord>(res);
+}
+
+export async function recordApprovalDecision(
+  taskId: string,
+  input: { approverId: string; approverLabel?: string; verdict: ApprovalVerdict; note?: string }
+): Promise<ApprovalTaskRecord> {
+  const orgId = await getOrgId();
+  const res = await fetch(`/api/platform/authorities/tasks/${taskId}/decisions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ orgId, ...input }),
+  });
+  return handle<ApprovalTaskRecord>(res);
 }
 
 /* -------------------------------------------------------------------------- */

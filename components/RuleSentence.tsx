@@ -223,7 +223,12 @@ export default function RuleSentence({ rule, onChange, overlay, unresolved, onRe
   const slotForLeaf = (leaf: ConditionLeaf) =>
     unresolved?.find((s) => s.where === "condition-value" && s.conditionIndex === flatLeaves.indexOf(leaf));
   const actionSlot = (lane: Lane, i: number) =>
-    lane === "then" ? unresolved?.find((s) => s.where === "action-param" && s.actionIndex === i) : undefined;
+    unresolved?.find(
+      (s) =>
+        s.where === "action-param" &&
+        (s.lane ?? "then") === lane &&
+        s.actionIndex === i
+    );
 
   /** Suggestions-first option list for a slot's picker. */
   function slotOptions(slot: UnresolvedSlot, base: PickerOption[]): PickerOption[] {

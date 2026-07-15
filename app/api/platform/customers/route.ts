@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { CustomerService } from "@/lib/services/customer";
+import { CustomerService, toCustomerRecord } from "@/lib/services/customer";
 import { aggregateExposure } from "@/lib/services/exposure";
 
 const DEFAULT_ORG_ID = "test-org-uuid-999";
@@ -32,15 +32,7 @@ export async function GET(req: NextRequest) {
       })
     );
     return NextResponse.json({
-      customers: customers.map((c) => ({
-        id: c.id,
-        orgId: c.orgId,
-        type: c.type,
-        name: c.name,
-        status: c.status,
-        mergedIntoId: c.mergedIntoId,
-        version: c.version,
-      })),
+      customers: customers.map(toCustomerRecord),
       roles,
       summaries,
     });

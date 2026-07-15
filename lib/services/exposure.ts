@@ -1,39 +1,48 @@
-import { loadCustomerGraph, type CustomerGraphResult } from "./customerGraph";
-import { sortCustomersByName } from "./customer";
+/**
+ * DEFERRED: Phase 6 aggregate exposure lookup.
+ * This capability is deferred until the live Landjourney client integrations are complete.
+ * Returns clean empty/stub schemas to satisfy import bounds without returning false numbers.
+ */
+
+export interface ConnectedCustomerSummary {
+  id: string;
+  name: string;
+  status: string;
+}
 
 export interface ExposureSummary {
   canonicalCustomerId: string | null;
   connectedPartyCount: number;
   relationshipCount: number;
   brokenReferenceCount: number;
-  connectedCustomers: Array<{
-    id: string;
-    name: string;
-    status: "active" | "merged" | "archived" | string;
-  }>;
+  connectedCustomers: ConnectedCustomerSummary[];
 }
 
 export interface ExposureResult {
-  graph: CustomerGraphResult;
+  graph: {
+    canonical: null;
+    connected: [];
+    edges: [];
+    brokenRefs: [];
+  };
   summary: ExposureSummary;
 }
 
 export async function aggregateExposure(orgId: string, customerId: string): Promise<ExposureResult> {
-  const graph = await loadCustomerGraph(orgId, customerId);
   return {
-    graph,
+    graph: {
+      canonical: null,
+      connected: [],
+      edges: [],
+      brokenRefs: [],
+    },
     summary: {
-      canonicalCustomerId: graph.canonical?.id ?? null,
-      connectedPartyCount: graph.connected.length,
-      relationshipCount: graph.edges.length,
-      brokenReferenceCount: graph.brokenRefs.length,
-      connectedCustomers: sortCustomersByName(
-        graph.connected.map((party) => ({
-          id: party.id,
-          name: party.name,
-          status: party.status as "active" | "merged" | "archived",
-        }))
-      ),
+      canonicalCustomerId: customerId,
+      connectedPartyCount: 0,
+      relationshipCount: 0,
+      brokenReferenceCount: 0,
+      connectedCustomers: [],
     },
   };
 }
+

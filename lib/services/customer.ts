@@ -28,7 +28,7 @@ async function getPrisma() {
   return mod.prisma;
 }
 
-function toCustomerRecord(row: {
+export function toCustomerRecord(row: {
   id: string;
   orgId: string;
   type: string;
@@ -48,7 +48,7 @@ function toCustomerRecord(row: {
   };
 }
 
-export function sortCustomersByName<T extends { name: string }>(customers: T[]): T[] {
+export function sortCustomersByName<T extends { name: string }>(customers: readonly T[]): T[] {
   return [...customers].sort((a, b) => a.name.localeCompare(b.name));
 }
 

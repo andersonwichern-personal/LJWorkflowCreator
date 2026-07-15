@@ -14,7 +14,7 @@ import { ExternalLink } from "lucide-react";
 type Toast = { id: number; kind: "ok" | "err"; text: string };
 
 export default function CustomersPanel() {
-  const { canEdit } = useViewpoint();
+  const { canEdit, persona } = useViewpoint();
   const [customers, setCustomers] = useState<CustomerRecord[]>([]);
   const [summaries, setSummaries] = useState<CustomerExposureSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +66,7 @@ export default function CustomersPanel() {
         survivorId: customer.id,
         duplicateId,
         reason,
-        actorId: "ui",
+        actorId: persona.id,
         expectedVersion: duplicate.version,
       });
       pushToast("ok", result.noOp ? "Merge already applied." : "Merge complete.");

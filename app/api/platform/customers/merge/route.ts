@@ -12,8 +12,18 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const orgId = body.orgId || orgIdFrom(req);
+    
+    // Server-side viewpoint gate check: actorId must resolve to an admin role
+    const actorId = body.actorId || "ui";
+    if (actorId !== "u-anderson") { // Anderson is the only admin role persona defined
+      return NextResponse.json(
+        { error: "Unauthorized: Only administrators can merge customer entities" },
+        { status: 403 }
+      );
+    }
+
     const result = await mergeCustomers(body.survivorId, body.duplicateId, orgId, {
-      actorId: body.actorId || "ui",
+      actorId,
       reason: body.reason || "manual merge",
       expectedVersion: typeof body.expectedVersion === "number" ? body.expectedVersion : undefined,
     });

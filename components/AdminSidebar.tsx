@@ -443,6 +443,39 @@ function BrandSettingsPanel() {
           className="mb-2 text-[11px] font-semibold uppercase tracking-wide"
           style={{ color: "var(--fg-subtle)" }}
         >
+          Custom Vocabulary
+        </div>
+        <button
+          type="button"
+          onClick={async (e) => {
+            const btn = e.currentTarget;
+            btn.disabled = true;
+            const originalText = btn.innerText;
+            btn.innerText = "Syncing…";
+            try {
+              const res = await fetch("/api/platform/vocabulary/sync", { method: "POST" });
+              if (!res.ok) throw new Error("Sync failed");
+              const schema = await res.json();
+              localStorage.setItem("wf-custom-vocab", JSON.stringify(schema));
+              window.dispatchEvent(new Event("wf-custom-vocab-sync"));
+              alert(`Successfully synced ${schema.fields?.length ?? 0} fields and ${schema.tags?.length ?? 0} tags from Live Schema!`);
+            } catch (err: unknown) {
+              alert("Failed to sync vocabulary: " + (err instanceof Error ? err.message : String(err)));
+            } finally {
+              btn.disabled = false;
+              btn.innerText = originalText;
+            }
+          }}
+          className="ring-accent mb-3 flex w-full items-center justify-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all hover:bg-[var(--accent-soft)]"
+          style={{ borderColor: "var(--panel-border)", color: "var(--fg-muted)" }}
+        >
+          Sync Live Schema
+        </button>
+
+        <div
+          className="mb-2 text-[11px] font-semibold uppercase tracking-wide"
+          style={{ color: "var(--fg-subtle)" }}
+        >
           Demo controls
         </div>
         <div

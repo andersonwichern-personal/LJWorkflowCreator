@@ -99,8 +99,20 @@ export default function WorkflowCreator({
 
   // Demo bridge: live platform vocabulary for the pickers (falls back to static).
   const [vocabSource, setVocabSource] = useState<VocabularySource | null>(null);
+  const [syncTrigger, setSyncTrigger] = useState(0);
+
   useEffect(() => {
     loadLiveVocabulary().then(setVocabSource);
+  }, [syncTrigger]);
+
+  useEffect(() => {
+    const handleSync = () => {
+      setSyncTrigger((prev) => prev + 1);
+    };
+    window.addEventListener("wf-custom-vocab-sync", handleSync);
+    return () => {
+      window.removeEventListener("wf-custom-vocab-sync", handleSync);
+    };
   }, []);
 
   // Configured approval-authority levels feed the `escalate to authority` action

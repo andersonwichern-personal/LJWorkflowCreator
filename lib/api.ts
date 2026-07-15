@@ -8,6 +8,7 @@
 
 import { WorkflowRule, normalizeRule } from "./vocabulary";
 import { ApprovalRequirement, ApprovalVerdict, RequirementStatus } from "./authorityEngine";
+import type { ConnectedCustomerSummary } from "./services/exposure";
 
 /** Demo tenant used only when /api/platform/me can't resolve a real org. */
 const DEMO_FALLBACK_ORG_ID = "test-org-uuid-999";
@@ -208,7 +209,7 @@ export interface CustomerExposureSummary {
   connectedPartyCount: number;
   relationshipCount: number;
   brokenReferenceCount: number;
-  connectedCustomers: Array<{ id: string; name: string; status: "active" | "merged" | "archived" | string }>;
+  connectedCustomers: ConnectedCustomerSummary[];
 }
 
 export async function listCustomers(requestId?: string): Promise<{

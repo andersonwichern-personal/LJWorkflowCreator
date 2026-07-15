@@ -1,0 +1,31 @@
+{
+  "tenant": "Organic Bank of America",
+  "scannedAt": "2026-07-15T15:00:00Z",
+  "fields": [
+    {
+      "id": "fld-crop-details",
+      "name": "Crop Details",
+      "type": "object",
+      "category": "Crop",
+      "description": "Acreage and yields data."
+    },
+    {
+      "id": "fld-yes-no-questionnaire",
+      "name": "Yes/No Questionnaire",
+      "type": "array",
+      "category": "Compliance",
+      "description": "Standard questionnaire responses."
+    }
+  ],
+  "tags": [
+    "high-risk-agriculture",
+    "corporate-borrower"
+  ],
+  "endpoints": [
+    {
+      "path": "/workflows/templates",
+      "method": "GET",
+      "service": "workflows"
+    }
+  ]
+}

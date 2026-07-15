@@ -58,10 +58,17 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    loadLiveVocabulary().then((liveSource) => {
-      const overlay = buildOverlay(liveSource);
-      setVocab(overlay);
-    });
+    const refreshVocab = () => {
+      loadLiveVocabulary().then((liveSource) => {
+        const overlay = buildOverlay(liveSource);
+        setVocab(overlay);
+      });
+    };
+    refreshVocab();
+    window.addEventListener("wf-custom-vocab-sync", refreshVocab);
+    return () => {
+      window.removeEventListener("wf-custom-vocab-sync", refreshVocab);
+    };
   }, []);
 
   function handleInputChange(text: string) {

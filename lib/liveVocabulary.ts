@@ -113,17 +113,39 @@ function merge(live: string[], base: string[] = []): string[] {
  * the live ones) so the representative-data simulation still matches.
  */
 export function buildOverlay(v: VocabularySource | null): VocabOverlay | null {
-  if (!v || v.source !== "live") return null;
+  // Read synced custom vocab from localStorage (safe client hook).
+  let customVocab: { fields?: { id: string; name: string; type: string; category: string; description: string }[]; tags?: string[] } = {};
+  if (typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem("wf-custom-vocab");
+      if (raw) customVocab = JSON.parse(raw);
+    } catch {
+      /* ignore storage blockages */
+    }
+  }
 
-  const users = v.users.map((u) => u.label);
-  const retailers = v.retailers.map((r) => r.label);
-  const customers = v.customers.map((c) => c.label);
+  // If there's no live source, build a partial overlay just for the custom vocabulary.
+  const activeVocab = v && v.source === "live" ? v : {
+    source: "static" as const,
+    reason: "fallback",
+    users: [],
+    retailers: [],
+    customers: [],
+    templates: [],
+    forms: [],
+    fields: [],
+    errors: [],
+  };
+
+  const users = activeVocab.users.map((u) => u.label);
+  const retailers = activeVocab.retailers.map((r) => r.label);
+  const customers = activeVocab.customers.map((c) => c.label);
   const stages = merge(
-    dedupe(v.templates.flatMap((t) => t.stages.map((s) => s.label))),
+    dedupe(activeVocab.templates.flatMap((t) => t.stages.map((s) => s.label))),
     FIELDS.stage.options
   );
   const reqTypes = merge(
-    dedupe(v.templates.map((t) => t.requestType ?? "").filter(Boolean)),
+    dedupe(activeVocab.templates.map((t) => t.requestType ?? "").filter(Boolean)),
     FIELDS.reqtype.options
   );
 
@@ -137,30 +159,49 @@ export function buildOverlay(v: VocabularySource | null): VocabOverlay | null {
   }
   if (retailers.length) fieldOptions.retailer = retailers;
   if (customers.length) fieldOptions.customer_name = customers;
-  if (v.templates.length) {
+  if (activeVocab.templates.length) {
     fieldOptions.stage = stages;
     fieldOptions.reqtype = reqTypes;
-    fieldOptions.template = v.templates.map((t) => t.name);
+    fieldOptions.template = activeVocab.templates.map((t) => t.name);
     actionParamOptions.change_stage = merge(
       stages,
       ACTIONS.find((a) => a.key === "change_stage")?.paramOptions
     );
   }
 
+  // Merge Custom Synced Tags
+  if (customVocab.tags && customVocab.tags.length) {
+    fieldOptions.tags = merge(customVocab.tags, FIELDS.tags.options);
+    actionParamOptions.add_tag = merge(customVocab.tags, ACTIONS.find((a) => a.key === "add_tag")?.paramOptions);
+    actionParamOptions.remove_tag = merge(customVocab.tags, ACTIONS.find((a) => a.key === "remove_tag")?.paramOptions);
+  }
+
   // Phase 2: ID-bearing registries for scoped pickers. Stage instances are
   // template-qualified so two same-named stages stay distinct (C7).
   const instances: ScopedInstances = {
-    templates: v.templates.map((t) => ({ id: t.id, label: t.name })),
-    retailers: v.retailers,
-    customers: v.customers.length ? v.customers : dedupeRequestsCustomers(),
-    users: v.users,
-    stages: v.templates.flatMap((t) =>
+    templates: activeVocab.templates.map((t) => ({ id: t.id, label: t.name })),
+    retailers: activeVocab.retailers,
+    customers: activeVocab.customers.length ? activeVocab.customers : dedupeRequestsCustomers(),
+    users: activeVocab.users,
+    stages: activeVocab.templates.flatMap((t) =>
       t.stages.map((s) => ({ id: `${t.id}:${s.id}`, label: `${t.name} › ${s.label}` }))
     ),
     authorities: [], // injected client-side (listAuthorities) — see WorkflowCreator
   };
 
-  return { fieldOptions, actionParamOptions, liveFields: v.fields ?? [], instances };
+  // Merge Custom Synced Fields (e.g. Crop Details, Yes/No Questionnaire)
+  const baseFields = activeVocab.fields ?? [];
+  const customFields: LiveField[] = (customVocab.fields ?? []).map((f) => ({
+    formTemplateId: "custom-vocab-sync",
+    formName: f.category,
+    fieldId: f.id,
+    name: f.id,
+    label: f.name,
+    fieldType: f.type.toUpperCase() === "OBJECT" ? "INPUT" : f.type.toUpperCase(),
+    required: false,
+  }));
+
+  return { fieldOptions, actionParamOptions, liveFields: [...baseFields, ...customFields], instances };
 }
 
 function dedupeRequestsCustomers(): LiveOption[] {

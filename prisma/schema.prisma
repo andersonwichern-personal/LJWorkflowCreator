@@ -99,3 +99,77 @@ model ApprovalDecision {
   @@unique([taskId, approverId])
   @@map("approval_decisions")
 }
+
+model Customer {
+  id           String   @id @default(uuid())
+  orgId        String   @map("org_id")
+  type         String
+  name         String
+  status       String   @default("active") // "active" | "merged" | "archived"
+  mergedIntoId String?  @map("merged_into_id")
+  version      Int      @default(1)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  mergedInto   Customer?          @relation("CustomerMergeAlias", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedFrom   Customer[]         @relation("CustomerMergeAlias")
+  fromRels     CustomerRelationship[] @relation("CustomerRelationshipFrom")
+  toRels       CustomerRelationship[] @relation("CustomerRelationshipTo")
+  requestRoles  RequestCustomerRole[]
+
+  @@unique([orgId, name])
+  @@index([orgId, mergedIntoId])
+  @@map("customers")
+}
+
+model CustomerRelationship {
+  id           String   @id @default(uuid())
+  orgId        String   @map("org_id")
+  fromId       String   @map("from_id")
+  toId         String   @map("to_id")
+  relationType String   @map("relation_type")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  from Customer @relation("CustomerRelationshipFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to   Customer @relation("CustomerRelationshipTo", fields: [toId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, fromId])
+  @@index([orgId, toId])
+  @@map("customer_relationships")
+}
+
+model RequestCustomerRole {
+  id         String   @id @default(uuid())
+  orgId      String   @map("org_id")
+  requestId  String   @map("request_id")
+  customerId String   @map("customer_id")
+  role       String
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, customerId, role])
+  @@index([orgId, customerId])
+  @@index([orgId, requestId])
+  @@map("request_customer_roles")
+}
+
+// Append-only lifecycle log (edge-cases doc §13). Core emits CUSTOMERS_MERGED;
+// other `type` values are reserved for later phases. History is immutable — rows
+// are never updated or deleted (principle A).
+model PlatformAuditLog {
+  id          String   @id @default(uuid())
+  orgId       String   @map("org_id")
+  type        String // CUSTOMERS_MERGED (core) | REQUEST_REOPENED | USER_REASSIGNED | ...
+  subjectType String   @map("subject_type") // "customer" | "workflow" | "authority" | "request"
+  subjectId   String   @map("subject_id")
+  payload     Json
+  actorId     String   @map("actor_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([orgId, subjectType, subjectId])
+  @@index([orgId, type, createdAt])
+  @@map("platform_audit_log")
+}

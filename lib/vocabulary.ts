@@ -1152,8 +1152,7 @@ export const SCOPED_FIELDS: Record<string, ScopeSpec> = {
   },
   customer_name: {
     categories: ["Business", "Individual"],
-    instanceSource: null,
-    instancesDisabledHint: "Specific customers need the customer API — pick a type or enter a name.",
+    instanceSource: "customers",
     categoryAttribute: "custtype",
   },
   stage: {

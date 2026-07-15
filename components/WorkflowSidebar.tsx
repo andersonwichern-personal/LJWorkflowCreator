@@ -230,6 +230,35 @@ function ReferencesPanel({ refreshKey }: { refreshKey: number }) {
                 </div>
               ))
           )}
+          {Array.isArray((audit as unknown as { customerStates?: { id: string; label: string; status: string; mergedIntoId?: string | null }[] }).customerStates) && (
+            <div className="mt-2 rounded-lg border px-2 py-2" style={{ borderColor: "var(--panel-border)" }}>
+              <div className="mb-1 text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--fg-subtle)" }}>
+                Customers
+              </div>
+              <div className="flex flex-col gap-1">
+                {((audit as unknown as { customerStates: { id: string; label: string; status: string; mergedIntoId?: string | null }[] }).customerStates ?? []).slice(0, 8).map((c) => (
+                  <div key={c.id} className="flex items-center justify-between gap-2 text-[11px]">
+                    <span className="min-w-0 truncate" style={{ color: "var(--fg-muted)" }} title={c.label}>
+                      {c.label}
+                    </span>
+                    <span
+                      className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase"
+                      style={
+                        c.status === "active"
+                          ? { background: "var(--tok-if-bg)", color: "var(--tok-if-fg)" }
+                          : c.status === "merged"
+                          ? { background: "var(--warn-bg)", color: "var(--warn-fg)" }
+                          : { background: "var(--danger-bg)", color: "var(--danger-fg)" }
+                      }
+                      title={c.mergedIntoId ? `Merged into ${c.mergedIntoId}` : c.status}
+                    >
+                      {c.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

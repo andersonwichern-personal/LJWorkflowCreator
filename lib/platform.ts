@@ -249,6 +249,7 @@ export async function fetchLiveVocabulary(): Promise<VocabularySource> {
     fetchedAt: new Date().toISOString(),
     users: toOptions(rows.users),
     retailers: toOptions(rows.retailers),
+    customers: [],
     templates: toTemplates(rows.templates),
     forms,
     fields,

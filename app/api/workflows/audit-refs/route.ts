@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { WorkflowService } from "@/lib/services/workflow";
 import { ApprovalAuthorityService } from "@/lib/services/authority";
+import { CustomerService } from "@/lib/services/customer";
 import { auditWorkflowRefs } from "@/lib/refAudit";
 import { fetchLiveVocabulary, platformConfigured } from "@/lib/platform";
 import { ScopedInstances, emptyInstances } from "@/lib/liveVocabulary";
@@ -34,12 +35,21 @@ export async function GET(req: NextRequest) {
     } catch {
       /* authorities unverifiable */
     }
+    try {
+      const customers = await CustomerService.listAll(orgId);
+      registry.customers = customers
+        .filter((c) => c.status === "active")
+        .map((c) => ({ id: c.id, label: c.name }));
+    } catch {
+      /* customers unverifiable */
+    }
     if (platformConfigured()) {
       try {
         const vocab = await fetchLiveVocabulary();
         if (vocab.source === "live") {
           registry.templates = vocab.templates.map((t) => ({ id: t.id, label: t.name }));
           registry.retailers = vocab.retailers;
+          registry.customers = vocab.customers;
           registry.users = vocab.users;
           registry.stages = vocab.templates.flatMap((t) =>
             t.stages.map((s) => ({ id: `${t.id}:${s.id}`, label: `${t.name} › ${s.label}` }))
@@ -54,7 +64,16 @@ export async function GET(req: NextRequest) {
       workflows.map((w) => ({ id: w.id, name: w.name, ruleJson: w.ruleJson })),
       registry
     );
-    return NextResponse.json(result);
+    const customers = await CustomerService.listAll(orgId);
+    return NextResponse.json({
+      ...result,
+      customerStates: customers.map((c) => ({
+        id: c.id,
+        label: c.name,
+        status: c.status,
+        mergedIntoId: c.mergedIntoId,
+      })),
+    });
   } catch (error: unknown) {
     console.error("Reference audit failed:", error);
     return NextResponse.json(

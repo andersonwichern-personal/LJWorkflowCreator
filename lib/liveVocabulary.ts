@@ -15,6 +15,7 @@
  */
 
 import { ACTIONS, ASSIGNEES, FIELDS, FieldKind } from "@/lib/vocabulary";
+import { REQUESTS } from "@/lib/platformData";
 
 /* ---- Shapes shared with the server proxy (lib/platform.ts) ---- */
 
@@ -59,6 +60,7 @@ export interface LiveVocabulary {
   fetchedAt: string;
   users: LiveOption[];
   retailers: LiveOption[];
+  customers: LiveOption[];
   templates: LiveTemplate[];
   forms: LiveOption[];
   /** Flattened per-form field registry (bounded fan-out; see lib/platform.ts). */
@@ -77,6 +79,7 @@ export type VocabularySource = LiveVocabulary | { source: "static"; reason: stri
 export interface ScopedInstances {
   templates: LiveOption[];
   retailers: LiveOption[];
+  customers: LiveOption[];
   users: LiveOption[];
   /** id = `${templateId}:${stageId}`, label = `Template › Stage` (kills C7). */
   stages: LiveOption[];
@@ -85,7 +88,7 @@ export interface ScopedInstances {
 }
 
 export function emptyInstances(): ScopedInstances {
-  return { templates: [], retailers: [], users: [], stages: [], authorities: [] };
+  return { templates: [], retailers: [], customers: [], users: [], stages: [], authorities: [] };
 }
 
 export interface VocabOverlay {
@@ -114,6 +117,7 @@ export function buildOverlay(v: VocabularySource | null): VocabOverlay | null {
 
   const users = v.users.map((u) => u.label);
   const retailers = v.retailers.map((r) => r.label);
+  const customers = v.customers.map((c) => c.label);
   const stages = merge(
     dedupe(v.templates.flatMap((t) => t.stages.map((s) => s.label))),
     FIELDS.stage.options
@@ -132,6 +136,7 @@ export function buildOverlay(v: VocabularySource | null): VocabOverlay | null {
     actionParamOptions.notify = merge(users, ASSIGNEES);
   }
   if (retailers.length) fieldOptions.retailer = retailers;
+  if (customers.length) fieldOptions.customer_name = customers;
   if (v.templates.length) {
     fieldOptions.stage = stages;
     fieldOptions.reqtype = reqTypes;
@@ -147,6 +152,7 @@ export function buildOverlay(v: VocabularySource | null): VocabOverlay | null {
   const instances: ScopedInstances = {
     templates: v.templates.map((t) => ({ id: t.id, label: t.name })),
     retailers: v.retailers,
+    customers: v.customers.length ? v.customers : dedupeRequestsCustomers(),
     users: v.users,
     stages: v.templates.flatMap((t) =>
       t.stages.map((s) => ({ id: `${t.id}:${s.id}`, label: `${t.name} › ${s.label}` }))
@@ -155,6 +161,19 @@ export function buildOverlay(v: VocabularySource | null): VocabOverlay | null {
   };
 
   return { fieldOptions, actionParamOptions, liveFields: v.fields ?? [], instances };
+}
+
+function dedupeRequestsCustomers(): LiveOption[] {
+  const seen = new Set<string>();
+  const out: LiveOption[] = [];
+  for (const request of REQUESTS) {
+    const label = request.mainBorrower.trim();
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ id: `seed:${request.id}`, label });
+  }
+  return out;
 }
 
 function dedupe(values: string[]): string[] {

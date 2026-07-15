@@ -181,6 +181,65 @@ export async function deleteAuthority(id: string): Promise<void> {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Customers — /api/platform/customers                                        */
+/* -------------------------------------------------------------------------- */
+
+export interface CustomerRecord {
+  id: string;
+  orgId: string;
+  type: "Business" | "Individual";
+  name: string;
+  status: "active" | "merged" | "archived";
+  mergedIntoId: string | null;
+  version: number;
+}
+
+export interface CustomerGraphRole {
+  id: string;
+  orgId: string;
+  requestId: string;
+  customerId: string;
+  role: string;
+}
+
+export interface CustomerExposureSummary {
+  customerId: string;
+  canonicalCustomerId: string | null;
+  connectedPartyCount: number;
+  relationshipCount: number;
+  brokenReferenceCount: number;
+  connectedCustomers: Array<{ id: string; name: string; status: "active" | "merged" | "archived" | string }>;
+}
+
+export async function listCustomers(requestId?: string): Promise<{
+  customers: CustomerRecord[];
+  roles: CustomerGraphRole[];
+  summaries: CustomerExposureSummary[];
+}> {
+  const orgId = await getOrgId();
+  const qs = new URLSearchParams({ orgId });
+  if (requestId) qs.set("requestId", requestId);
+  const res = await fetch(`/api/platform/customers?${qs}`, { cache: "no-store" });
+  return handle<{ customers: CustomerRecord[]; roles: CustomerGraphRole[]; summaries: CustomerExposureSummary[] }>(res);
+}
+
+export async function mergeCustomersApi(input: {
+  survivorId: string;
+  duplicateId: string;
+  reason: string;
+  actorId?: string;
+  expectedVersion?: number;
+}): Promise<{ survivorId: string; duplicateId: string; movedRoles: number; movedRelationships: number; noOp?: boolean }> {
+  const orgId = await getOrgId();
+  const res = await fetch(`/api/platform/customers/merge`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ orgId, ...input }),
+  });
+  return handle<{ survivorId: string; duplicateId: string; movedRoles: number; movedRelationships: number; noOp?: boolean }>(res);
+}
+
+/* -------------------------------------------------------------------------- */
 /* Approval Tasks — /api/platform/authorities/tasks                           */
 /* -------------------------------------------------------------------------- */
 

@@ -17,6 +17,7 @@ import WorkflowDashboard, { type OpenCreator } from "@/components/WorkflowDashbo
 import WorkflowCreator from "@/components/WorkflowCreator";
 import ApprovalAuthorities from "@/components/ApprovalAuthorities";
 import AuditLogs from "@/components/AuditLogs";
+import CustomersPanel from "@/components/CustomersPanel";
 import { AutomationPausedBanner, AutomationProvider } from "@/components/AutomationControls";
 import { ViewpointProvider, useViewpoint } from "@/lib/viewpoint";
 import { BrandProvider } from "@/lib/brand";
@@ -25,6 +26,7 @@ type View =
   | { name: "dashboard" }
   | { name: "creator"; id: string | null; intent: OpenCreator["intent"] }
   | { name: "authorities" }
+  | { name: "customers" }
   | { name: "audit" }
   | { name: "placeholder"; key: NavKey; label: string };
 
@@ -58,6 +60,7 @@ function ShellBody({ initialView }: { initialView: "dashboard" }) {
   function navigate(key: NavKey) {
     if (key === "workflows") setView({ name: "dashboard" });
     else if (key === "root") setView({ name: "authorities" });
+    else if (key === "customers") setView({ name: "customers" });
     else if (key === "system") setView({ name: "audit" });
     else setView({ name: "placeholder", key, label: PLACEHOLDER_LABELS[key] ?? "Section" });
   }
@@ -76,6 +79,8 @@ function ShellBody({ initialView }: { initialView: "dashboard" }) {
       ? "workflows"
       : view.name === "authorities"
         ? "root"
+        : view.name === "customers"
+          ? "customers"
         : view.name === "audit"
           ? "system"
           : view.key;
@@ -94,6 +99,7 @@ function ShellBody({ initialView }: { initialView: "dashboard" }) {
             <WorkflowCreator intent={view.intent} initialWorkflowId={view.id} onExit={backToDashboard} />
           )}
           {view.name === "authorities" && <AdminSection title="Approval Authorities"><ApprovalAuthorities /></AdminSection>}
+          {view.name === "customers" && <AdminSection title="Customers"><CustomersPanel /></AdminSection>}
           {view.name === "audit" && <AdminSection title="Audit Logs"><AuditLogs /></AdminSection>}
           {view.name === "placeholder" && <Placeholder label={view.label} onBack={() => navigate("workflows")} />}
         </main>

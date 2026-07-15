@@ -39,6 +39,7 @@ function fieldValue(r: PlatformRequest, field: string): string | number | string
     case "stage": return r.stage;
     case "custtype": return r.customerType;
     case "main_borrower": return r.mainBorrower;
+    case "customer_name": return r.mainBorrower;
     case "core": return r.core;
     case "loan_product": return r.loanProduct;
     case "retailer": return r.retailer;

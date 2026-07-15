@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ApprovalTaskService, taskRequirementStatus } from "@/lib/services/approvalTask";
+import { dynamicExclusionsForRequest } from "@/lib/services/customer";
 
 /** Fixed demo tenant fallback (real app derives org_id from the authed session). */
 const DEFAULT_ORG_ID = "test-org-uuid-999";
@@ -43,12 +44,18 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const orgId = body.orgId || orgIdFrom(req);
+    const exclusions = await dynamicExclusionsForRequest(
+      orgId,
+      String(body.requestId || ""),
+      Array.isArray(body.exclusions) ? body.exclusions.map(String) : []
+    );
     const task = await ApprovalTaskService.createTask({
-      orgId: body.orgId || orgIdFrom(req),
+      orgId,
       authorityId: body.authorityId,
       requestId: body.requestId,
       requirement: body.requirement,
-      exclusions: Array.isArray(body.exclusions) ? body.exclusions.map(String) : [],
+      exclusions,
       delegations: Array.isArray(body.delegations) ? body.delegations : [],
     });
     return NextResponse.json(

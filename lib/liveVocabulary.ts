@@ -71,6 +71,11 @@ export interface LiveVocabulary {
 
 export type VocabularySource = LiveVocabulary | { source: "static"; reason: string };
 
+export interface CustomVocabularySync {
+  fields?: { id: string; name: string; type: string; category: string; description: string }[];
+  tags?: string[];
+}
+
 /* ---- Overlay: live values merged onto the static token option lists ---- */
 
 /** ID-bearing instance registries for the scoped pickers + reference audit
@@ -102,6 +107,16 @@ export interface VocabOverlay {
   instances: ScopedInstances;
 }
 
+export function readCustomVocabularySync(): CustomVocabularySync {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem("wf-custom-vocab");
+    return raw ? (JSON.parse(raw) as CustomVocabularySync) : {};
+  } catch {
+    return {};
+  }
+}
+
 /** Live values first, then static entries not already present (case-insensitive). */
 function merge(live: string[], base: string[] = []): string[] {
   const seen = new Set(live.map((v) => v.toLowerCase()));
@@ -114,15 +129,7 @@ function merge(live: string[], base: string[] = []): string[] {
  */
 export function buildOverlay(v: VocabularySource | null): VocabOverlay | null {
   // Read synced custom vocab from localStorage (safe client hook).
-  let customVocab: { fields?: { id: string; name: string; type: string; category: string; description: string }[]; tags?: string[] } = {};
-  if (typeof window !== "undefined") {
-    try {
-      const raw = localStorage.getItem("wf-custom-vocab");
-      if (raw) customVocab = JSON.parse(raw);
-    } catch {
-      /* ignore storage blockages */
-    }
-  }
+  const customVocab = readCustomVocabularySync();
 
   // If there's no live source, build a partial overlay just for the custom vocabulary.
   const activeVocab = v && v.source === "live" ? v : {
@@ -197,7 +204,14 @@ export function buildOverlay(v: VocabularySource | null): VocabOverlay | null {
     fieldId: f.id,
     name: f.id,
     label: f.name,
-    fieldType: f.type.toUpperCase() === "OBJECT" ? "INPUT" : f.type.toUpperCase(),
+    // Sync spec: object → text (INPUT), array → enum (SELECT). "ARRAY" alone
+    // falls through fieldKindForType() to "text", so map it to an enum type.
+    fieldType:
+      f.type.toUpperCase() === "OBJECT"
+        ? "INPUT"
+        : f.type.toUpperCase() === "ARRAY"
+          ? "SELECT"
+          : f.type.toUpperCase(),
     required: false,
   }));
 

@@ -1,9 +1,10 @@
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const SCHEMA_PATH = new URL("../../../../../docs/2026-07-15_live_schema.json", import.meta.url);
+const SCHEMA_PATH = join(process.cwd(), "docs/2026-07-15_live_schema.json");
 
 export async function POST(_req: NextRequest) {
   try {

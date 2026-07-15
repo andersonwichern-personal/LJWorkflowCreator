@@ -21,13 +21,19 @@ import {
   Lock,
   Pencil,
   Plus,
+  Clock,
+  Flame,
+  TrendingUp,
 } from "lucide-react";
 import {
+  ExecutionAnalytics,
   WorkflowRecord,
+  fetchExecutionAnalytics,
   listWorkflows,
   toggleWorkflow,
   updateWorkflow,
 } from "@/lib/api";
+import { matchRatePct } from "@/lib/executionAnalytics";
 import { getEvent } from "@/lib/vocabulary";
 import { useViewpoint } from "@/lib/viewpoint";
 import { clearProposed, useProposedIds } from "@/lib/proposals";
@@ -56,6 +62,11 @@ export default function WorkflowDashboard({
   const [workflows, setWorkflows] = useState<WorkflowRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Phase 7.1: Rules List vs Diagnostics & Analytics view.
+  const [activeTab, setActiveTab] = useState<"workflows" | "analytics">("workflows");
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const [analytics, setAnalytics] = useState<ExecutionAnalytics | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -72,6 +83,27 @@ export default function WorkflowDashboard({
   useEffect(() => {
     load();
   }, [load, reloadToken]);
+
+  useEffect(() => {
+    if (activeTab !== "analytics") return;
+    let cancelled = false;
+    async function loadAnalytics() {
+      setAnalyticsLoading(true);
+      setAnalyticsError(null);
+      try {
+        const body = await fetchExecutionAnalytics();
+        if (!cancelled) setAnalytics(body);
+      } catch (e) {
+        if (!cancelled) setAnalyticsError(e instanceof Error ? e.message : "Couldn't load analytics");
+      } finally {
+        if (!cancelled) setAnalyticsLoading(false);
+      }
+    }
+    void loadAnalytics();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, reloadToken]);
 
   async function onToggle(wf: WorkflowRecord, next: boolean) {
     if (!canEdit) return; // read-only viewpoints can't flip enablement
@@ -156,55 +188,76 @@ export default function WorkflowDashboard({
         </div>
       )}
 
-      {/* Table */}
-      <div className="glass overflow-hidden rounded-2xl">
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr style={{ borderBottom: "1px solid var(--panel-border)" }}>
-                <Th>Name</Th>
-                <Th>Event Trigger</Th>
-                <Th>Mode</Th>
-                <Th className="text-center">Status</Th>
-                <Th className="text-right">Edit</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-sm" style={{ color: "var(--fg-subtle)" }}>
-                    Loading workflows…
-                  </td>
-                </tr>
-              )}
+      <div className="mb-4 flex items-center gap-2">
+        {(["workflows", "analytics"] as const).map((tab) => {
+          const active = activeTab === tab;
+          return (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className="ring-accent rounded-full border px-4 py-2 text-sm font-semibold transition-colors"
+              style={
+                active
+                  ? { background: "var(--accent)", borderColor: "var(--accent)", color: "#fff" }
+                  : { background: "var(--panel)", borderColor: "var(--panel-border)", color: "var(--fg-muted)" }
+              }
+            >
+              {tab === "workflows" ? "Rules List" : "Diagnostics & Analytics"}
+            </button>
+          );
+        })}
+      </div>
 
-              {!loading && workflows.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center" style={{ color: "var(--fg-subtle)" }}>
-                    <p className="text-sm font-medium" style={{ color: "var(--fg-muted)" }}>
-                      No workflows yet.
-                    </p>
-                    <p className="mt-1 text-xs">
-                      {canEdit
-                        ? "Click “New Workflow” to build your first rule."
-                        : canPropose
-                          ? "Click “Propose Workflow” to draft a rule for Admin approval."
-                          : "Nothing has been created yet."}
-                    </p>
-                  </td>
+      {activeTab === "workflows" ? (
+        <div className="glass overflow-hidden rounded-2xl">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--panel-border)" }}>
+                  <Th>Name</Th>
+                  <Th>Event Trigger</Th>
+                  <Th>Mode</Th>
+                  <Th className="text-center">Status</Th>
+                  <Th className="text-right">Edit</Th>
                 </tr>
-              )}
+              </thead>
+              <tbody>
+                {loading && (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-10 text-center text-sm" style={{ color: "var(--fg-subtle)" }}>
+                      Loading workflows…
+                    </td>
+                  </tr>
+                )}
 
-              {!loading &&
-                workflows.map((wf) => {
-                  const mode = wf.ruleJson?.controls?.mode ?? "shadow";
-                  const proposed = proposedIds.has(wf.id);
-                  return (
-                    <tr
-                      key={wf.id}
-                      className="transition-colors hover:bg-[var(--accent-soft)]"
-                      style={{ borderBottom: "1px solid var(--panel-border)" }}
-                    >
+                {!loading && workflows.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-12 text-center" style={{ color: "var(--fg-subtle)" }}>
+                      <p className="text-sm font-medium" style={{ color: "var(--fg-muted)" }}>
+                        No workflows yet.
+                      </p>
+                      <p className="mt-1 text-xs">
+                        {canEdit
+                          ? "Click “New Workflow” to build your first rule."
+                          : canPropose
+                            ? "Click “Propose Workflow” to draft a rule for Admin approval."
+                            : "Nothing has been created yet."}
+                      </p>
+                    </td>
+                  </tr>
+                )}
+
+                {!loading &&
+                  workflows.map((wf) => {
+                    const mode = wf.ruleJson?.controls?.mode ?? "shadow";
+                    const proposed = proposedIds.has(wf.id);
+                    return (
+                      <tr
+                        key={wf.id}
+                        className="transition-colors hover:bg-[var(--accent-soft)]"
+                        style={{ borderBottom: "1px solid var(--panel-border)" }}
+                      >
                       {/* Name */}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
@@ -298,19 +351,167 @@ export default function WorkflowDashboard({
                           </button>
                         </div>
                       </td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-3">
+            <MetricCard
+              icon={<Clock size={18} strokeWidth={2} />}
+              label="Auto-approval turnaround (simulated)"
+              value={analytics ? `${analytics.averageLatencyMinutes} min avg manual wait` : "—"}
+              tone="clock"
+            />
+            <MetricCard
+              icon={<TrendingUp size={18} strokeWidth={2} />}
+              label="Success rate"
+              value={analytics ? `${matchRatePct(analytics)}%` : "—"}
+              tone="trend"
+            />
+            <MetricCard
+              icon={<Flame size={18} strokeWidth={2} />}
+              label="Fires"
+              value={analytics ? String(analytics.totals.fired) : "—"}
+              tone="fire"
+            />
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+            <div className="glass rounded-2xl border p-5" style={{ borderColor: "var(--panel-border)" }}>
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="flex items-center gap-1.5 text-sm font-semibold" style={{ color: "var(--fg)" }}>
+                    <Flame size={14} strokeWidth={2} style={{ color: "var(--warn-fg)" }} /> Hotspot Leaderboard
+                  </h2>
+                  <p className="text-xs" style={{ color: "var(--fg-subtle)" }}>
+                    Most active workflows by execution count.
+                  </p>
+                </div>
+                <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
+                  {analytics?.totals.evaluations ?? 0} total runs
+                </span>
+              </div>
+              {analyticsLoading ? (
+                <div className="py-10 text-center text-sm" style={{ color: "var(--fg-subtle)" }}>
+                  Loading analytics…
+                </div>
+              ) : analyticsError ? (
+                <div className="rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "var(--danger-br)", color: "var(--danger-fg)", background: "var(--danger-bg)" }}>
+                  {analyticsError}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {Object.entries(analytics?.hotspots ?? {})
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([workflowId, executions], index) => (
+                    <div
+                      key={workflowId}
+                      className="flex items-center justify-between rounded-xl border px-4 py-3"
+                      style={{ borderColor: "var(--panel-border)", background: "var(--panel)" }}
+                    >
+                      <div>
+                        <div className="text-sm font-medium" style={{ color: "var(--fg)" }}>
+                          {index + 1}. {workflows.find((wf) => wf.id === workflowId)?.name ?? workflowId}
+                        </div>
+                        <div className="text-xs" style={{ color: "var(--fg-subtle)" }}>
+                          {workflowId}
+                        </div>
+                      </div>
+                      <div className="text-right text-sm font-semibold" style={{ color: "var(--fg)" }}>
+                        {executions}
+                      </div>
+                    </div>
+                  ))}
+                  {Object.keys(analytics?.hotspots ?? {}).length === 0 && (
+                    <div className="rounded-xl border border-dashed px-4 py-8 text-center text-sm" style={{ borderColor: "var(--panel-border)", color: "var(--fg-subtle)" }}>
+                      No execution history yet.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="glass rounded-2xl border p-5" style={{ borderColor: "var(--panel-border)" }}>
+              <h2 className="mb-4 text-sm font-semibold" style={{ color: "var(--fg)" }}>
+                Status mix
+              </h2>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between rounded-xl bg-[var(--panel)] px-4 py-3">
+                  <span style={{ color: "var(--fg-muted)" }}>Shadow</span>
+                  <span className="font-semibold" style={{ color: "var(--fg)" }}>
+                    {analytics?.totals.shadow ?? 0}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between rounded-xl bg-[var(--panel)] px-4 py-3">
+                  <span style={{ color: "var(--fg-muted)" }}>Errors</span>
+                  <span className="font-semibold" style={{ color: "var(--fg)" }}>
+                    {analytics?.totals.errors ?? 0}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between rounded-xl bg-[var(--panel)] px-4 py-3">
+                  <span style={{ color: "var(--fg-muted)" }}>Match rate</span>
+                  <span className="font-semibold" style={{ color: "var(--fg)" }}>
+                    {analytics ? `${matchRatePct(analytics)}%` : "—"}
+                  </span>
+                </div>
+              </div>
+              {!analyticsLoading && !analyticsError && (
+                <p className="mt-4 text-xs" style={{ color: "var(--fg-subtle)" }}>
+                  Turnaround is simulated (deterministic 15–90 min per request) — the platform
+                  exposes no real decision timestamps yet.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {!canEdit && !canPropose && !loading && (
         <p className="mt-3 flex items-center gap-1.5 text-xs" style={{ color: "var(--fg-subtle)" }}>
           <Lock size={12} strokeWidth={2} /> {persona.roleLabel} view is read-only.
         </p>
       )}
+    </div>
+  );
+}
+
+function MetricCard({
+  icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  tone: "clock" | "trend" | "fire";
+}) {
+  const tones: Record<typeof tone, { background: string; color: string }> = {
+    clock: { background: "var(--tok-when-bg)", color: "var(--tok-when-fg)" },
+    trend: { background: "var(--tok-if-bg)", color: "var(--tok-if-fg)" },
+    fire: { background: "var(--danger-bg)", color: "var(--danger-fg)" },
+  };
+  const style = tones[tone];
+  return (
+    <div className="glass rounded-2xl border p-4" style={{ borderColor: "var(--panel-border)" }}>
+      <div className="flex items-center gap-3">
+        <span className="flex h-11 w-11 items-center justify-center rounded-xl" style={{ background: style.background, color: style.color }}>
+          {icon}
+        </span>
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--fg-subtle)" }}>
+            {label}
+          </div>
+          <div className="text-xl font-semibold" style={{ color: "var(--fg)" }}>
+            {value}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

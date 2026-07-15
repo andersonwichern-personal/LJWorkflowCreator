@@ -29,6 +29,7 @@ import { UnresolvedSlot } from "@/lib/nlParser";
 import { ChatDraftMeta } from "@/components/ChatBox";
 import {
   WorkflowRecord,
+  getOrgId,
   listWorkflows,
   createWorkflow,
   updateWorkflow,
@@ -100,10 +101,32 @@ export default function WorkflowCreator({
   // Demo bridge: live platform vocabulary for the pickers (falls back to static).
   const [vocabSource, setVocabSource] = useState<VocabularySource | null>(null);
   const [syncTrigger, setSyncTrigger] = useState(0);
+  const [analyticsHotspots, setAnalyticsHotspots] = useState<Record<string, number>>({});
 
   useEffect(() => {
     loadLiveVocabulary().then(setVocabSource);
   }, [syncTrigger]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadAnalyticsHotspots() {
+      try {
+        const orgId = await getOrgId();
+        const res = await fetch(`/api/workflows/analytics?orgId=${encodeURIComponent(orgId)}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const body = (await res.json()) as { hotspots?: Record<string, number> };
+        if (!cancelled) setAnalyticsHotspots(body.hotspots ?? {});
+      } catch {
+        if (!cancelled) setAnalyticsHotspots({});
+      }
+    }
+    void loadAnalyticsHotspots();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const handleSync = () => {
@@ -592,6 +615,10 @@ export default function WorkflowCreator({
                 onChange={onRuleChange}
                 overlay={overlay}
                 unresolved={unresolved}
+                hotspotCount={activeId ? analyticsHotspots[activeId] ?? 0 : 0}
+                workflowOptions={workflows
+                  .filter((wf) => wf.id !== activeId)
+                  .map((wf) => ({ value: wf.id, label: wf.name }))}
                 onResolve={(slot) => setUnresolved((u) => u.filter((s) => s !== slot))}
               />
             </div>

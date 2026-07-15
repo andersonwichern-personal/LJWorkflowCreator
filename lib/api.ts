@@ -462,3 +462,20 @@ export async function setAutomationsPaused(paused: boolean): Promise<OrgControls
   });
   return handle<OrgControls>(res);
 }
+
+/* -------------------------------------------------------------------------- */
+/* Phase 7.1 — execution analytics (Diagnostics & Analytics dashboard)        */
+/* -------------------------------------------------------------------------- */
+
+export type { ExecutionAnalytics } from "@/lib/executionAnalytics";
+
+/** Execution totals, simulated queue latency, and per-workflow hotspot counts. */
+export async function fetchExecutionAnalytics(): Promise<
+  import("@/lib/executionAnalytics").ExecutionAnalytics
+> {
+  const orgId = await getOrgId();
+  const res = await fetch(`/api/workflows/analytics?orgId=${encodeURIComponent(orgId)}`, {
+    cache: "no-store",
+  });
+  return handle<import("@/lib/executionAnalytics").ExecutionAnalytics>(res);
+}

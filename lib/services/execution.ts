@@ -105,4 +105,22 @@ export class RuleExecutionService {
       include: { workflow: { select: { id: true, name: true } } },
     });
   }
+
+  /** Minimal projection for the analytics aggregator (Phase 7.1) — bounded to
+   *  the most recent rows so the demo dashboard stays cheap at any log size. */
+  static async analyticsRows(
+    orgId: string,
+    limit = 1000
+  ): Promise<{ workflowId: string; requestId: string; status: string }[]> {
+    if (!orgId) {
+      throw new Error("Organization ID is required for analytics");
+    }
+
+    return prisma.ruleExecution.findMany({
+      where: { orgId },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      select: { workflowId: true, requestId: true, status: true },
+    });
+  }
 }

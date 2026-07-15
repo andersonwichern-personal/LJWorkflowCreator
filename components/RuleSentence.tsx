@@ -48,7 +48,7 @@ import {
   nodeAt,
   emptyGroup,
 } from "@/lib/conditionTree";
-import { SlidersHorizontal, Crosshair, CirclePlus, X } from "lucide-react";
+import { SlidersHorizontal, Crosshair, CirclePlus, Flame, X } from "lucide-react";
 import TokenPicker, { PickerOption, ScopedOptions } from "./TokenPicker";
 import { VocabOverlay, ScopedInstances, fieldKindForType } from "@/lib/liveVocabulary";
 import { UnresolvedSlot } from "@/lib/nlParser";
@@ -196,9 +196,21 @@ interface RuleSentenceProps {
   unresolved?: UnresolvedSlot[];
   /** Called when the user resolves a slot by picking a value. */
   onResolve?: (slot: UnresolvedSlot) => void;
+  /** Hotspot frequency for the active rule, fetched from analytics. */
+  hotspotCount?: number | null;
+  /** Candidate workflows for A/B split routing. */
+  workflowOptions?: { value: string; label: string }[];
 }
 
-export default function RuleSentence({ rule, onChange, overlay, unresolved, onResolve }: RuleSentenceProps) {
+export default function RuleSentence({
+  rule,
+  onChange,
+  overlay,
+  unresolved,
+  onResolve,
+  hotspotCount,
+  workflowOptions = [],
+}: RuleSentenceProps) {
   const [open, setOpen] = useState<Open | null>(null);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [controlsOpen, setControlsOpen] = useState(false);
@@ -509,7 +521,18 @@ export default function RuleSentence({ rule, onChange, overlay, unresolved, onRe
     <div className="relative">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-3 leading-relaxed" style={{ color: "var(--fg)" }}>
         {/* WHEN — multiple triggers joined by "or" */}
-        <Word>When</Word>
+        <span className="inline-flex items-center gap-2">
+          <Word>When</Word>
+          {typeof hotspotCount === "number" && hotspotCount > 0 && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+              style={{ borderColor: "var(--warn-fg)", background: "var(--warn-bg)", color: "var(--warn-fg)" }}
+              title={`Fired ${hotspotCount} times in recent simulations`}
+            >
+              <Flame size={11} strokeWidth={2.25} /> fired {hotspotCount}
+            </span>
+          )}
+        </span>
         {triggers.map((t, ti) => {
           const ev = getEvent(t.event);
           return (
@@ -614,7 +637,7 @@ export default function RuleSentence({ rule, onChange, overlay, unresolved, onRe
         )}
       </div>
 
-      {controlsOpen && <ControlsPanel controls={rule.controls} onChange={setControls} />}
+      {controlsOpen && <ControlsPanel controls={rule.controls} onChange={setControls} workflowOptions={workflowOptions} />}
 
       {/* Pickers */}
       {open?.kind === "event" && (
@@ -818,7 +841,15 @@ export default function RuleSentence({ rule, onChange, overlay, unresolved, onRe
 /* Controls panel                                                             */
 /* -------------------------------------------------------------------------- */
 
-function ControlsPanel({ controls, onChange }: { controls: RuleControls; onChange: (patch: Partial<RuleControls>) => void }) {
+function ControlsPanel({
+  controls,
+  onChange,
+  workflowOptions,
+}: {
+  controls: RuleControls;
+  onChange: (patch: Partial<RuleControls>) => void;
+  workflowOptions?: { value: string; label: string }[];
+}) {
   const row = "flex items-center justify-between gap-3 py-1.5";
   const labelCls = "text-sm";
   return (
@@ -898,6 +929,75 @@ function ControlsPanel({ controls, onChange }: { controls: RuleControls; onChang
           className="ring-accent w-20 rounded-lg border px-2 py-1 text-sm"
           style={{ borderColor: "var(--panel-border)", background: "var(--panel)", color: "var(--fg)" }}
         />
+      </div>
+
+      <div className="mt-2 border-t pt-3" style={{ borderColor: "var(--panel-border)" }}>
+        <div className="mb-2 text-[11px] font-bold uppercase tracking-widest" style={{ color: "var(--fg-subtle)" }}>
+          A/B Testing
+        </div>
+        <div className={row}>
+          <span className={labelCls} style={{ color: "var(--fg)" }}>Enable split</span>
+          <input
+            type="checkbox"
+            checked={!!controls.abSplit}
+            onChange={(e) =>
+              onChange(
+                e.target.checked
+                  ? { abSplit: { targetWorkflowId: workflowOptions?.[0]?.value ?? "", weightPercent: 10 } }
+                  : { abSplit: undefined }
+              )
+            }
+            className="h-4 w-4 cursor-pointer accent-[var(--accent)]"
+          />
+        </div>
+        {controls.abSplit && (
+          <div className="space-y-2">
+            <div className={row}>
+              <span className={labelCls} style={{ color: "var(--fg)" }}>Peer workflow</span>
+              <select
+                value={controls.abSplit.targetWorkflowId}
+                onChange={(e) =>
+                  onChange({
+                    abSplit: {
+                      targetWorkflowId: e.target.value,
+                      weightPercent: controls.abSplit?.weightPercent ?? 10,
+                    },
+                  })
+                }
+                className="ring-accent min-w-0 rounded-lg border px-2 py-1 text-sm"
+                style={{ borderColor: "var(--panel-border)", background: "var(--panel)", color: "var(--fg)" }}
+              >
+                <option value="">Select workflow</option>
+                {(workflowOptions ?? []).map((wf) => (
+                  <option key={wf.value} value={wf.value}>
+                    {wf.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className={row}>
+              <span className={labelCls} style={{ color: "var(--fg)" }}>Peer weight</span>
+              <input
+                type="range"
+                min={1}
+                max={99}
+                value={controls.abSplit.weightPercent}
+                onChange={(e) =>
+                  onChange({
+                    abSplit: {
+                      targetWorkflowId: controls.abSplit?.targetWorkflowId ?? "",
+                      weightPercent: Number(e.target.value) || 10,
+                    },
+                  })
+                }
+                className="w-32 accent-[var(--accent)]"
+              />
+            </div>
+            <div className="text-xs" style={{ color: "var(--fg-subtle)" }}>
+              {controls.abSplit.weightPercent}% to peer, {100 - controls.abSplit.weightPercent}% to this rule.
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

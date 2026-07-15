@@ -2,12 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { normalizeRule } from "@/lib/vocabulary";
 import { simulateRule } from "@/lib/ruleEvaluator";
 import { getRequest } from "@/lib/platformData";
+import { WorkflowService } from "@/lib/services/workflow";
 import { RuleExecutionService } from "@/lib/services/execution";
 
 export const dynamic = "force-dynamic";
 
 /** Fixed demo tenant fallback, matching the platform routes. */
 const DEFAULT_ORG_ID = "test-org-uuid-999";
+
+function hashToPercent(input: string): number {
+  let h = 0;
+  for (let i = 0; i < input.length; i++) {
+    h = (h * 33 + input.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h) % 100;
+}
 
 /**
  * POST /api/workflows/simulate — dry-run a rule against a request.
@@ -51,9 +60,23 @@ export async function POST(req: NextRequest) {
 
   const rule = normalizeRule(body.rule);
   const orgId = body.orgId || DEFAULT_ORG_ID;
+  const abSplit = rule.controls.abSplit;
 
   try {
-    const result = simulateRule(rule, request);
+    let routedRule = rule;
+    let routed: "ab-split" | undefined;
+    if (abSplit?.targetWorkflowId) {
+      const roll = hashToPercent(body.requestId);
+      if (roll < abSplit.weightPercent) {
+        const peer = await WorkflowService.getWorkflowById(abSplit.targetWorkflowId, orgId);
+        if (peer) {
+          routedRule = normalizeRule(peer.ruleJson);
+          routed = "ab-split";
+        }
+      }
+    }
+
+    const result = simulateRule(routedRule, request);
 
     let logged = false;
     let logError: string | undefined;
@@ -64,7 +87,7 @@ export async function POST(req: NextRequest) {
           workflowId: body.workflowId,
           requestId: request.id,
           requestName: request.name,
-          eventName: result.trace.matchedTrigger ?? rule.triggers[0]?.event ?? "—",
+          eventName: result.trace.matchedTrigger ?? routedRule.triggers[0]?.event ?? "—",
           status: result.matched ? "FIRED" : "CONDITIONS_NOT_MET",
           trace: result.trace as never,
           actions: result.actions,
@@ -75,7 +98,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ ...result, request: { id: request.id, name: request.name }, logged, ...(logError ? { logError } : {}) });
+    return NextResponse.json({
+      ...result,
+      request: { id: request.id, name: request.name },
+      logged,
+      ...(routed ? { routed } : {}),
+      ...(logError ? { logError } : {}),
+    });
   } catch (error: unknown) {
     // Evaluator crash → persist an ERROR audit row when attributable, then 500.
     console.error("Simulation failed:", error);

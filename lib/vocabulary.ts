@@ -1245,6 +1245,10 @@ export interface RuleControls {
   maxFiresPerHour: number;           // default 25 (A2 circuit breaker)
   missingData: "no_match" | "alert"; // default "no_match" (C2)
   priority: number;                  // default 100; lower runs first (T4)
+  abSplit?: {
+    targetWorkflowId: string;
+    weightPercent: number;
+  };
 }
 
 export function defaultControls(): RuleControls {
@@ -1371,6 +1375,10 @@ function normalizeActions(raw: unknown): RuleOutput[] {
 function coerceControls(raw: unknown): RuleControls {
   const d = defaultControls();
   const c = (raw ?? {}) as Record<string, unknown>;
+  const ab =
+    c.abSplit && typeof c.abSplit === "object"
+      ? (c.abSplit as Record<string, unknown>)
+      : null;
   return {
     mode: c.mode === "armed" ? "armed" : "shadow",
     oncePerRequest: typeof c.oncePerRequest === "boolean" ? c.oncePerRequest : d.oncePerRequest,
@@ -1378,6 +1386,13 @@ function coerceControls(raw: unknown): RuleControls {
       typeof c.maxFiresPerHour === "number" && !Number.isNaN(c.maxFiresPerHour) ? c.maxFiresPerHour : d.maxFiresPerHour,
     missingData: c.missingData === "alert" ? "alert" : "no_match",
     priority: typeof c.priority === "number" && !Number.isNaN(c.priority) ? c.priority : d.priority,
+    abSplit:
+      ab && typeof ab.targetWorkflowId === "string" && typeof ab.weightPercent === "number" && !Number.isNaN(ab.weightPercent)
+        ? {
+            targetWorkflowId: ab.targetWorkflowId,
+            weightPercent: Math.max(1, Math.min(99, Math.round(ab.weightPercent))),
+          }
+        : undefined,
   };
 }
 

@@ -184,6 +184,9 @@ export default function WorkflowCreator() {
   }
 
   async function save() {
+    if (!canEdit) {
+      return pushToast("err", `${persona.name} (${persona.roleLabel}) has read-only access — switch to the Admin viewpoint to edit.`);
+    }
     if (!name.trim()) return pushToast("err", "Give the workflow a name first.");
     // N1 hard gate: unresolved parser slots must be picked before persistence.
     if (unresolved.length > 0) {
@@ -224,6 +227,9 @@ export default function WorkflowCreator() {
   }
 
   async function onToggleWorkflow(wf: WorkflowRecord, next: boolean) {
+    if (!canEdit) {
+      return pushToast("err", `${persona.name} (${persona.roleLabel}) has read-only access — switch to the Admin viewpoint to edit.`);
+    }
     setWorkflows((list) => list.map((w) => (w.id === wf.id ? { ...w, enabled: next } : w)));
     if (wf.id === activeId) setEnabled(next);
     try {
@@ -235,6 +241,9 @@ export default function WorkflowCreator() {
   }
 
   async function onDeleteWorkflow(wf: WorkflowRecord) {
+    if (!canEdit) {
+      return pushToast("err", `${persona.name} (${persona.roleLabel}) has read-only access — switch to the Admin viewpoint to edit.`);
+    }
     if (!confirm(`Delete “${wf.name}”? This can't be undone.`)) return;
     try {
       await deleteWorkflow(wf.id);
@@ -305,24 +314,36 @@ export default function WorkflowCreator() {
               <div className="flex-1">
                 <input
                   value={name}
+                  disabled={!canEdit}
                   onChange={(e) => { setName(e.target.value); setDirty(true); }}
                   placeholder="Workflow name"
-                  className="ring-accent w-full rounded-lg bg-transparent px-1 py-0.5 text-2xl font-semibold tracking-tight outline-none"
+                  className="ring-accent w-full rounded-lg bg-transparent px-1 py-0.5 text-2xl font-semibold tracking-tight outline-none disabled:opacity-70"
                   style={{ color: "var(--fg)" }}
                 />
                 <input
                   value={description}
+                  disabled={!canEdit}
                   onChange={(e) => { setDescription(e.target.value); setDirty(true); }}
                   placeholder="Add a short description…"
-                  className="ring-accent mt-1 w-full rounded-lg bg-transparent px-1 py-0.5 text-sm outline-none"
+                  className="ring-accent mt-1 w-full rounded-lg bg-transparent px-1 py-0.5 text-sm outline-none disabled:opacity-70"
                   style={{ color: "var(--fg-muted)" }}
                 />
               </div>
               <div className="flex flex-wrap items-center gap-3">
+                {!canEdit && (
+                  <span
+                    className="rounded-full px-2.5 py-1 text-[11px] font-medium"
+                    style={{ background: "var(--warn-bg)", color: "var(--warn-fg)" }}
+                    title={`${persona.name} (${persona.roleLabel}) can view the canvas but not change it.`}
+                  >
+                    Read-only — {persona.roleLabel} view
+                  </span>
+                )}
                 <span className="flex items-center gap-2">
                   <Toggle
                     size="sm"
                     checked={enabled}
+                    disabled={!canEdit}
                     onChange={(v) => { setEnabled(v); setDirty(true); }}
                     label="Workflow enabled"
                   />
@@ -341,61 +362,67 @@ export default function WorkflowCreator() {
                     {dirty ? "Unsaved changes" : "Saved"}
                   </span>
                 )}
-                <button
-                  type="button"
-                  onClick={newWorkflow}
-                  className="ring-accent rounded-xl border px-3.5 py-2 text-sm font-medium transition-colors hover:bg-[var(--accent-soft)]"
-                  style={{ borderColor: "var(--panel-border)", color: "var(--fg-muted)" }}
-                >
-                  New
-                </button>
-                {activeId && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const wf = workflows.find((w) => w.id === activeId);
-                      if (wf) onDeleteWorkflow(wf);
-                    }}
-                    className="ring-accent rounded-xl border px-3.5 py-2 text-sm font-medium transition-colors hover:bg-[var(--danger-bg)]"
-                    style={{ borderColor: "var(--panel-border)", color: "var(--danger-fg)" }}
-                  >
-                    Delete
-                  </button>
+                {canEdit && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={newWorkflow}
+                      className="ring-accent rounded-xl border px-3.5 py-2 text-sm font-medium transition-colors hover:bg-[var(--accent-soft)]"
+                      style={{ borderColor: "var(--panel-border)", color: "var(--fg-muted)" }}
+                    >
+                      New
+                    </button>
+                    {activeId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const wf = workflows.find((w) => w.id === activeId);
+                          if (wf) onDeleteWorkflow(wf);
+                        }}
+                        className="ring-accent rounded-xl border px-3.5 py-2 text-sm font-medium transition-colors hover:bg-[var(--danger-bg)]"
+                        style={{ borderColor: "var(--panel-border)", color: "var(--danger-fg)" }}
+                      >
+                        Delete
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={save}
+                      disabled={saving}
+                      className="ring-accent rounded-xl px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:brightness-110 disabled:opacity-50"
+                      style={{ background: "var(--accent)" }}
+                    >
+                      {saving ? "Saving…" : activeId ? "Update" : "Save workflow"}
+                    </button>
+                  </>
                 )}
-                <button
-                  type="button"
-                  onClick={save}
-                  disabled={saving}
-                  className="ring-accent rounded-xl px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:brightness-110 disabled:opacity-50"
-                  style={{ background: "var(--accent)" }}
-                >
-                  {saving ? "Saving…" : activeId ? "Update" : "Save workflow"}
-                </button>
               </div>
             </div>
           </div>
 
           {/* 2. Focal AI console — parser resolves against the live vocabulary */}
-          <ChatBox
-            onDraft={onDraftFromChat}
-            parserOptions={{
-              assignees: overlay?.actionParamOptions.assign_user ?? ASSIGNEES,
-              instanceOptions: overlay?.fieldOptions,
-              // Phase 2 §4.6: id-bearing registries → parser emits instance ScopeRefs.
-              instanceRegistry: overlay
-                ? {
-                    team_member: overlay.instances.users,
-                    retailer: overlay.instances.retailers,
-                    template: overlay.instances.templates,
-                    assign_user: overlay.instances.users,
-                    notify: overlay.instances.users,
-                    assign_authority: overlay.instances.authorities,
-                  }
-                : undefined,
-            }}
-          />
+          {canEdit && (
+            <ChatBox
+              onDraft={onDraftFromChat}
+              parserOptions={{
+                assignees: overlay?.actionParamOptions.assign_user ?? ASSIGNEES,
+                instanceOptions: overlay?.fieldOptions,
+                // Phase 2 §4.6: id-bearing registries → parser emits instance ScopeRefs.
+                instanceRegistry: overlay
+                  ? {
+                      team_member: overlay.instances.users,
+                      retailer: overlay.instances.retailers,
+                      template: overlay.instances.templates,
+                      assign_user: overlay.instances.users,
+                      notify: overlay.instances.users,
+                      assign_authority: overlay.instances.authorities,
+                    }
+                  : undefined,
+              }}
+            />
+          )}
 
-          {isBlank && (
+          {isBlank && canEdit && (
             <div className="glass rounded-2xl p-5">
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--fg-subtle)" }}>
                 Start from a template
@@ -426,13 +453,19 @@ export default function WorkflowCreator() {
               </h3>
             </div>
 
-            <RuleSentence
-              rule={rule}
-              onChange={onRuleChange}
-              overlay={overlay}
-              unresolved={unresolved}
-              onResolve={(slot) => setUnresolved((u) => u.filter((s) => s !== slot))}
-            />
+            {/* Read-only viewpoints get a frozen (non-interactive) canvas. */}
+            <div
+              className={canEdit ? undefined : "pointer-events-none select-none opacity-80"}
+              aria-disabled={!canEdit}
+            >
+              <RuleSentence
+                rule={rule}
+                onChange={onRuleChange}
+                overlay={overlay}
+                unresolved={unresolved}
+                onResolve={(slot) => setUnresolved((u) => u.filter((s) => s !== slot))}
+              />
+            </div>
 
             <div className="mt-6 rounded-xl p-4" style={{ background: "var(--panel-solid)", border: "1px solid var(--panel-border)" }}>
               <div className="mb-1 text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--fg-subtle)" }}>
@@ -441,7 +474,7 @@ export default function WorkflowCreator() {
               <p className="text-[15px] leading-relaxed" style={{ color: "var(--fg)" }}>{summary}</p>
             </div>
 
-            {unconfirmed && (
+            {unconfirmed && !isPresentation && (
               <div
                 className="mt-3 flex items-start gap-2 rounded-xl px-3 py-2.5 text-xs"
                 style={{ background: "var(--warn-bg)", color: "var(--warn-fg)", border: "1px solid var(--warn-br)" }}
@@ -455,19 +488,22 @@ export default function WorkflowCreator() {
             )}
           </div>
 
-          <SimulationPanel rule={rule} workflowId={activeId} />
+          {/* Builder-only dev surface: simulation traces + persisted contract */}
+          {!isPresentation && <SimulationPanel rule={rule} workflowId={activeId} />}
 
-          <details className="glass rounded-2xl p-4">
-            <summary className="cursor-pointer text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--fg-subtle)" }}>
-              Rule JSON (persisted contract)
-            </summary>
-            <pre
-              className="scroll-thin mt-3 overflow-x-auto rounded-xl p-3 text-xs"
-              style={{ background: "var(--panel-solid)", color: "var(--fg-muted)", border: "1px solid var(--panel-border)" }}
-            >
-              {JSON.stringify(rule, null, 2)}
-            </pre>
-          </details>
+          {!isPresentation && (
+            <details className="glass rounded-2xl p-4">
+              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--fg-subtle)" }}>
+                Rule JSON (persisted contract)
+              </summary>
+              <pre
+                className="scroll-thin mt-3 overflow-x-auto rounded-xl p-3 text-xs"
+                style={{ background: "var(--panel-solid)", color: "var(--fg-muted)", border: "1px solid var(--panel-border)" }}
+              >
+                {JSON.stringify(rule, null, 2)}
+              </pre>
+            </details>
+          )}
         </div>
       </div>
 

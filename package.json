@@ -7,7 +7,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "tsx scripts/assert-parser.ts && tsx scripts/assert-operators.ts && tsx scripts/assert-normalize.ts && tsx scripts/assert-validation.ts && tsx scripts/assert-linter.ts && tsx scripts/assert-tree.ts && tsx scripts/assert-scope.ts && tsx scripts/assert-refaudit.ts && tsx scripts/assert-parse-ai.ts && tsx scripts/assert-requirement.ts",
+    "test": "tsx scripts/assert-parser.ts && tsx scripts/assert-operators.ts && tsx scripts/assert-normalize.ts && tsx scripts/assert-validation.ts && tsx scripts/assert-linter.ts && tsx scripts/assert-tree.ts && tsx scripts/assert-scope.ts && tsx scripts/assert-refaudit.ts && tsx scripts/assert-fire.ts && tsx scripts/assert-parse-ai.ts && tsx scripts/assert-requirement.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",

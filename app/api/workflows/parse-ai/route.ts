@@ -16,6 +16,7 @@ import {
 } from "@/lib/vocabulary";
 import { fetchLiveVocabulary, platformConfigured } from "@/lib/platform";
 import { buildOverlay, fieldKindForType, type VocabOverlay, type VocabularySource } from "@/lib/liveVocabulary";
+import { hasBlockingIssues, lintRuleIssues } from "@/lib/ruleLinter";
 import { validateRule } from "@/lib/ruleValidation";
 import { fuzzyMatches } from "@/lib/fuzzy";
 
@@ -120,10 +121,19 @@ function heuristicResponse(
       : undefined,
   };
   const result = parseInstruction(instruction, opts);
+  const lintIssues = result.rule ? lintRuleIssues(result.rule, {}) : [];
+  const notes = [
+    ...result.notes,
+    ...lintIssues.map((issue) =>
+      issue.severity === "warning"
+        ? `I also noticed a lint note: ${issue.message}`
+        : `I also noticed a lint error: ${issue.message}`
+    ),
+  ];
 
   return {
-    rule: result.rule,
-    notes: result.notes,
+    rule: hasBlockingIssues(lintIssues) ? null : result.rule,
+    notes,
     suggestions: [],
     unresolved: result.unresolved,
     uncovered: result.uncovered,
@@ -241,9 +251,17 @@ function coerceGeminiPayload(raw: unknown, context: PromptContext): ParseAiRespo
     const normalized = normalizeRule(massageGeminiRule(obj.rule));
     enforceKnownAssignees(normalized, context, unresolved, notes);
     const validation = validateRule(normalized);
-    rule = validation.rule;
+    const lintIssues = lintRuleIssues(normalized, {});
+    rule = validation.rule && !hasBlockingIssues(lintIssues) ? validation.rule : null;
     for (const issue of validation.issues.filter((i) => i.severity === "error")) {
       notes.push(`I drafted a rule shape, but it needs one fix before saving: ${issue.message}`);
+    }
+    for (const issue of lintIssues) {
+      notes.push(
+        issue.severity === "warning"
+          ? `I also noticed a lint note: ${issue.message}`
+          : `I also noticed a lint error: ${issue.message}`
+      );
     }
   }
 

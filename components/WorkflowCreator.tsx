@@ -38,8 +38,10 @@ import RuleSentence from "@/components/RuleSentence";
 import ChatBox from "@/components/ChatBox";
 import WorkflowSidebar from "@/components/WorkflowSidebar";
 import SimulationPanel from "@/components/SimulationPanel";
+import LintPanel from "@/components/LintPanel";
 import PageHeader from "@/components/ui/PageHeader";
 import Toggle from "@/components/Toggle";
+import { lintRuleIssues, hasBlockingIssues, type LintContext } from "@/lib/ruleLinter";
 import {
   VocabularySource,
   buildOverlay,
@@ -196,6 +198,11 @@ export default function WorkflowCreator() {
     if (rule.controls.mode === "armed" && rule.actions.length === 0) {
       return pushToast("err", "Add at least one action, or switch the rule to shadow mode to observe.");
     }
+    // Phase 4: block save on any error-severity lint issue (§3).
+    if (lintBlocked) {
+      const first = lintIssues.find((i) => i.severity === "error");
+      return pushToast("err", `Fix the blocking lint issue before saving: ${first?.message ?? "see the issues panel."}`);
+    }
     setSaving(true);
     try {
       if (activeId) {
@@ -259,6 +266,23 @@ export default function WorkflowCreator() {
   const unconfirmed = useMemo(() => ruleUsesUnconfirmed(rule), [rule]);
   const enabledCount = workflows.filter((w) => w.enabled).length;
   const isBlank = !activeId && rule.conditions.children.length === 0 && rule.actions.length === 0;
+
+  // Phase 4 linter: semantic checks over the live registries. Errors block save.
+  const lintContext = useMemo<LintContext>(
+    () => ({
+      users: [...ASSIGNEES, ...(overlay?.instances.users?.map((u) => u.label) ?? [])],
+      templates: overlay?.instances.templates?.map((t) => t.id) ?? [],
+      stages: overlay?.instances.stages?.map((s) => s.label) ?? [],
+      authorityIds: authorities.map((a) => a.id),
+      liveFieldKeys: overlay?.liveFields?.map((f) => f.fieldId) ?? [],
+      peers: workflows
+        .filter((w) => w.id !== activeId)
+        .map((w) => ({ id: w.id, name: w.name, rule: normalizeRule(w.ruleJson), enabled: w.enabled })),
+    }),
+    [overlay, authorities, workflows, activeId]
+  );
+  const lintIssues = useMemo(() => lintRuleIssues(rule, lintContext), [rule, lintContext]);
+  const lintBlocked = useMemo(() => hasBlockingIssues(lintIssues), [lintIssues]);
 
   return (
     <div>
@@ -388,11 +412,12 @@ export default function WorkflowCreator() {
                     <button
                       type="button"
                       onClick={save}
-                      disabled={saving}
+                      disabled={saving || lintBlocked}
+                      title={lintBlocked ? "Resolve the blocking lint error before saving." : undefined}
                       className="ring-accent rounded-xl px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:brightness-110 disabled:opacity-50"
                       style={{ background: "var(--accent)" }}
                     >
-                      {saving ? "Saving…" : activeId ? "Update" : "Save workflow"}
+                      {saving ? "Saving…" : lintBlocked ? "Fix errors to save" : activeId ? "Update" : "Save workflow"}
                     </button>
                   </>
                 )}
@@ -473,6 +498,9 @@ export default function WorkflowCreator() {
               </div>
               <p className="text-[15px] leading-relaxed" style={{ color: "var(--fg)" }}>{summary}</p>
             </div>
+
+            {/* Phase 4 linter dashboard — blocking errors gate the Save button. */}
+            {!isPresentation && <LintPanel issues={lintIssues} className="mt-3" />}
 
             {unconfirmed && !isPresentation && (
               <div

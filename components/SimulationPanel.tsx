@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { WorkflowRule, getAction, paramKeyFor, ActionExecution, scopeLabel } from "@/lib/vocabulary";
 import { formatCurrency, PlatformRequest, REQUESTS } from "@/lib/platformData";
 import { matchingRequests } from "@/lib/ruleEngine";
-import { SimulateResult, simulateWorkflowRule } from "@/lib/api";
+import { SimulateResult, simulateWorkflowRule, backtestRule, BacktestResult } from "@/lib/api";
 import StatusBadge from "@/components/ui/StatusBadge";
 import TraceView from "@/components/TraceView";
 
@@ -38,6 +38,10 @@ export default function SimulationPanel({
   const [result, setResult] = useState<SimulateResult | null>(null);
   const [simError, setSimError] = useState<string | null>(null);
 
+  // Backtest: dry-run the rule across every request record at once (Phase 4 §2).
+  const [backtesting, setBacktesting] = useState(false);
+  const [backtest, setBacktest] = useState<BacktestResult | null>(null);
+
   const searchResults = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
@@ -61,6 +65,19 @@ export default function SimulationPanel({
       setSimError(e instanceof Error ? e.message : "Simulation failed");
     } finally {
       setSimulating(false);
+    }
+  }
+
+  async function runBacktest() {
+    setBacktesting(true);
+    setSimError(null);
+    try {
+      setBacktest(await backtestRule(rule));
+    } catch (e: unknown) {
+      setBacktest(null);
+      setSimError(e instanceof Error ? e.message : "Backtest failed");
+    } finally {
+      setBacktesting(false);
     }
   }
   const actions = useMemo(
@@ -147,10 +164,58 @@ export default function SimulationPanel({
           >
             {simulating ? "Simulating…" : "Simulate Rule"}
           </button>
+          <button
+            type="button"
+            onClick={runBacktest}
+            disabled={backtesting}
+            title="Dry-run this rule against every request record"
+            className="ring-accent shrink-0 rounded-xl border px-4 py-2 text-sm font-semibold transition-all hover:bg-[var(--accent-soft)] disabled:opacity-40"
+            style={{ borderColor: "var(--panel-border)", color: "var(--fg-muted)" }}
+          >
+            {backtesting ? "Backtesting…" : "Backtest all"}
+          </button>
         </div>
 
         {simError && (
           <p className="mt-2 text-xs" style={{ color: "var(--danger-fg)" }}>{simError}</p>
+        )}
+
+        {backtest && (
+          <div className="mt-3 rounded-xl border p-3" style={{ borderColor: "var(--panel-border)" }}>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span
+                className="rounded-full px-2.5 py-0.5 text-xs font-bold"
+                style={{
+                  background: backtest.matchCount ? "var(--tok-if-bg)" : "var(--tok-op-bg)",
+                  color: backtest.matchCount ? "var(--tok-if-fg)" : "var(--fg-subtle)",
+                }}
+              >
+                {backtest.matchCount} / {backtest.total} requests match
+              </span>
+              {backtest.alerts.length > 0 && (
+                <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ background: "var(--warn-bg)", color: "var(--warn-fg)" }}>
+                  {backtest.alerts.length} data alert{backtest.alerts.length === 1 ? "" : "s"}
+                </span>
+              )}
+            </div>
+            {backtest.matches.length > 0 && (
+              <div className="flex flex-col gap-1">
+                {backtest.matches.slice(0, 8).map((m) => (
+                  <div key={m.requestId} className="flex items-center justify-between gap-2 text-xs" style={{ color: "var(--fg-muted)" }}>
+                    <span className="min-w-0 truncate">
+                      <span className="font-medium" style={{ color: "var(--fg)" }}>{m.name}</span> · {m.requestId}
+                    </span>
+                    <span className="shrink-0" style={{ color: "var(--fg-subtle)" }}>
+                      {m.actions.length ? m.actions.join(", ") : "no actions"}
+                    </span>
+                  </div>
+                ))}
+                {backtest.matches.length > 8 && (
+                  <span className="text-xs" style={{ color: "var(--fg-subtle)" }}>+{backtest.matches.length - 8} more…</span>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         {result && (

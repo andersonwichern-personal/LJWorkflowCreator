@@ -9,10 +9,23 @@ const STATUS_STYLE: Record<ExecutionRecord["status"], { label: string; bg: strin
   FIRED: { label: "FIRED", bg: "var(--tok-if-bg)", fg: "var(--tok-if-fg)" },
   CONDITIONS_NOT_MET: { label: "SKIPPED", bg: "var(--tok-op-bg)", fg: "var(--fg-subtle)" },
   ERROR: { label: "ERROR", bg: "var(--danger-bg)", fg: "var(--danger-fg)" },
+  SHADOW: { label: "SHADOW", bg: "var(--tok-op-bg)", fg: "var(--fg-subtle)" },
+  PAUSED_ORG: { label: "PAUSED", bg: "var(--tok-op-bg)", fg: "var(--fg-subtle)" },
+  SKIPPED_DUPLICATE: { label: "SKIPPED", bg: "var(--tok-op-bg)", fg: "var(--fg-subtle)" },
+  PAUSED_RATE_LIMIT: { label: "PAUSED", bg: "var(--tok-op-bg)", fg: "var(--fg-subtle)" },
 };
 
+/** Enforcement-mode tag colors (Phase 4 §4). */
+const MODE_STYLE: Record<"armed" | "shadow", { label: string; bg: string; fg: string }> = {
+  armed: { label: "ARMED", bg: "var(--danger-bg)", fg: "var(--danger-fg)" },
+  shadow: { label: "SHADOW", bg: "var(--tok-when-bg)", fg: "var(--tok-when-fg)" },
+};
+
+const MODE_FILTERS = ["All", "Armed", "Shadow"] as const;
+type ModeFilter = (typeof MODE_FILTERS)[number];
+
 function isTrace(t: ExecutionRecord["evaluationTrace"]): t is EvaluationTrace {
-  return !!t && typeof t === "object" && "trigger" in t;
+  return !!t && typeof t === "object" && "triggers" in t;
 }
 
 /**
@@ -24,6 +37,7 @@ export default function AuditLogs() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<ExecutionRecord | null>(null);
+  const [modeFilter, setModeFilter] = useState<ModeFilter>("All");
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -42,6 +56,9 @@ export default function AuditLogs() {
   }, [refresh]);
 
   const fired = executions.filter((e) => e.status === "FIRED").length;
+  const visible = executions.filter((e) =>
+    modeFilter === "All" ? true : (e.mode ?? "shadow") === modeFilter.toLowerCase()
+  );
 
   return (
     <div>
@@ -50,11 +67,33 @@ export default function AuditLogs() {
         icon="🧾"
         actions={
           <>
+            <div
+              className="flex items-center rounded-xl border p-0.5"
+              style={{ borderColor: "var(--panel-border)", background: "var(--panel-solid)" }}
+              role="group"
+              aria-label="Filter by enforcement mode"
+            >
+              {MODE_FILTERS.map((f) => {
+                const active = modeFilter === f;
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setModeFilter(f)}
+                    aria-pressed={active}
+                    className="ring-accent rounded-[10px] px-3 py-1.5 text-xs font-semibold transition-all"
+                    style={active ? { background: "var(--accent)", color: "#fff" } : { color: "var(--fg-muted)" }}
+                  >
+                    {f}
+                  </button>
+                );
+              })}
+            </div>
             <span
               className="rounded-full px-3 py-1.5 text-xs font-medium"
               style={{ background: "var(--panel)", border: "1px solid var(--panel-border)", color: "var(--fg-muted)" }}
             >
-              {executions.length} evaluations · {fired} fired
+              {visible.length} shown · {fired} fired
             </span>
             <button
               type="button"
@@ -77,10 +116,11 @@ export default function AuditLogs() {
           <div className="px-4 py-10 text-center text-sm" style={{ color: "var(--danger-fg)" }}>
             {error}
           </div>
-        ) : executions.length === 0 ? (
+        ) : visible.length === 0 ? (
           <div className="m-4 rounded-xl border border-dashed px-4 py-10 text-center text-sm" style={{ borderColor: "var(--panel-border)", color: "var(--fg-subtle)" }}>
-            No rule evaluations logged yet. Select a saved workflow in the Rules Canvas and run
-            the simulator — attributable runs land here.
+            {executions.length === 0
+              ? "No rule evaluations logged yet. Select a saved workflow in the Rules Canvas and run the simulator — attributable runs land here."
+              : `No ${modeFilter.toLowerCase()} evaluations to show.`}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -91,13 +131,15 @@ export default function AuditLogs() {
                   <th className="px-4 py-3">Rule</th>
                   <th className="px-4 py-3">Request</th>
                   <th className="px-4 py-3">Trigger Event</th>
+                  <th className="px-4 py-3">Mode</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {executions.map((e) => {
+                {visible.map((e) => {
                   const s = STATUS_STYLE[e.status] ?? STATUS_STYLE.ERROR;
+                  const m = MODE_STYLE[(e.mode ?? "shadow") as "armed" | "shadow"];
                   return (
                     <tr
                       key={e.id}
@@ -117,6 +159,11 @@ export default function AuditLogs() {
                       </td>
                       <td className="px-4 py-3 text-xs font-semibold uppercase" style={{ color: "var(--fg-muted)" }}>
                         {e.eventName}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: m.bg, color: m.fg }}>
+                          {m.label}
+                        </span>
                       </td>
                       <td className="px-4 py-3">
                         <span className="rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: s.bg, color: s.fg }}>

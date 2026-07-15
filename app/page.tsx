@@ -5,6 +5,11 @@ import WorkflowCreator from "@/components/WorkflowCreator";
 import ApprovalAuthorities from "@/components/ApprovalAuthorities";
 import AuditLogs from "@/components/AuditLogs";
 import RoleSwitcher from "@/components/RoleSwitcher";
+import {
+  AutomationProvider,
+  AutomationPausedBanner,
+  PauseAutomationsButton,
+} from "@/components/AutomationControls";
 import { ViewpointProvider, useViewpoint } from "@/lib/viewpoint";
 
 const TABS = [
@@ -18,7 +23,9 @@ type TabKey = (typeof TABS)[number]["key"];
 export default function HomePage() {
   return (
     <ViewpointProvider>
-      <HomeShell />
+      <AutomationProvider>
+        <HomeShell />
+      </AutomationProvider>
     </ViewpointProvider>
   );
 }
@@ -65,6 +72,7 @@ function HomeShell() {
         </nav>
 
         <div className="flex items-center gap-3">
+          <PauseAutomationsButton />
           <RoleSwitcher />
 
           {/* Demo layout switch — clean client-facing vs full dev surface */}
@@ -96,6 +104,8 @@ function HomeShell() {
           </div>
         </div>
       </header>
+
+      <AutomationPausedBanner />
 
       <main className="mx-auto max-w-[1440px] px-5 py-6">
         {currentTab === "rules" ? (

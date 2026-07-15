@@ -289,6 +289,15 @@ export interface SimulateResult {
   logError?: string;
 }
 
+export type ExecutionStatus =
+  | "FIRED"
+  | "CONDITIONS_NOT_MET"
+  | "ERROR"
+  | "SHADOW"
+  | "PAUSED_ORG"
+  | "SKIPPED_DUPLICATE"
+  | "PAUSED_RATE_LIMIT";
+
 export interface ExecutionRecord {
   id: string;
   orgId: string;
@@ -296,7 +305,9 @@ export interface ExecutionRecord {
   requestId: string;
   requestName: string;
   eventName: string;
-  status: "FIRED" | "CONDITIONS_NOT_MET" | "ERROR";
+  status: ExecutionStatus;
+  /** Phase 4: enforcement mode captured at fire time. */
+  mode?: "shadow" | "armed";
   evaluationTrace: EvaluationTrace | { error?: string };
   actionsDispatched: string[];
   createdAt: string;
@@ -324,4 +335,70 @@ export async function listExecutions(): Promise<ExecutionRecord[]> {
     cache: "no-store",
   });
   return handle<ExecutionRecord[]>(res);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Phase 4 — backtest, fire, and org automation controls                      */
+/* -------------------------------------------------------------------------- */
+
+export interface BacktestResult {
+  total: number;
+  matchCount: number;
+  matches: { requestId: string; name: string; matchedTrigger: string | null; actions: string[] }[];
+  alerts: string[];
+}
+
+/** Dry-run a rule against every request record (no side effects, nothing logged). */
+export async function backtestRule(rule: WorkflowRule): Promise<BacktestResult> {
+  const res = await fetch(`/api/workflows/backtest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rule }),
+  });
+  return handle<BacktestResult>(res);
+}
+
+export interface FireResult {
+  outcome: ExecutionStatus;
+  fired: boolean;
+  matched?: boolean;
+  mode?: "shadow" | "armed";
+  reason?: string;
+  actions?: string[];
+  wouldRun?: string[];
+}
+
+/** Run the real fire path (guardrails enforced server-side). */
+export async function fireWorkflow(workflowId: string, requestId: string): Promise<FireResult> {
+  const orgId = await getOrgId();
+  const res = await fetch(`/api/workflows/${workflowId}/fire`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ requestId, orgId }),
+  });
+  return handle<FireResult>(res);
+}
+
+export interface OrgControls {
+  orgId: string;
+  automationsPaused: boolean;
+  updatedAt: string | null;
+}
+
+export async function getOrgControls(): Promise<OrgControls> {
+  const orgId = await getOrgId();
+  const res = await fetch(`/api/platform/controls?orgId=${encodeURIComponent(orgId)}`, {
+    cache: "no-store",
+  });
+  return handle<OrgControls>(res);
+}
+
+export async function setAutomationsPaused(paused: boolean): Promise<OrgControls> {
+  const orgId = await getOrgId();
+  const res = await fetch(`/api/platform/controls`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ orgId, automationsPaused: paused }),
+  });
+  return handle<OrgControls>(res);
 }

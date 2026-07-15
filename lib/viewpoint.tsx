@@ -14,23 +14,13 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { ACTIVE_ROLES, useActiveRole, type ActiveRole, type Persona } from "@/components/RoleSwitcher";
 
-export type ViewpointRole = "admin" | "approver" | "preparer";
+export type ViewpointRole = ActiveRole;
 export type ViewMode = "builder" | "presentation";
 
-export interface Persona {
-  /** Approver seat id used on tasks/decisions, e.g. "u-wael". */
-  id: string;
-  name: string;
-  role: ViewpointRole;
-  roleLabel: string;
-}
-
-export const PERSONAS: Persona[] = [
-  { id: "u-anderson", name: "Anderson", role: "admin", roleLabel: "Admin" },
-  { id: "u-wael", name: "Wael", role: "approver", roleLabel: "Approver" },
-  { id: "u-omar", name: "Omar", role: "preparer", roleLabel: "Preparer" },
-];
+export type { Persona } from "@/components/RoleSwitcher";
+export const PERSONAS = ACTIVE_ROLES as Persona[];
 
 /** Directory-less demo mapping: an assignee label → its approver seat id. */
 export function approverIdFor(label: string): string {
@@ -67,30 +57,26 @@ const ViewpointContext = createContext<ViewpointValue>({
   isPresentation: false,
 });
 
-const PERSONA_KEY = "wf-persona";
 const VIEWMODE_KEY = "wf-viewmode";
 
 export function ViewpointProvider({ children }: { children: React.ReactNode }) {
-  const [persona, setPersonaState] = useState<Persona>(PERSONAS[0]);
+  const { persona, setRole } = useActiveRole();
   const [viewMode, setViewModeState] = useState<ViewMode>("builder");
+  const setPersona = useCallback(
+    (p: Persona) => {
+      setRole(p.role);
+    },
+    [setRole]
+  );
 
   // Rehydrate after mount (SSR-safe): the switches survive reloads mid-demo.
   useEffect(() => {
     try {
-      const saved = PERSONAS.find((p) => p.id === localStorage.getItem(PERSONA_KEY));
-      if (saved) setPersonaState(saved);
       const mode = localStorage.getItem(VIEWMODE_KEY);
       if (mode === "presentation" || mode === "builder") setViewModeState(mode);
     } catch {
       /* private mode etc. — defaults stand */
     }
-  }, []);
-
-  const setPersona = useCallback((p: Persona) => {
-    setPersonaState(p);
-    try {
-      localStorage.setItem(PERSONA_KEY, p.id);
-    } catch {}
   }, []);
 
   const setViewMode = useCallback((m: ViewMode) => {

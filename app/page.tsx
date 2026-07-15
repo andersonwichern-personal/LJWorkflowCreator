@@ -4,7 +4,8 @@ import { useState } from "react";
 import WorkflowCreator from "@/components/WorkflowCreator";
 import ApprovalAuthorities from "@/components/ApprovalAuthorities";
 import AuditLogs from "@/components/AuditLogs";
-import { PERSONAS, ViewpointProvider, useViewpoint } from "@/lib/viewpoint";
+import RoleSwitcher from "@/components/RoleSwitcher";
+import { ViewpointProvider, useViewpoint } from "@/lib/viewpoint";
 
 const TABS = [
   { key: "rules", label: "Rules Canvas" },
@@ -24,7 +25,7 @@ export default function HomePage() {
 
 function HomeShell() {
   const [activeTab, setActiveTab] = useState<TabKey>("rules");
-  const { persona, setPersona, isPresentation, setViewMode } = useViewpoint();
+  const { isPresentation, setViewMode } = useViewpoint();
 
   // Presentation view hides the dev-facing audit surface entirely.
   const tabs = TABS.filter((t) => !(isPresentation && "builderOnly" in t && t.builderOnly));
@@ -64,30 +65,7 @@ function HomeShell() {
         </nav>
 
         <div className="flex items-center gap-3">
-          {/* Role switcher — impersonate a viewpoint to demo permission gating */}
-          <label className="flex items-center gap-2 text-xs font-medium" style={{ color: "var(--fg-subtle)" }}>
-            <span aria-hidden>👤</span>
-            <select
-              value={persona.id}
-              onChange={(e) => {
-                const next = PERSONAS.find((p) => p.id === e.target.value);
-                if (next) setPersona(next);
-              }}
-              aria-label="Viewing as"
-              className="ring-accent rounded-lg px-2.5 py-1.5 text-sm font-medium"
-              style={{
-                background: "var(--panel-solid)",
-                border: "1px solid var(--panel-border)",
-                color: "var(--fg)",
-              }}
-            >
-              {PERSONAS.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({p.roleLabel})
-                </option>
-              ))}
-            </select>
-          </label>
+          <RoleSwitcher />
 
           {/* Demo layout switch — clean client-facing vs full dev surface */}
           <div

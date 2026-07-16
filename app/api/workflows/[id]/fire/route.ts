@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { normalizeRule, ruleReferencesField } from "@/lib/vocabulary";
-import { EvaluationContext, simulateRule } from "@/lib/ruleEvaluator";
+import { normalizeRule } from "@/lib/vocabulary";
+import { simulateRule } from "@/lib/ruleEvaluator";
 import { getRequest } from "@/lib/platformData";
 import { WorkflowService } from "@/lib/services/workflow";
 import { RuleExecutionService } from "@/lib/services/execution";

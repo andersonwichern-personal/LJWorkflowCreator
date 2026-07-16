@@ -145,14 +145,28 @@ export function computeAggregateExposure(
   requests: readonly ExposureRequestLike[],
   customerId: string
 ): number {
-  const graph = buildCustomerGraph([...nodes], [...edges], customerId);
+  const nodeList = [...nodes];
+  const graph = buildCustomerGraph(nodeList, [...edges], customerId);
   if (!graph.canonical) return 0;
+
+  // Memoized: canonicalizeCustomerNode rebuilds an index of every node per call,
+  // and roles far outnumber customers — resolving each id once keeps this linear
+  // in roles instead of roles × customers.
+  const canonicalIds = new Map<string, string | null>();
+  const canonicalIdOf = (id: string): string | null => {
+    let canonical = canonicalIds.get(id);
+    if (canonical === undefined) {
+      canonical = canonicalizeCustomerNode(nodeList, id)?.id ?? null;
+      canonicalIds.set(id, canonical);
+    }
+    return canonical;
+  };
 
   const inGraph = new Set(graph.connected.map((node) => node.id));
   const requestIds = new Set<string>();
   for (const role of roles) {
-    const canonical = canonicalizeCustomerNode([...nodes], role.customerId);
-    if (canonical && inGraph.has(canonical.id)) requestIds.add(role.requestId);
+    const canonical = canonicalIdOf(role.customerId);
+    if (canonical && inGraph.has(canonical)) requestIds.add(role.requestId);
   }
 
   const byId = new Map(requests.map((request) => [request.id, request]));

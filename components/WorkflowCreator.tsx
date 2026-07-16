@@ -304,9 +304,10 @@ export default function WorkflowCreator({
             ruleJson: rule,
             enabled,
           },
-          workflows.find((w) => w.id === activeId)?.version
+          workflows.find((w) => w.id === activeId)?.version,
+          persona.id
         );
-        pushToast("ok", "Workflow updated.");
+        pushToast("ok", updated.pendingProposalId ? "Proposed changes sent for peer approval." : "Workflow updated.");
         setWorkflows((list) => list.map((w) => (w.id === updated.id ? updated : w)));
       } else {
         const created = await createWorkflow({
@@ -340,7 +341,11 @@ export default function WorkflowCreator({
     setWorkflows((list) => list.map((w) => (w.id === wf.id ? { ...w, enabled: next } : w)));
     if (wf.id === activeId) setEnabled(next);
     try {
-      await toggleWorkflow(wf.id, next);
+      const updated = await toggleWorkflow(wf.id, next, persona.id);
+      if (updated.pendingProposalId) {
+        pushToast("ok", "Enablement change sent for peer approval.");
+        setWorkflows((list) => list.map((w) => (w.id === wf.id ? updated : w)));
+      }
     } catch (e: unknown) {
       setWorkflows((list) => list.map((w) => (w.id === wf.id ? { ...w, enabled: !next } : w)));
       pushToast("err", errMsg(e, "Toggle failed"));
@@ -367,6 +372,7 @@ export default function WorkflowCreator({
   const unconfirmed = useMemo(() => ruleUsesUnconfirmed(rule), [rule]);
   const enabledCount = workflows.filter((w) => w.enabled).length;
   const isBlank = !activeId && rule.conditions.children.length === 0 && rule.actions.length === 0;
+  const editingLiveRule = Boolean(activeId && (enabled || rule.controls.mode === "armed"));
 
   // Phase 4 linter: semantic checks over the live registries. Errors block save.
   // Phase 11: stages/users/retailers carry their platform id so an instance ref
@@ -519,6 +525,14 @@ export default function WorkflowCreator({
                     {dirty ? "Unsaved changes" : "Saved"}
                   </span>
                 )}
+                {editingLiveRule && canWrite && (
+                  <span
+                    className="rounded-full px-2.5 py-1 text-[11px] font-medium"
+                    style={{ background: "var(--warn-bg)", color: "var(--warn-fg)" }}
+                  >
+                    Peer approval required
+                  </span>
+                )}
                 {canWrite && (
                   <>
                     {showSidebar && (
@@ -558,6 +572,8 @@ export default function WorkflowCreator({
                           ? "Fix errors to save"
                           : proposing
                             ? "Send proposal"
+                            : editingLiveRule
+                              ? "Propose changes"
                             : activeId
                               ? "Update"
                               : "Save workflow"}
@@ -741,11 +757,12 @@ export default function WorkflowCreator({
                     const updated = await updateWorkflow(
                       theirs.id,
                       { name: name.trim(), description: description.trim() || null, ruleJson: rule, enabled },
-                      theirs.version
+                      theirs.version,
+                      persona.id
                     );
                     setWorkflows((list) => list.map((w) => (w.id === updated.id ? updated : w)));
                     setDirty(false);
-                    pushToast("ok", "Overwrote with your version.");
+                    pushToast("ok", updated.pendingProposalId ? "Proposed your version for peer approval." : "Overwrote with your version.");
                   } catch (e: unknown) {
                     if (e instanceof ConflictError) {
                       setConflict({ current: e.current as WorkflowRecord });

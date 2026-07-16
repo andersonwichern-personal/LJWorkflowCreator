@@ -16,6 +16,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
   Check,
+  X,
   Eye,
   GitBranch,
   Lock,
@@ -28,8 +29,12 @@ import {
 import {
   ExecutionAnalytics,
   WorkflowRecord,
+  WorkflowProposalRecord,
+  approveWorkflowProposal,
   fetchExecutionAnalytics,
+  listWorkflowProposals,
   listWorkflows,
+  rejectWorkflowProposal,
   toggleWorkflow,
   updateWorkflow,
 } from "@/lib/api";
@@ -63,7 +68,8 @@ export default function WorkflowDashboard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Phase 7.1: Rules List vs Diagnostics & Analytics view.
-  const [activeTab, setActiveTab] = useState<"workflows" | "analytics">("workflows");
+  const [activeTab, setActiveTab] = useState<"workflows" | "proposals" | "analytics">("workflows");
+  const [proposals, setProposals] = useState<WorkflowProposalRecord[]>([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<ExecutionAnalytics | null>(null);
@@ -80,9 +86,22 @@ export default function WorkflowDashboard({
     }
   }, []);
 
+  const loadProposals = useCallback(async () => {
+    if (!canEdit) {
+      setProposals([]);
+      return;
+    }
+    try {
+      setProposals(await listWorkflowProposals());
+    } catch {
+      setProposals([]);
+    }
+  }, [canEdit]);
+
   useEffect(() => {
     load();
-  }, [load, reloadToken]);
+    void loadProposals();
+  }, [load, loadProposals, reloadToken]);
 
   useEffect(() => {
     if (activeTab !== "analytics") return;
@@ -109,7 +128,11 @@ export default function WorkflowDashboard({
     if (!canEdit) return; // read-only viewpoints can't flip enablement
     setWorkflows((list) => list.map((w) => (w.id === wf.id ? { ...w, enabled: next } : w)));
     try {
-      await toggleWorkflow(wf.id, next);
+      const updated = await toggleWorkflow(wf.id, next, persona.id);
+      if (updated.pendingProposalId) {
+        setWorkflows((list) => list.map((w) => (w.id === wf.id ? updated : w)));
+        await loadProposals();
+      }
     } catch {
       setWorkflows((list) => list.map((w) => (w.id === wf.id ? { ...w, enabled: !next } : w)));
     }
@@ -124,6 +147,18 @@ export default function WorkflowDashboard({
     } catch {
       /* optimistic; the toggle can retry */
     }
+  }
+
+  async function approvePendingProposal(proposal: WorkflowProposalRecord) {
+    if (!canEdit) return;
+    await approveWorkflowProposal(proposal.id, persona.id);
+    await Promise.all([load(), loadProposals()]);
+  }
+
+  async function rejectPendingProposal(proposal: WorkflowProposalRecord) {
+    if (!canEdit) return;
+    await rejectWorkflowProposal(proposal.id, persona.id);
+    await loadProposals();
   }
 
   const enabledCount = workflows.filter((w) => w.enabled).length;
@@ -189,7 +224,7 @@ export default function WorkflowDashboard({
       )}
 
       <div className="mb-4 flex items-center gap-2">
-        {(["workflows", "analytics"] as const).map((tab) => {
+        {(["workflows", "proposals", "analytics"] as const).map((tab) => {
           const active = activeTab === tab;
           return (
             <button
@@ -203,7 +238,7 @@ export default function WorkflowDashboard({
                   : { background: "var(--panel)", borderColor: "var(--panel-border)", color: "var(--fg-muted)" }
               }
             >
-              {tab === "workflows" ? "Rules List" : "Diagnostics & Analytics"}
+              {tab === "workflows" ? "Rules List" : tab === "proposals" ? `Proposals${proposals.length ? ` (${proposals.length})` : ""}` : "Diagnostics & Analytics"}
             </button>
           );
         })}
@@ -354,6 +389,72 @@ export default function WorkflowDashboard({
                       </tr>
                     );
                   })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : activeTab === "proposals" ? (
+        <div className="glass overflow-hidden rounded-2xl">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--panel-border)" }}>
+                  <Th>Workflow</Th>
+                  <Th>Proposer</Th>
+                  <Th>Change</Th>
+                  <Th className="text-right">Review</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {proposals.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-10 text-center text-sm" style={{ color: "var(--fg-subtle)" }}>
+                      No pending workflow proposals.
+                    </td>
+                  </tr>
+                )}
+                {proposals.map((proposal) => (
+                  <tr key={proposal.id} style={{ borderBottom: "1px solid var(--panel-border)" }}>
+                    <td className="px-4 py-3">
+                      <div className="font-medium" style={{ color: "var(--fg)" }}>
+                        {proposal.workflow?.name ?? proposal.workflowId}
+                      </div>
+                      <div className="mt-0.5 text-xs" style={{ color: "var(--fg-subtle)" }}>
+                        {proposal.taskId ? `Task ${proposal.taskId}` : "Task pending authority setup"}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-xs" style={{ color: "var(--fg-muted)" }}>
+                      {proposal.proposerId}
+                    </td>
+                    <td className="px-4 py-3">
+                      <pre className="max-h-28 overflow-auto rounded-lg border p-2 text-[10px]" style={{ borderColor: "var(--panel-border)", color: "var(--fg-subtle)", background: "var(--bg)" }}>
+                        {JSON.stringify({ current: proposal.workflow?.ruleJson ?? null, proposed: proposal.proposedRule, enabled: proposal.proposedEnabled }, null, 2)}
+                      </pre>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => approvePendingProposal(proposal)}
+                          className="ring-accent inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+                          style={{ background: "var(--accent)" }}
+                          disabled={proposal.proposerId === persona.id}
+                        >
+                          <Check size={13} strokeWidth={2.5} /> Approve
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => rejectPendingProposal(proposal)}
+                          className="ring-accent inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors hover:bg-[var(--danger-bg)] disabled:opacity-50"
+                          style={{ borderColor: "var(--danger-br)", color: "var(--danger-fg)" }}
+                          disabled={proposal.proposerId === persona.id}
+                        >
+                          <X size={13} strokeWidth={2.5} /> Reject
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

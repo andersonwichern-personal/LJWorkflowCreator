@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { WorkflowService } from "@/lib/services/workflow";
+import { ProposalRequiredError, WorkflowService } from "@/lib/services/workflow";
 import { conflictPayload, isVersionConflict } from "@/lib/optimisticWrite";
 
 /**
@@ -64,16 +64,26 @@ export async function PATCH(
     const body = await req.json();
     // Phase 8 §12: expectedVersion rides beside the field updates; a stale
     // version surfaces as 409 + the server's current record (no silent loss).
-    const { expectedVersion, ...updates } = body ?? {};
+    const { expectedVersion, proposerId, ...updates } = body ?? {};
 
     const workflow = await WorkflowService.updateWorkflow(
       id,
       orgId,
       updates,
-      typeof expectedVersion === "number" ? expectedVersion : undefined
+      typeof expectedVersion === "number" ? expectedVersion : undefined,
+      typeof proposerId === "string" && proposerId.trim() ? proposerId.trim() : undefined
     );
     return NextResponse.json(workflow);
   } catch (error: any) {
+    if (error instanceof ProposalRequiredError) {
+      const orgId = getOrgId(req);
+      const { id } = await context.params;
+      const current = orgId ? await WorkflowService.getWorkflowById(id, orgId) : null;
+      return NextResponse.json(
+        { ...current, pendingProposalId: error.proposalId, proposalStatus: "pending" },
+        { status: 202 }
+      );
+    }
     if (isVersionConflict(error)) {
       return NextResponse.json(conflictPayload(error), { status: 409 });
     }

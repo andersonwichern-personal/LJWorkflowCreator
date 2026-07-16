@@ -236,6 +236,10 @@ export class ApprovalTaskService {
       data: { status: statusFrom(status) },
       include: TASK_INCLUDE,
     });
+    if (status.satisfied) {
+      const { WorkflowProposalService } = await import("@/lib/services/workflowProposal");
+      await WorkflowProposalService.applyApprovedTask(taskId);
+    }
 
     return { task: updated, status };
   }

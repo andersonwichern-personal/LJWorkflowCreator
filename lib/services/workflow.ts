@@ -2,6 +2,20 @@ import { prisma } from "@/lib/prisma";
 import { Workflow, Prisma } from "@prisma/client";
 import { validateRule } from "@/lib/ruleValidation";
 import { VersionConflictError } from "@/lib/optimisticWrite";
+import { shouldProposeWorkflowWrite } from "@/lib/fourEyes";
+
+/**
+ * Phase 13 four-eyes: the caller tried to change a protected rule directly.
+ * The change is not lost — it has been filed as `proposalId` for a peer admin
+ * to approve — so this is a redirect, not a failure. The route turns it into a
+ * 202 carrying the proposal id.
+ */
+export class ProposalRequiredError extends Error {
+  constructor(readonly proposalId: string) {
+    super("This rule is protected — your change was filed as a proposal for a peer admin to approve.");
+    this.name = "ProposalRequiredError";
+  }
+}
 
 /**
  * The versioned rule JSON contract lives in `@/lib/vocabulary` (the single
@@ -96,7 +110,9 @@ export class WorkflowService {
       ruleJson: Prisma.InputJsonValue;
     }>,
     /** Phase 8 §12: caller's last-read version. Absent → legacy last-write-wins. */
-    expectedVersion?: number
+    expectedVersion?: number,
+    /** Phase 13: who is making the change. Absent → unattributed/system write. */
+    proposerId?: string
   ): Promise<Workflow> {
     if (!id) {
       throw new Error("Workflow ID is required for updates");
@@ -111,6 +127,32 @@ export class WorkflowService {
     });
     if (!existing) {
       throw new Error("Workflow not found or access denied");
+    }
+
+    // Four-eyes: a change to a protected rule never lands directly — it becomes
+    // a proposal for someone else to approve. Only an attributed caller can be
+    // held to the gate; an unattributed write has no maker to check against, so
+    // it is refused rather than waved through.
+    if (
+      shouldProposeWorkflowWrite({
+        currentRule: existing.ruleJson,
+        currentEnabled: existing.enabled,
+        nextRule: updates.ruleJson,
+        nextEnabled: updates.enabled,
+      })
+    ) {
+      if (!proposerId?.trim()) {
+        throw new Error("A proposer ID is required to change a live rule");
+      }
+      const { WorkflowProposalService } = await import("@/lib/services/workflowProposal");
+      const proposal = await WorkflowProposalService.createProposal({
+        orgId,
+        workflowId: id,
+        proposerId,
+        proposedRule: updates.ruleJson ?? existing.ruleJson,
+        proposedEnabled: updates.enabled ?? null,
+      });
+      throw new ProposalRequiredError(proposal.id);
     }
 
     const data: Prisma.WorkflowUpdateInput = {};

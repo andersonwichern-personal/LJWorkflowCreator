@@ -1,0 +1,48 @@
+import { NextRequest, NextResponse } from "next/server";
+import { WorkflowProposalService } from "@/lib/services/workflowProposal";
+
+function getOrgId(req: NextRequest, bodyOrg?: unknown): string | null {
+  if (typeof bodyOrg === "string" && bodyOrg.trim()) return bodyOrg.trim();
+  const { searchParams } = new URL(req.url);
+  return searchParams.get("orgId") || searchParams.get("org_id");
+}
+
+function errorResponse(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message : fallback;
+  const status = /not found|access denied/i.test(message)
+    ? 404
+    : /required|invalid|cannot/i.test(message)
+    ? 400
+    : 500;
+  return NextResponse.json({ error: message }, { status });
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const orgId = getOrgId(req);
+    if (!orgId) return NextResponse.json({ error: "orgId query parameter is required" }, { status: 400 });
+    return NextResponse.json(await WorkflowProposalService.listPending(orgId));
+  } catch (error: unknown) {
+    console.error("Failed to list workflow proposals:", error);
+    return errorResponse(error, "Failed to list workflow proposals");
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const orgId = getOrgId(req, body.orgId);
+    if (!orgId) return NextResponse.json({ error: "orgId query parameter is required" }, { status: 400 });
+    const proposal = await WorkflowProposalService.createProposal({
+      orgId,
+      workflowId: body.workflowId,
+      proposerId: body.proposerId,
+      proposedRule: body.proposedRule,
+      proposedEnabled: body.proposedEnabled,
+    });
+    return NextResponse.json(proposal, { status: 201 });
+  } catch (error: unknown) {
+    console.error("Failed to create workflow proposal:", error);
+    return errorResponse(error, "Failed to create workflow proposal");
+  }
+}

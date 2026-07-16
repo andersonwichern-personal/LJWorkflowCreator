@@ -37,6 +37,8 @@ export interface WorkflowRecord {
   version: number;
   createdAt: string;
   updatedAt: string;
+  pendingProposalId?: string;
+  proposalStatus?: string;
 }
 
 /** Phase 8 §12 — a guarded save lost the race; `current` is the server's record. */
@@ -106,21 +108,26 @@ export async function updateWorkflow(
     ruleJson: WorkflowRule;
   }>,
   /** Pass the record's `version` to arm the conflict guard (§12); 409 → ConflictError. */
-  expectedVersion?: number
+  expectedVersion?: number,
+  proposerId?: string
 ): Promise<WorkflowRecord> {
   const orgId = await getOrgId();
   const res = await fetch(`/api/workflows/${id}?orgId=${encodeURIComponent(orgId)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(
-      typeof expectedVersion === "number" ? { ...updates, expectedVersion } : updates
+      {
+        ...updates,
+        ...(typeof expectedVersion === "number" ? { expectedVersion } : {}),
+        ...(proposerId ? { proposerId } : {}),
+      }
     ),
   });
   return normalizeRecord(await handle<WorkflowRecord>(res));
 }
 
-export async function toggleWorkflow(id: string, enabled: boolean): Promise<WorkflowRecord> {
-  return updateWorkflow(id, { enabled });
+export async function toggleWorkflow(id: string, enabled: boolean, proposerId?: string): Promise<WorkflowRecord> {
+  return updateWorkflow(id, { enabled }, undefined, proposerId);
 }
 
 export async function deleteWorkflow(id: string): Promise<void> {
@@ -129,6 +136,59 @@ export async function deleteWorkflow(id: string): Promise<void> {
     method: "DELETE",
   });
   await handle<{ success: boolean }>(res);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Workflow Proposals — maker-checker queue                                   */
+/* -------------------------------------------------------------------------- */
+
+export interface WorkflowProposalRecord {
+  id: string;
+  orgId: string;
+  workflowId: string;
+  proposedRule: WorkflowRule;
+  proposedEnabled: boolean | null;
+  proposerId: string;
+  status: "pending" | "approved" | "rejected";
+  taskId: string | null;
+  createdAt: string;
+  workflow: { id: string; name: string; ruleJson: WorkflowRule; enabled: boolean } | null;
+}
+
+function normalizeProposal(rec: WorkflowProposalRecord): WorkflowProposalRecord {
+  return {
+    ...rec,
+    proposedRule: normalizeRule(rec.proposedRule),
+    workflow: rec.workflow ? { ...rec.workflow, ruleJson: normalizeRule(rec.workflow.ruleJson) } : null,
+  };
+}
+
+export async function listWorkflowProposals(): Promise<WorkflowProposalRecord[]> {
+  const orgId = await getOrgId();
+  const res = await fetch(`/api/workflows/proposals?orgId=${encodeURIComponent(orgId)}`, {
+    cache: "no-store",
+  });
+  return (await handle<WorkflowProposalRecord[]>(res)).map(normalizeProposal);
+}
+
+export async function approveWorkflowProposal(id: string, approverId: string): Promise<WorkflowProposalRecord> {
+  const orgId = await getOrgId();
+  const res = await fetch(`/api/workflows/proposals/${id}/approve?orgId=${encodeURIComponent(orgId)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ approverId }),
+  });
+  return normalizeProposal(await handle<WorkflowProposalRecord>(res));
+}
+
+export async function rejectWorkflowProposal(id: string, approverId: string): Promise<WorkflowProposalRecord> {
+  const orgId = await getOrgId();
+  const res = await fetch(`/api/workflows/proposals/${id}/reject?orgId=${encodeURIComponent(orgId)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ approverId }),
+  });
+  return normalizeProposal(await handle<WorkflowProposalRecord>(res));
 }
 
 /* -------------------------------------------------------------------------- */

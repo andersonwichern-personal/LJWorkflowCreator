@@ -5,6 +5,7 @@ export {};
 // for the functions under test.
 
 import { canonicalizeCustomerNode, type CustomerNodeLike } from "../lib/services/customerGraphPure";
+import { summarizeExposureGraph } from "../lib/services/exposure";
 import { roleHolderExclusions, sortCustomersByName } from "../lib/services/customer";
 
 let failures = 0;
@@ -60,8 +61,27 @@ const sorted = sortCustomersByName([
 ]);
 t("customers sort by name", sorted.map((c) => c.name).join(",") === "Alpha,Zulu");
 
-if (failures) {
-  console.error(`\n${failures} entity-integrity assertion(s) FAILED`);
-  process.exit(1);
+// 4. exposure summaries are derived from graph data, not stubbed zeros.
+const exposureSummary = summarizeExposureGraph({
+  canonical: { id: "c1", orgId: org, name: "Prairie Gold", status: "active", mergedIntoId: null },
+  connected: [
+    { id: "c1", name: "Prairie Gold", status: "active" },
+    { id: "c2", name: "Dale Hendricks", status: "merged" },
+  ],
+  edges: [{ fromId: "c2", toId: "c1", relationType: "Guarantor" }],
+  brokenRefs: ["Broken customer edge x -> y"],
+});
+t("aggregate exposure anchors to the canonical customer", exposureSummary.canonicalCustomerId === "c1");
+t("aggregate exposure counts connected parties", exposureSummary.connectedPartyCount === 1);
+t("aggregate exposure counts relationships and broken refs", exposureSummary.relationshipCount === 1 && exposureSummary.brokenReferenceCount === 1);
+t("aggregate exposure preserves connected customers", exposureSummary.connectedCustomers.length === 2);
+
+async function main() {
+  if (failures) {
+    console.error(`\n${failures} entity-integrity assertion(s) FAILED`);
+    process.exit(1);
+  }
+  console.log("\nAll entity-integrity assertions passed.");
 }
-console.log("\nAll entity-integrity assertions passed.");
+
+void main();

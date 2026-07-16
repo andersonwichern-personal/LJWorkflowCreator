@@ -60,74 +60,82 @@ export async function mergeCustomers(
     };
   }
 
-  // 1. Repoint request roles + relationship edges from duplicate → survivor.
-  const [roles, fromRels, toRels] = await prisma.$transaction([
-    prisma.requestCustomerRole.updateMany({
-      where: { orgId, customerId: duplicateId },
-      data: { customerId: survivorId },
-    }),
-    prisma.customerRelationship.updateMany({
-      where: { orgId, fromId: duplicateId },
-      data: { fromId: survivorId },
-    }),
-    prisma.customerRelationship.updateMany({
-      where: { orgId, toId: duplicateId },
-      data: { toId: survivorId },
-    }),
-  ]);
+  const result = await prisma.$transaction(async (tx) => {
+    // 1. Repoint request roles + relationship edges from duplicate → survivor.
+    const [roles, fromRels, toRels] = await Promise.all([
+      tx.requestCustomerRole.updateMany({
+        where: { orgId, customerId: duplicateId },
+        data: { customerId: survivorId },
+      }),
+      tx.customerRelationship.updateMany({
+        where: { orgId, fromId: duplicateId },
+        data: { fromId: survivorId },
+      }),
+      tx.customerRelationship.updateMany({
+        where: { orgId, toId: duplicateId },
+        data: { toId: survivorId },
+      }),
+    ]);
 
-  // 2. Repoint workflow rule refs (customer_name instance refs) dup → survivor.
-  const workflows = await prisma.workflow.findMany({ where: { orgId } });
-  const ruleRefsRepointed: { workflowId: string; name: string }[] = [];
-  for (const wf of workflows) {
-    const { rule, changed } = rewriteCustomerInstanceRefs(
-      wf.ruleJson,
-      duplicateId,
-      survivorId,
-      survivor.name
-    );
-    if (!changed) continue;
-    await prisma.workflow.update({
-      where: { id: wf.id },
-      data: { ruleJson: rule as unknown as Prisma.InputJsonValue },
-    });
-    ruleRefsRepointed.push({ workflowId: wf.id, name: wf.name });
-  }
+    // 2. Repoint workflow rule refs (customer_name instance refs) dup → survivor.
+    const workflows = await tx.workflow.findMany({ where: { orgId } });
+    const ruleRefsRepointed: { workflowId: string; name: string }[] = [];
+    for (const wf of workflows) {
+      const { rule, changed } = rewriteCustomerInstanceRefs(
+        wf.ruleJson,
+        duplicateId,
+        survivorId,
+        survivor.name
+      );
+      if (!changed) continue;
+      await tx.workflow.update({
+        where: { id: wf.id },
+        data: { ruleJson: rule as unknown as Prisma.InputJsonValue },
+      });
+      ruleRefsRepointed.push({ workflowId: wf.id, name: wf.name });
+    }
 
-  // 3. Alias the duplicate (never delete) + append an immutable audit row.
-  await prisma.$transaction([
-    prisma.customer.update({
-      where: { id: duplicateId },
-      data: {
-        status: "merged",
-        mergedIntoId: survivorId,
-        version: { increment: 1 },
-      },
-    }),
-    prisma.platformAuditLog.create({
-      data: {
-        orgId,
-        type: "CUSTOMERS_MERGED",
-        subjectType: "customer",
-        subjectId: duplicateId,
-        payload: {
-          survivorId,
-          duplicateId,
-          movedRoles: roles.count,
-          movedRelationships: fromRels.count + toRels.count,
-          ruleRefsRepointed: ruleRefsRepointed.map((r) => r.workflowId),
-          reason: opts.reason,
+    // 3. Alias the duplicate (never delete) + append an immutable audit row.
+    await Promise.all([
+      tx.customer.update({
+        where: { id: duplicateId },
+        data: {
+          status: "merged",
+          mergedIntoId: survivorId,
+          version: { increment: 1 },
         },
-        actorId: opts.actorId,
-      },
-    }),
-  ]);
+      }),
+      tx.platformAuditLog.create({
+        data: {
+          orgId,
+          type: "CUSTOMERS_MERGED",
+          subjectType: "customer",
+          subjectId: duplicateId,
+          payload: {
+            survivorId,
+            duplicateId,
+            movedRoles: roles.count,
+            movedRelationships: fromRels.count + toRels.count,
+            ruleRefsRepointed: ruleRefsRepointed.map((r) => r.workflowId),
+            reason: opts.reason,
+          },
+          actorId: opts.actorId,
+        },
+      }),
+    ]);
+
+    return {
+      movedRoles: roles.count,
+      movedRelationships: fromRels.count + toRels.count,
+      ruleRefsRepointed,
+    };
+  });
 
   return {
     survivorId,
     duplicateId,
-    movedRoles: roles.count,
-    movedRelationships: fromRels.count + toRels.count,
-    ruleRefsRepointed,
+    movedRoles: result.movedRoles,
+    movedRelationships: result.movedRelationships,
+    ruleRefsRepointed: result.ruleRefsRepointed,
   };
 }

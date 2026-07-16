@@ -109,6 +109,7 @@ export class CustomerService {
 
   static async listRolesForRequest(orgId: string, requestId: string): Promise<RequestCustomerRole[]> {
     const prisma = await getPrisma();
+    await seedCustomers(orgId);
     const rows = await prisma.requestCustomerRole.findMany({ where: { orgId, requestId } });
     return rows.map((row) => ({
       id: row.id,
@@ -122,6 +123,7 @@ export class CustomerService {
   static async relatedTo(orgId: string, customerId: string): Promise<CustomerRecord[]> {
     const prisma = await getPrisma();
     const { loadCustomerGraph } = await import("./customerGraph");
+    await seedCustomers(orgId);
     const [graph, customers] = await Promise.all([
       loadCustomerGraph(orgId, customerId),
       prisma.customer.findMany({ where: { orgId } }),

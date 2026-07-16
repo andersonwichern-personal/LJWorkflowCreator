@@ -1,13 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { AlertTriangle, ArrowDown, ArrowRight, Filter, Play, Zap } from "lucide-react";
 import { ParseAmbiguity, ParseOptions, UnresolvedSlot } from "@/lib/nlParser";
 import {
   WorkflowRule,
-  EVENTS,
-  FIELDS,
-  ASSIGNEES,
   getEvent,
   getAction,
   opLabel,
@@ -20,7 +17,12 @@ import {
   walkLeaves,
 } from "@/lib/vocabulary";
 import { loadLiveVocabulary, buildOverlay, type VocabOverlay } from "@/lib/liveVocabulary";
-import { fuzzyMatches } from "@/lib/fuzzy";
+import {
+  applyCompletion,
+  buildCandidates,
+  suggestCompletions,
+  type AutocompleteMatch,
+} from "@/lib/autocomplete";
 
 export interface ChatDraftMeta {
   unresolved: UnresolvedSlot[];
@@ -54,7 +56,7 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
 
   // Real-time Autocomplete States
   const [vocab, setVocab] = useState<VocabOverlay | null>(null);
-  const [autocomplete, setAutocomplete] = useState<string[]>([]);
+  const [autocomplete, setAutocomplete] = useState<AutocompleteMatch[]>([]);
   const [activeSelectionIndex, setActiveSelectionIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -72,115 +74,21 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
     };
   }, []);
 
+  // Rebuilt only when the live vocabulary overlay changes, not per keystroke.
+  const candidates = useMemo(() => buildCandidates(vocab), [vocab]);
+
   function handleInputChange(text: string) {
     setInput(text);
-    if (!text.trim()) {
-      setAutocomplete([]);
-      return;
-    }
-
-    const words = text.split(/[\s,]+/);
-    const lastWord = words[words.length - 1] || "";
-    if (lastWord.length < 2) {
-      setAutocomplete([]);
-      return;
-    }
-
-    // Determine syntax context based on active/previous keyword cues.
-    const normalized = text.toLowerCase();
-    let priority: "events" | "fields" | "assignees" | "none" = "none";
-
-    if (/\b(?:when|whenever)\b\s*[^,\.]*$/.test(normalized)) {
-      priority = "events";
-    } else if (/\b(?:if|where|and|or)\b\s*[^,\.]*$/.test(normalized)) {
-      priority = "fields";
-    } else if (/\b(?:assign|route|escalate|notify|to)\b\s*[^,\.]*$/.test(normalized)) {
-      priority = "assignees";
-    }
-
-    // Accumulate target options categorized by type.
-    const events: string[] = [];
-    EVENTS.forEach(e => {
-      events.push(e.label);
-      events.push(e.key);
-    });
-
-    const fields: string[] = [];
-    Object.values(FIELDS).forEach(f => {
-      fields.push(f.label);
-    });
-
-    const assignees: string[] = [];
-    ASSIGNEES.filter(a => /team$/i.test(a)).forEach(t => {
-      assignees.push(t);
-    });
-    if (vocab) {
-      vocab.instances.users.forEach(u => assignees.push(u.label));
-      vocab.instances.retailers.forEach(r => assignees.push(r.label));
-      vocab.instances.templates.forEach(t => assignees.push(t.label));
-      vocab.instances.stages.forEach(s => assignees.push(s.label));
-    }
-
-    // Prioritize candidates list based on grammar context
-    let candidates: string[] = [];
-    if (priority === "events") {
-      candidates = [...events, ...fields, ...assignees];
-    } else if (priority === "fields") {
-      candidates = [...fields, ...events, ...assignees];
-    } else if (priority === "assignees") {
-      candidates = [...assignees, ...fields, ...events];
-    } else {
-      candidates = [...events, ...fields, ...assignees];
-    }
-
-    // Check sliding window inputs to support multi-word queries
-    const tokensToSearch: string[] = [];
-    tokensToSearch.push(lastWord);
-    if (words.length >= 2) {
-      tokensToSearch.push(`${words[words.length - 2]} ${lastWord}`);
-    }
-    if (words.length >= 3) {
-      tokensToSearch.push(`${words[words.length - 3]} ${words[words.length - 2]} ${lastWord}`);
-    }
-
-    // Collect best matches over tokens
-    let matches: string[] = [];
-    for (const needle of tokensToSearch) {
-      const currentMatches = fuzzyMatches(needle, candidates, 5);
-      if (currentMatches.length > 0) {
-        matches = [...matches, ...currentMatches];
-      }
-    }
-
-    const uniqueMatches = Array.from(new Set(matches)).slice(0, 5);
-    setAutocomplete(uniqueMatches);
+    setAutocomplete(text.trim() ? suggestCompletions(text, candidates) : []);
     setActiveSelectionIndex(0);
   }
 
-  function acceptSuggestion(suggestion: string) {
-    const words = input.split(/[\s,]+/);
-    // Decide how many trailing input words the suggestion replaces using the
-    // SAME fuzzy matcher that produced it — a strict substring test misses
-    // typo matches ("loan aproved" → "LOAN APPROVED") and duplicates words
-    // (review finding). Widest window wins.
-    const suggestionWords = suggestion.toLowerCase().split(/\s+/);
-    const windowMatches = (k: number) =>
-      fuzzyMatches(words.slice(-k).join(" ").toLowerCase(), [suggestion], 1).length > 0;
-    let matchedCount = 1;
-    if (words.length >= 3 && suggestionWords.length >= 3 && windowMatches(3)) {
-      matchedCount = 3;
-    } else if (words.length >= 2 && suggestionWords.length >= 2 && windowMatches(2)) {
-      matchedCount = 2;
-    }
-
-    // Replace the trailing parsed tokens with the full suggestion
-    words.splice(words.length - matchedCount, matchedCount, suggestion);
-    const joined = words.join(" ") + " ";
-    setInput(joined);
+  /** Each match carries the window it matched on, so accepting swaps exactly
+   *  those 1–3 words — no re-deriving the window from the finished string. */
+  function acceptSuggestion(match: AutocompleteMatch) {
+    setInput(applyCompletion(input, match));
     setAutocomplete([]);
-    if (textareaRef.current) {
-      textareaRef.current.focus();
-    }
+    textareaRef.current?.focus();
   }
 
   async function run(text: string, forceEvent?: string) {
@@ -293,7 +201,7 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
               const active = idx === activeSelectionIndex;
               return (
                 <div
-                  key={match}
+                  key={match.value}
                   onClick={() => acceptSuggestion(match)}
                   onMouseEnter={() => setActiveSelectionIndex(idx)}
                   className="flex items-center justify-between px-3 py-1.5 text-xs font-semibold rounded-xl cursor-pointer transition-colors"
@@ -302,7 +210,7 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
                     color: active ? "var(--accent)" : "var(--fg)",
                   }}
                 >
-                  <span>{match}</span>
+                  <span>{match.value}</span>
                   {active && (
                     <span className="text-[9px] uppercase tracking-wider opacity-60">
                       Press Tab/Enter to autocomplete

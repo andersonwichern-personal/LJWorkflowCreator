@@ -207,8 +207,36 @@ below CLI v21's floor), standalone components, SCSS, no SSR.
       serves `/workflows`, workspace tests 149/149. NOT yet verified: a human
       click-through (no browser automation in this session).
 
-Next tranche candidates (product call): simulator/backtest port, proposals
-UI, live vocabulary service, ScopeRef authoring, Monaco, real guard wiring.
+### Tranche 2 — LANDED (`5fe49c7`)
+
+- [x] Simulator + backtest: `core/{platformData,ruleEvaluator,ruleEngine}.ts`
+      ported verbatim (+ `core/api.ts` type-only WorkflowRecord shim);
+      SimulationPanel traces triggers/conditions (depth-indented, unknown vs
+      empty), else-lane, alerts; backtest over the seed dataset.
+- [x] Four-eyes: `core/fourEyes.ts` verbatim (`@/lib/*` path mapped in
+      tsconfig); mock service intercepts protected writes → pending proposal
+      (SaveOutcome = the 202 contract); builder relabels Save → "Propose
+      changes" via the same shared gate + pending banner; Proposals page with
+      current-vs-proposed diff and approve/reject; list chips + count.
+- [x] Vocabulary seam: VocabularyService probes documents/products/workflows
+      sources through the production headers when configured; Live/Partial/
+      Demo chip. Pickers still serve STATIC vocabulary — live overlay into
+      pickers is the next increment.
+- [x] Tests: workspace suite now **233 assertions exit 0** (+ operators,
+      customer-eval, scope ports; + assert-angular-seam.ts covering the gate
+      truth table and the mock proposal lifecycle). `ng build` clean.
+
+### Viewing / deployment status
+
+- Local: `npm start` in `angular-workflows/` → http://localhost:4200/workflows
+  (mock backend, zero config).
+- Vercel: `vercel.json` (SPA rewrites, output dir) is committed and the CLI is
+  authenticated, but this session's permission mode blocks `vercel deploy` and
+  `git push` — **needs Anderson**: run `npx vercel deploy --prod --yes` inside
+  `angular-workflows/`, or add a permission rule so Claude can deploy.
+
+Next tranche candidates (product call): live vocab overlay into pickers,
+ScopeRef authoring, analytics/audit-log port, Monaco, real guard wiring.
 
 ---
 

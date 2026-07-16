@@ -4,7 +4,11 @@ export {};
 // (canonicalize) and role-holder exclusion derivation. No mock literals stand in
 // for the functions under test.
 
-import { canonicalizeCustomerNode, type CustomerNodeLike } from "../lib/services/customerGraphPure";
+import {
+  buildCustomerGraph,
+  canonicalizeCustomerNode,
+  type CustomerNodeLike,
+} from "../lib/services/customerGraphPure";
 import { summarizeExposureGraph } from "../lib/services/exposure";
 import { roleHolderExclusions, sortCustomersByName } from "../lib/services/customer";
 
@@ -75,6 +79,23 @@ t("aggregate exposure anchors to the canonical customer", exposureSummary.canoni
 t("aggregate exposure counts connected parties", exposureSummary.connectedPartyCount === 1);
 t("aggregate exposure counts relationships and broken refs", exposureSummary.relationshipCount === 1 && exposureSummary.brokenReferenceCount === 1);
 t("aggregate exposure preserves connected customers", exposureSummary.connectedCustomers.length === 2);
+
+// 5. the graph walk counts a dangling edge once, not once per traversal pass.
+// Edge order here forces three passes: n3 is only reachable after n2 is added.
+const walkNodes: CustomerNodeLike[] = [node("n1", null), node("n2", null), node("n3", null)];
+const walked = buildCustomerGraph(
+  walkNodes,
+  [
+    { fromId: "n2", toId: "n3", relationType: "Guarantor" },
+    { fromId: "gone", toId: "n1", relationType: "Guarantor" },
+    { fromId: "n1", toId: "n2", relationType: "Guarantor" },
+  ],
+  "n1"
+);
+t("graph walk reaches a node only linked on a later pass", walked.connected.length === 3);
+t("a dangling edge is reported exactly once", walked.brokenRefs.length === 1, `got ${walked.brokenRefs.length}`);
+t("a dangling endpoint never enters the connected set", !walked.connected.some((n) => n.id === "gone"));
+t("an unknown anchor reports itself broken", buildCustomerGraph(walkNodes, [], "nope").brokenRefs.length === 1);
 
 async function main() {
   if (failures) {

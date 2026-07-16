@@ -1,4 +1,4 @@
-import { canonicalizeCustomerNode } from "./customerGraphPure";
+import { buildCustomerGraph } from "./customerGraphPure";
 
 export type CustomerStatus = "active" | "merged" | "archived";
 
@@ -43,37 +43,5 @@ export async function loadCustomerGraph(orgId: string, customerId: string): Prom
     relationType: r.relationType,
   }));
 
-  const canonical = canonicalizeCustomerNode(nodes, customerId) as CustomerNode | null;
-  if (!canonical) {
-    return { canonical: null, connected: [], edges, brokenRefs: [`Customer ${customerId} not found`] };
-  }
-
-  const connectedIds = new Set<string>([canonical.id]);
-  const brokenRefs: string[] = [];
-  let expanded = true;
-  while (expanded) {
-    expanded = false;
-    for (const edge of edges) {
-      const fromExists = nodes.some((n) => n.id === edge.fromId);
-      const toExists = nodes.some((n) => n.id === edge.toId);
-      if (!fromExists || !toExists) {
-        brokenRefs.push(`Broken customer edge ${edge.fromId} -> ${edge.toId}`);
-        continue;
-      }
-      if (connectedIds.has(edge.fromId) && !connectedIds.has(edge.toId)) {
-        connectedIds.add(edge.toId);
-        expanded = true;
-      } else if (connectedIds.has(edge.toId) && !connectedIds.has(edge.fromId)) {
-        connectedIds.add(edge.fromId);
-        expanded = true;
-      }
-    }
-  }
-
-  const connected = [...connectedIds]
-    .map((id) => canonicalizeCustomerNode(nodes, id) as CustomerNode | null)
-    .filter((n): n is CustomerNode => Boolean(n))
-    .filter((node, index, arr) => arr.findIndex((candidate) => candidate.id === node.id) === index);
-
-  return { canonical, connected, edges, brokenRefs };
+  return buildCustomerGraph(nodes, edges, customerId);
 }

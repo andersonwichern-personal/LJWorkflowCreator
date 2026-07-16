@@ -130,8 +130,19 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
         requestId: request.id,
       },
     });
-    await log("FIRED", eventName, sim.trace, sim.actions);
-    return NextResponse.json({ outcome: "FIRED", fired: true, matched: true, mode, actions: sim.actions, results, trace: sim.trace });
+    // Phase 8 §11: a dispatch that hit an open circuit is logged distinctly —
+    // it's an outage, not a rule defect (ERROR) and not a clean FIRED.
+    const sinkDown = results.some((r) => r.status === "integration-unavailable");
+    await log(sinkDown ? "INTEGRATION_UNAVAILABLE" : "FIRED", eventName, sim.trace, sim.actions);
+    return NextResponse.json({
+      outcome: sinkDown ? "INTEGRATION_UNAVAILABLE" : "FIRED",
+      fired: true,
+      matched: true,
+      mode,
+      actions: sim.actions,
+      results,
+      trace: sim.trace,
+    });
   } catch (error: unknown) {
     console.error(`Fire failed for workflow ${id}:`, error);
     await log("ERROR", firstEvent, { error: error instanceof Error ? error.message : "unknown" }, []).catch(() => {});

@@ -159,21 +159,18 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
 
   function acceptSuggestion(suggestion: string) {
     const words = input.split(/[\s,]+/);
-    // Find how many words in input match the suggestion suffix and swap them
+    // Decide how many trailing input words the suggestion replaces using the
+    // SAME fuzzy matcher that produced it — a strict substring test misses
+    // typo matches ("loan aproved" → "LOAN APPROVED") and duplicates words
+    // (review finding). Widest window wins.
     const suggestionWords = suggestion.toLowerCase().split(/\s+/);
+    const windowMatches = (k: number) =>
+      fuzzyMatches(words.slice(-k).join(" ").toLowerCase(), [suggestion], 1).length > 0;
     let matchedCount = 1;
-    if (words.length >= 2 && suggestionWords.length >= 2) {
-      const twoInputWords = `${words[words.length - 2]} ${words[words.length - 1]}`.toLowerCase();
-      const twoSuggestWords = `${suggestionWords[suggestionWords.length - 2]} ${suggestionWords[suggestionWords.length - 1]}`;
-      if (suggestion.toLowerCase().includes(twoInputWords)) {
-        matchedCount = 2;
-      }
-    }
-    if (words.length >= 3 && suggestionWords.length >= 3) {
-      const threeInputWords = `${words[words.length - 3]} ${words[words.length - 2]} ${words[words.length - 1]}`.toLowerCase();
-      if (suggestion.toLowerCase().includes(threeInputWords)) {
-        matchedCount = 3;
-      }
+    if (words.length >= 3 && suggestionWords.length >= 3 && windowMatches(3)) {
+      matchedCount = 3;
+    } else if (words.length >= 2 && suggestionWords.length >= 2 && windowMatches(2)) {
+      matchedCount = 2;
     }
 
     // Replace the trailing parsed tokens with the full suggestion

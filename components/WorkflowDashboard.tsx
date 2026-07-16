@@ -363,19 +363,19 @@ export default function WorkflowDashboard({
           <div className="grid gap-4 md:grid-cols-3">
             <MetricCard
               icon={<Clock size={18} strokeWidth={2} />}
-              label="Auto-approval turnaround (simulated)"
+              label="Average queue latency"
               value={analytics ? `${analytics.averageLatencyMinutes} min avg manual wait` : "—"}
               tone="clock"
             />
             <MetricCard
               icon={<TrendingUp size={18} strokeWidth={2} />}
-              label="Success rate"
+              label="Execution success rate"
               value={analytics ? `${matchRatePct(analytics)}%` : "—"}
               tone="trend"
             />
             <MetricCard
               icon={<Flame size={18} strokeWidth={2} />}
-              label="Fires"
+              label="Executed runs"
               value={analytics ? String(analytics.totals.fired) : "—"}
               tone="fire"
             />

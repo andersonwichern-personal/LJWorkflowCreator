@@ -18,12 +18,14 @@
 import {
   EVENTS,
   FIELDS,
+  getAction,
   FieldDef,
   allowedFieldsForEvent,
   ASSIGNEES,
   WorkflowRule,
   RuleCondition,
   RuleOutput,
+  ConditionGroup,
   ScopeValue,
   scopeLabel,
   CondLogic,
@@ -105,6 +107,17 @@ function consume(spans: Spans, start: number, length: number) {
   if (length > 0) spans.push([start, start + length]);
 }
 
+/** Replace consumed spans with spaces — the text the parser has NOT claimed.
+ *  Used so already-consumed trigger words (e.g. the dual-trigger "or") can't
+ *  influence downstream text scans like AND/OR logic detection. */
+function maskConsumed(text: string, spans: Spans): string {
+  const chars = text.split("");
+  for (const [s, e] of spans) {
+    for (let i = Math.max(0, s); i < Math.min(chars.length, e); i++) chars[i] = " ";
+  }
+  return chars.join("");
+}
+
 /** Words that don't count toward an "uncovered fragment" (connectors/noise). */
 const STOPWORDS = new Set([
   "when", "if", "then", "and", "or", "the", "a", "an", "is", "are", "to", "it",
@@ -170,20 +183,39 @@ function matchEvent(
   const dualTriggerMatch = /\b(approved|rejected|denied|declined|accepted)\b\s+or\s+\b(approved|rejected|denied|declined|accepted)\b/.exec(text);
   if (dualTriggerMatch) {
     const [full, firstRaw, secondRaw] = dualTriggerMatch;
-    const subjectHasDocument = /\bdocument\b/.test(text);
-    const subjectHasOffer = /\boffer\b/.test(text);
-    const subjectHasLoan = /\bloan\b/.test(text) || /\brequest\b/.test(text) || /\bapplication\b/.test(text);
-    if (subjectHasLoan || subjectHasDocument || subjectHasOffer) {
-      consume(spans, dualTriggerMatch.index, full.length);
-      const subject = subjectHasDocument ? "DOCUMENT" : subjectHasOffer ? "OFFER" : "LOAN";
-      const first = firstRaw === "approved" ? `${subject} APPROVED` : firstRaw === "accepted" ? "OFFER ACCEPTED" : `${subject} REJECTED`;
-      const second =
-        secondRaw === "approved"
-          ? `${subject} APPROVED`
-          : secondRaw === "accepted"
+    // Anchor to the trigger clause: a verb pair appearing after the first
+    // "and"/comma belongs to a condition ("… and status is rejected or
+    // denied"), not the trigger — matching there replaced the user's real
+    // trigger (review finding).
+    const clauseSep = /,|\band\b/.exec(text);
+    const inTriggerClause = !clauseSep || dualTriggerMatch.index < clauseSep.index;
+    const subjects = [
+      /\bdocument\b/.test(text) ? "DOCUMENT" : null,
+      /\boffer\b/.test(text) ? "OFFER" : null,
+      /\bloan\b/.test(text) || /\brequest\b/.test(text) || /\bapplication\b/.test(text) ? "LOAN" : null,
+    ].filter((s): s is "DOCUMENT" | "OFFER" | "LOAN" => s !== null);
+    // N3: exactly one subject may be auto-picked. Several subjects ("a loan or
+    // document is approved…") fall through to the single-event branches below,
+    // which ask instead of precedence-guessing (review finding).
+    if (inTriggerClause && subjects.length === 1) {
+      const subject = subjects[0];
+      // Subject-aware mapping onto REAL vocabulary keys only — offers have no
+      // "OFFER APPROVED" event (approved/accepted → OFFER ACCEPTED), and
+      // "accepted" never crosses subjects (review findings).
+      const mapTok = (tok: string): string =>
+        subject === "OFFER"
+          ? tok === "approved" || tok === "accepted"
             ? "OFFER ACCEPTED"
+            : "OFFER REJECTED"
+          : tok === "approved" || tok === "accepted"
+            ? `${subject} APPROVED`
             : `${subject} REJECTED`;
-      return { event: first, extraEvents: first === second ? [] : [second], ambiguity: null };
+      const first = mapTok(firstRaw);
+      const second = mapTok(secondRaw);
+      if (EVENTS.some((e) => e.key === first) && EVENTS.some((e) => e.key === second)) {
+        consume(spans, dualTriggerMatch.index, full.length);
+        return { event: first, extraEvents: first === second ? [] : [second], ambiguity: null };
+      }
     }
   }
 
@@ -455,7 +487,41 @@ function matchConditions(
       }
     }
   }
+
+  // Fallback numeric phrasing: "loan over 500k" / "loan under 100k".
+  if (!conds.some((c) => c.field === "loan_amount")) {
+    const loanAmountRe =
+      /\bloan\b(?:\s+amount)?\s+(?:is\s+)?(over|above|greater than|more than|at least|under|below|less than|at most|>=|>|<=|<|=)\s+\$?([\d.,]+(?:\s*(?:k|m|thousand|million))?)\b/;
+    const m = loanAmountRe.exec(text);
+    if (m) {
+      const amount = parseAmount(m[2]);
+      if (amount) {
+        consume(spans, m.index, m[0].length);
+        const opWord = m[1].trim();
+        let operator = "is";
+        if (/over|above|greater than|more than|>/.test(opWord)) operator = "gt";
+        else if (/at least|>=/.test(opWord)) operator = "gte";
+        else if (/under|below|less than|</.test(opWord)) operator = "lt";
+        else if (/at most|<=/.test(opWord)) operator = "lte";
+        conds.push({ field: "loan_amount", operator, value: amount });
+      }
+    }
+  }
   return conds;
+}
+
+/** Parse an action-local gate clause into a v3 condition group. */
+function parseActionGate(
+  clause: string,
+  eventKey: string,
+  opts: ParseOptions | undefined,
+  unresolved: UnresolvedSlot[]
+): ConditionGroup | undefined {
+  const text = norm(clause).replace(/^(?:if|when)\s+/, "");
+  if (!text) return undefined;
+  const gateConds = matchConditions(text, eventKey, [], opts, unresolved);
+  if (!gateConds.length) return undefined;
+  return { logic: "AND", children: gateConds };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -464,6 +530,7 @@ function matchConditions(
 
 function matchOutputs(
   text: string,
+  eventKey: string,
   spans: Spans,
   opts: ParseOptions | undefined,
   unresolved: UnresolvedSlot[],
@@ -501,31 +568,114 @@ function matchOutputs(
     }
   }
 
+  function attachActionGate(actionIndex: number, clause?: string) {
+    if (!clause) return;
+    const gate = parseActionGate(clause, eventKey, opts, unresolved);
+    if (gate) outputs[actionIndex].when = gate;
+  }
+
+  function pushAuthority(heard: string) {
+    const param = paramKeyFor("assign_authority");
+    const options = opts?.instanceOptions?.assign_authority?.length
+      ? opts.instanceOptions.assign_authority
+      : getAction("assign_authority")?.paramOptions ?? ["Loan Officer", "Credit Committee"];
+    const exact = options.find((a) => norm(a) === norm(heard));
+    if (exact) {
+      outputs.push({ action: "assign_authority", params: { [param]: exact } });
+    } else {
+      outputs.push({ action: "assign_authority", params: {} });
+      unresolved.push({
+        where: "action-param",
+        actionIndex: outputs.length - 1,
+        param,
+        heard,
+        suggestions: fuzzyMatches(heard, options),
+      });
+    }
+  }
+
+  function pushGenericAuthority() {
+    const param = paramKeyFor("assign_authority");
+    const options = opts?.instanceOptions?.assign_authority?.length
+      ? opts.instanceOptions.assign_authority
+      : getAction("assign_authority")?.paramOptions ?? ["Loan Officer", "Credit Committee"];
+    if (options.length === 1) {
+      outputs.push({ action: "assign_authority", params: { [param]: options[0] } });
+      return;
+    }
+    outputs.push({ action: "assign_authority", params: {} });
+    unresolved.push({
+      where: "action-param",
+      actionIndex: outputs.length - 1,
+      param,
+      heard: "authority",
+      suggestions: options.slice(0, 3),
+    });
+  }
+
   // assign / route / escalate to <name>
   if (!excluded.has("assign")) {
-    const assign =
-      /(?:assign|route|escalate|send it|send this)\s+(?:it\s+|this\s+)?to\s+([a-z0-9 ._-]{2,40}?)(?:\s+(?:and|then|,|\.)|$)/.exec(
-        text
-      );
-    if (assign) {
-      consume(spans, assign.index, assign[0].length);
-      pushResolved("assign_user", assign[1].trim());
+    const genericAuthority =
+      /\b(?:assign|route|escalate|send it|send this)\s+(?:this\s+|it\s+)?to\s+(?:the\s+)?(?:approval\s+)?authority(?:\s+level)?(?:\s+(?:if|when)\s+(.+?))?(?=\s*(?:,|\.|;|$|\band\b|\bthen\b))/.
+        exec(text);
+    if (genericAuthority) {
+      consume(spans, genericAuthority.index, genericAuthority[0].length);
+      pushGenericAuthority();
+      attachActionGate(outputs.length - 1, genericAuthority[1]);
+    } else {
+      const authority =
+        /\b(?:assign|route|escalate|send it|send this)\s+(?:this\s+|it\s+)?to\s+(?:the\s+)?(credit committee|loan officer)(?:\s+(?:if|when)\s+(.+?))?(?=\s*(?:,|\.|;|$|\band\b|\bthen\b))/.
+          exec(text) ??
+        /\b(?:assign|route|escalate|send it|send this)\s+to\s+(?:the\s+)?(credit committee|loan officer)(?:\s+(?:if|when)\s+(.+?))?(?=\s*(?:,|\.|;|$|\band\b|\bthen\b))/.
+          exec(text);
+      if (authority) {
+        consume(spans, authority.index, authority[0].length);
+        pushAuthority(authority[1].trim().replace(/\b\w/g, (c) => c.toUpperCase()));
+        attachActionGate(outputs.length - 1, authority[2]);
+      } else {
+        const assign =
+          /(?:assign|route|escalate|send it|send this)\s+(?:it\s+|this\s+)?to\s+([a-z0-9 ._-]{2,40}?)(?:\s+(?:if|when)\s+(.+?))?(?:\s+(?:and|then|,|\.)|$)/.exec(
+            text
+          );
+        if (assign) {
+          consume(spans, assign.index, assign[0].length);
+          pushResolved("assign_user", assign[1].trim());
+          attachActionGate(outputs.length - 1, assign[2]);
+        }
+      }
     }
   }
 
   // notify <name>
   if (!excluded.has("notify")) {
-    const notify = /notify\s+([a-z0-9 ._-]{2,40}?)(?:\s+(?:and|then|,|\.)|$)/.exec(text);
-    if (notify) {
-      consume(spans, notify.index, notify[0].length);
-      pushResolved("notify", notify[1].trim());
+    const remindWithDelay =
+      /\bremind\s+([a-z0-9 ._-]{2,40}?)\s+(\d{1,3})\s+days?\s+(before|after)\s+(?:the\s+)?([a-z0-9 _-]{3,40}?)(?:\s+(?:if|when)\s+(.+?))?(?=\s*(?:and|then|,|\.|;|$))/.
+        exec(
+        text
+      );
+    if (remindWithDelay) {
+      consume(spans, remindWithDelay.index, remindWithDelay[0].length);
+      pushResolved("notify", remindWithDelay[1].trim());
+      const days = Number(remindWithDelay[2]);
+      if (Number.isFinite(days) && days > 0 && outputs.length) {
+        outputs[outputs.length - 1].delayMinutes = remindWithDelay[3] === "before" ? -(days * 24 * 60) : days * 24 * 60;
+      }
+      attachActionGate(outputs.length - 1, remindWithDelay[5]);
+    } else {
+      const notify =
+        /(?:notify|remind)\s+([a-z0-9 ._-]{2,40}?)(?:\s+(?:if|when)\s+(.+?))?(?:\s+(?:and|then|,|\.)|$)/.exec(text);
+      if (notify) {
+        consume(spans, notify.index, notify[0].length);
+        pushResolved("notify", notify[1].trim());
+        attachActionGate(outputs.length - 1, notify[2]);
+      }
     }
   }
 
   // change / set / move stage to <stage>
   if (!excluded.has("change")) {
     const stage =
-      /(?:change|set|move)\s+(?:the\s+)?stage\s+to\s+([a-z ]{3,20}?)(?:\s+(?:and|then|,|\.)|$)/.exec(
+      /(?:change|set|move)\s+(?:the\s+)?stage\s+to\s+([a-z ]{3,20}?)(?:\s+(?:if|when)\s+(.+?))?(?:\s+(?:and|then|,|\.)|$)/.exec(
         text
       );
     if (stage) {
@@ -545,15 +695,17 @@ function matchOutputs(
           suggestions: fuzzyMatches(heard, options),
         });
       }
+      attachActionGate(outputs.length - 1, stage[2]);
     }
   }
 
   // add tag <tag> — tags are self-identifying free text (hardening §4); normalize only.
   if (!excluded.has("tag")) {
-    const tag = /add\s+(?:a\s+)?tag\s+([a-z0-9 _-]{2,30}?)(?:\s+(?:and|then|,|\.)|$)/.exec(text);
+    const tag = /add\s+(?:a\s+)?tag\s+([a-z0-9 _-]{2,30}?)(?:\s+(?:if|when)\s+(.+?))?(?:\s+(?:and|then|,|\.)|$)/.exec(text);
     if (tag) {
       consume(spans, tag.index, tag[0].length);
       outputs.push({ action: "add_tag", params: { value: tag[1].trim().replace(/\s+/g, " ") } });
+      attachActionGate(outputs.length - 1, tag[2]);
     }
   }
 
@@ -567,6 +719,40 @@ function matchOutputs(
   }
 
   return outputs;
+}
+
+function matchControls(text: string): Partial<WorkflowRule["controls"]> {
+  const controls: Partial<WorkflowRule["controls"]> = {};
+
+  if (/\bshadow\s+mode\b/.test(text)) {
+    controls.mode = "shadow";
+  }
+  if (/\blive\s+mode\b/.test(text)) {
+    controls.mode = "armed";
+  }
+  if (/\bonce\s+per\s+request\b/.test(text)) {
+    controls.oncePerRequest = true;
+  }
+  if (/\bone\s+per\s+request\b/.test(text) || /\bper\s+request\b/.test(text)) {
+    controls.oncePerRequest = true;
+  }
+
+  const armed =
+    /\b(?:arm|activate|enable)\b(?:\s+live\s+actions|\s+this\s+rule|\s+the\s+rule|\s+rule)?\b/.test(text) ||
+    /\blive\s+actions\b/.test(text);
+  if (!controls.mode) controls.mode = armed ? "armed" : "shadow";
+
+  const rate =
+    /\b(?:cap|limit|at most)\s+(?:at\s+)?(\d{1,3})\s+(?:fires?|runs?|executions?)\s+per\s+hour\b/.exec(text) ??
+    /\b(?:cap|limit|at most)\s+(?:at\s+)?(\d{1,3})\s*\/\s*hour\b/.exec(text) ??
+    /\b(\d{1,3})\s+(?:fires?|runs?|executions?)\s+per\s+hour\b/.exec(text) ??
+    /\b(\d{1,3})\s*\/\s*hour\b/.exec(text);
+  if (rate) {
+    const n = Number(rate[1]);
+    if (Number.isFinite(n) && n > 0) controls.maxFiresPerHour = Math.max(1, Math.min(999, Math.round(n)));
+  }
+
+  return controls;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -641,9 +827,20 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
 
   const conds = matchConditions(text, eventKey, spans, opts, unresolved);
   conds.push(...matchCategoryConditions(text, spans, conds));
-  const outputs = matchOutputs(text, spans, opts, unresolved, notes);
-  const condLogic = matchLogic(text);
+  const outputs = matchOutputs(text, eventKey, spans, opts, unresolved, notes);
+  const controlPatch = matchControls(text);
+  // AND/OR is decided on the UNCONSUMED text only: the trigger's own "or"
+  // ("approved or rejected") is already consumed and must not flip AND-joined
+  // conditions to OR (review finding).
+  const condLogic = matchLogic(maskConsumed(text, spans));
   const uncovered = uncoveredFragments(text, spans);
+  const elseMatch = /\b(?:otherwise|else)\b\s+(.+)$/.exec(text);
+  const elseOutputs = elseMatch
+    ? matchOutputs(elseMatch[1], eventKey, [], opts, unresolved, notes)
+    : [];
+  if (elseMatch) {
+    consume(spans, elseMatch.index, elseMatch[0].length);
+  }
 
   const triggers = [{ event: eventKey }];
   if (extraEvents?.length) {
@@ -692,7 +889,8 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
       triggers,
       conditions: { logic: condLogic, children: conds },
       actions: outputs,
-      controls: defaultControls(),
+      else: elseOutputs.length ? elseOutputs : undefined,
+      controls: { ...defaultControls(), ...controlPatch },
     },
     notes,
     unresolved,

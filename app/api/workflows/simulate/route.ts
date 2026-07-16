@@ -72,14 +72,20 @@ export async function POST(req: NextRequest) {
     let logError: string | undefined;
     if (body.workflowId && body.log !== false) {
       try {
+        // A/B attribution (review finding): a routed run is the PEER's outcome —
+        // logging it under the control workflow corrupts per-variant analytics.
+        // Attribute to the rule that actually evaluated, and persist the split
+        // marker in the trace so the audit log can reconstruct the experiment.
         await RuleExecutionService.logExecution({
           orgId,
-          workflowId: body.workflowId,
+          workflowId: routed && abSplit ? abSplit.targetWorkflowId : body.workflowId,
           requestId: request.id,
           requestName: request.name,
           eventName: result.trace.matchedTrigger ?? routedRule.triggers[0]?.event ?? "—",
           status: result.matched ? "FIRED" : "CONDITIONS_NOT_MET",
-          trace: result.trace as never,
+          trace: (routed
+            ? { ...result.trace, routed: "ab-split", controlWorkflowId: body.workflowId }
+            : result.trace) as never,
           actions: result.actions,
         });
         logged = true;

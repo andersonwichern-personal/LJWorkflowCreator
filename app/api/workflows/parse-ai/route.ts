@@ -623,7 +623,7 @@ function buildSystemInstruction(context: PromptContext): string {
           ]
         },
         actions: [
-          { action: "assign_user", params: { assignee: { level: "category", category: "Credit Committee" } } },
+          { action: "assign_authority", params: { value: "Credit Committee" } },
           { action: "add_tag", params: { value: "jumbo" } }
         ],
         controls: {
@@ -637,7 +637,7 @@ function buildSystemInstruction(context: PromptContext): string {
       notes: [
         "Captured the compound trigger as two OR'd events.",
         "Translated 'over 500k' into a gt 500000 condition.",
-        "Added escalation plus jumbo tagging."
+        "Added authority escalation plus jumbo tagging."
       ],
       suggestions: [],
       unresolved: [],

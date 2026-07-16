@@ -13,6 +13,7 @@ model Workflow {
   description String?
   enabled     Boolean  @default(true)
   ruleJson    Json     @map("rule_json")
+  version     Int      @default(1) // Phase 8 §12 — optimistic concurrency guard
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -59,6 +60,7 @@ model ApprovalAuthority {
   requirement  Json?    @map("requirement") // ApprovalRequirement topology (quorum/sequence); null → legacy any-of userIds
   escalationId String?  @map("escalation_id")
   autoApprove  Boolean  @default(false) @map("auto_approve")
+  version      Int      @default(1) // Phase 8 §12 — optimistic concurrency guard
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -172,4 +174,57 @@ model PlatformAuditLog {
   @@index([orgId, subjectType, subjectId])
   @@index([orgId, type, createdAt])
   @@map("platform_audit_log")
+}
+
+// Phase 8 §11 — per-sink circuit-breaker state (table-backed: serverless cold
+// starts reset in-memory state). statusJson holds lib/circuitBreaker BreakerState.
+model SinkHealth {
+  orgId      String   @map("org_id")
+  sink       String // "novu" | "platform-bridge" | future write endpoints
+  statusJson Json     @map("status_json")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@id([orgId, sink])
+  @@map("sink_health")
+}
+
+// Phase 8 §3 — prototype-owned many-to-many index: one canonical document
+// (owned by the admin documents service — UNCONFIRMED linkage support there)
+// satisfying several requests' checklists. Not a second source of truth.
+model DocumentLink {
+  id         String    @id @default(uuid())
+  orgId      String    @map("org_id")
+  documentId String    @map("document_id") // canonical id — from the documents service
+  requestId  String    @map("request_id")
+  purpose    String? // e.g. "renewal-2026", "covenant-q1-2026"
+  validFrom  DateTime? @map("valid_from")
+  validUntil DateTime? @map("valid_until") // expiry — drives the refresh check
+  linkedAt   DateTime  @default(now()) @map("linked_at")
+  linkedBy   String    @map("linked_by") // userId
+
+  @@unique([documentId, requestId])
+  @@index([orgId, requestId])
+  @@index([orgId, documentId])
+  @@map("document_links")
+}
+
+// Phase 8 §7 — scheduled-action data model ONLY (the scheduler stays deferred:
+// no worker/cron exists in this serverless prototype). runAt is a cache, always
+// derived from anchorField's current value + offsetMinutes — see lib/scheduledActions.ts.
+model ScheduledAction {
+  id            String   @id @default(uuid())
+  orgId         String   @map("org_id")
+  workflowId    String   @map("workflow_id")
+  requestId     String   @map("request_id")
+  actionIndex   Int      @map("action_index") // index into rule.actions[]
+  anchorField   String   @map("anchor_field") // ConditionFieldRef key, e.g. "maturity_date"
+  offsetMinutes Int      @map("offset_minutes") // negative = before anchor
+  runAt         DateTime @map("run_at")
+  status        String   @default("pending") // "pending" | "fired" | "canceled" | "superseded"
+  supersedes    String?  @map("supersedes") // principle A: prior ScheduledAction.id
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([orgId, status, runAt])
+  @@index([orgId, requestId, anchorField])
+  @@map("scheduled_actions")
 }

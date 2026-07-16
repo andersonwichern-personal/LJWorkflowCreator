@@ -120,6 +120,104 @@ t("P2: approved or rejected → multi-trigger rule",
     r.rule.triggers.some((t) => t.event === "LOAN REJECTED"),
   JSON.stringify(r.rule?.triggers));
 
+r = parseInstruction("When a loan over 500k is approved or rejected, escalate to the credit committee and add tag jumbo");
+t("P2: loan over 500k approved or rejected → multi-trigger rule",
+  r.rule?.triggers?.length === 2 &&
+    r.rule.triggers.some((t) => t.event === "LOAN APPROVED") &&
+    r.rule.triggers.some((t) => t.event === "LOAN REJECTED") &&
+    leaves(r.rule).some((c) => c.field === "loan_amount" && c.operator === "gt" && c.value === "500000") &&
+    r.rule?.actions.some((a) => a.action === "assign_authority") &&
+    r.rule?.actions.some((a) => a.action === "add_tag"),
+  JSON.stringify({ triggers: r.rule?.triggers, conditions: leaves(r.rule), actions: r.rule?.actions }));
+
+r = parseInstruction("When a loan is approved, assign to the credit committee");
+t("P2: assign to credit committee → authority action",
+  r.rule?.actions?.[0]?.action === "assign_authority" &&
+    r.rule?.actions?.[0]?.params.value === "Credit Committee",
+  JSON.stringify(r.rule?.actions));
+
+r = parseInstruction("When a loan is approved, escalate to authority");
+t("P2: escalate to authority → authority action",
+  r.rule?.actions?.[0]?.action === "assign_authority" &&
+    Object.keys(r.rule?.actions?.[0]?.params ?? {}).length === 0 &&
+    r.unresolved.some((slot) => slot.where === "action-param" && slot.param === "value" && slot.heard === "authority"),
+  JSON.stringify({ actions: r.rule?.actions, unresolved: r.unresolved }));
+
+r = parseInstruction("When a loan is approved, escalate to the approval authority");
+t("P2: escalate to approval authority → authority action",
+  r.rule?.actions?.[0]?.action === "assign_authority" &&
+    Object.keys(r.rule?.actions?.[0]?.params ?? {}).length === 0 &&
+    r.unresolved.some((slot) => slot.where === "action-param" && slot.param === "value" && slot.heard === "authority"),
+  JSON.stringify({ actions: r.rule?.actions, unresolved: r.unresolved }));
+
+r = parseInstruction("When a loan is approved, escalate to authority", {
+  instanceOptions: { assign_authority: ["Tier 1", "Tier 2"] },
+});
+t("P2: live authority options drive suggestions",
+  r.rule?.actions?.[0]?.action === "assign_authority" &&
+    Object.keys(r.rule?.actions?.[0]?.params ?? {}).length === 0 &&
+    r.unresolved.some((slot) => slot.where === "action-param" && slot.param === "value" &&
+      slot.heard === "authority" && slot.suggestions.includes("Tier 1") && slot.suggestions.includes("Tier 2")),
+  JSON.stringify({ actions: r.rule?.actions, unresolved: r.unresolved }));
+
+r = parseInstruction("When a loan is approved, arm this rule and assign to Wael");
+t("P2: explicit arm language sets controls to armed",
+  r.rule?.controls.mode === "armed" && r.rule?.actions?.[0]?.action === "assign_user",
+  JSON.stringify(r.rule?.controls));
+
+r = parseInstruction("When a loan is approved, arm this rule, once per request, and cap 10 fires per hour");
+t("P2: explicit control language is parsed",
+  r.rule?.controls.mode === "armed" &&
+    r.rule?.controls.oncePerRequest === true &&
+    r.rule?.controls.maxFiresPerHour === 10,
+  JSON.stringify(r.rule?.controls));
+
+r = parseInstruction("When a loan is approved, cap 10/hour");
+t("P2: compact rate shorthand is parsed",
+  r.rule?.controls.maxFiresPerHour === 10,
+  JSON.stringify(r.rule?.controls));
+
+r = parseInstruction("When a loan is approved, one per request");
+t("P2: one per request sets dedupe",
+  r.rule?.controls.oncePerRequest === true,
+  JSON.stringify(r.rule?.controls));
+
+r = parseInstruction("When a loan is approved, per request");
+t("P2: bare per request sets dedupe",
+  r.rule?.controls.oncePerRequest === true,
+  JSON.stringify(r.rule?.controls));
+
+r = parseInstruction("When a loan is approved, remind Sara 5 days before the maturity date");
+t("P2: reminder timing becomes delayMinutes",
+  r.rule?.actions?.[0]?.delayMinutes === -7200,
+  JSON.stringify(r.rule?.actions));
+
+r = parseInstruction("When a loan is approved, notify Sara otherwise add tag clean");
+t("P2: otherwise branch becomes else lane",
+  r.rule?.actions?.[0]?.action === "notify" &&
+    r.rule?.else?.[0]?.action === "add_tag" &&
+    r.rule?.else?.[0]?.params.value === "clean",
+  JSON.stringify({ actions: r.rule?.actions, else: r.rule?.else }));
+
+r = parseInstruction("When a loan is approved, notify Sara if risk grade is A");
+const gatedLeaf = r.rule?.actions?.[0]?.when ? leaves({ schemaVersion: 3, triggers: [], conditions: r.rule.actions[0].when, actions: [], controls: r.rule.controls })[0] : undefined;
+t("P2: gated action captures when clause",
+  r.rule?.actions?.[0]?.action === "notify" &&
+    gatedLeaf?.field === "risk_grade" &&
+    gatedLeaf?.operator === "is" &&
+    gatedLeaf?.value === "A",
+  JSON.stringify(r.rule?.actions));
+
+r = parseInstruction("When a loan is approved, keep it in shadow mode");
+t("P2: explicit shadow mode stays shadow",
+  r.rule?.controls.mode === "shadow",
+  JSON.stringify(r.rule?.controls));
+
+r = parseInstruction("When a loan is approved, switch to live mode");
+t("P2: explicit live mode sets armed",
+  r.rule?.controls.mode === "armed",
+  JSON.stringify(r.rule?.controls));
+
 /* ---- Phase 2: ScopeRef emission + category words ---------------------------- */
 r = parseInstruction("When a loan is approved, assign to Wael Hamdan", {
   assignees: ["Wael Hamdan"],
@@ -154,6 +252,27 @@ r = parseInstruction("When any origination request is approved, notify sara");
     !!catLeaf && (catLeaf.value as { category?: string }).category === "Origination",
     JSON.stringify(catLeaf));
 }
+
+/* ---- dual-trigger honesty (Phase 7 review findings — locked regressions) ---- */
+r = parseInstruction("When an offer is approved or rejected, notify sam");
+t("dual: offer approved/rejected maps onto REAL keys (no OFFER APPROVED)",
+  JSON.stringify(r.rule?.triggers.map((x) => x.event)) === JSON.stringify(["OFFER ACCEPTED", "OFFER REJECTED"]));
+
+r = parseInstruction("When a document is accepted or rejected, notify sam");
+t("dual: 'accepted' never crosses subjects",
+  JSON.stringify(r.rule?.triggers.map((x) => x.event)) === JSON.stringify(["DOCUMENT APPROVED", "DOCUMENT REJECTED"]));
+
+r = parseInstruction("When a loan is approved or rejected and loan amount over 500k and risk grade worse than B, assign to wael");
+t("dual: trigger 'or' does not flip AND conditions to OR", r.rule?.conditions.logic === "AND");
+t("dual: two triggers still emitted", r.rule?.triggers.length === 2);
+
+r = parseInstruction("when a loan is approved and status is rejected or denied assign to wael");
+t("dual: a verb pair inside the condition clause cannot hijack the trigger",
+  r.rule?.triggers[0]?.event === "LOAN APPROVED" && r.rule?.triggers.length === 1);
+
+r = parseInstruction("when a loan or document is approved or rejected assign to wael");
+t("dual: several subjects → ambiguity question, never a precedence guess",
+  r.rule === null && r.ambiguities.length > 0);
 
 /* ---- exit ------------------------------------------------------------------- */
 if (failures) {

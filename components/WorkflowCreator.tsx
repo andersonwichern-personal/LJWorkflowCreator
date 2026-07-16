@@ -28,8 +28,9 @@ import {
 import { UnresolvedSlot } from "@/lib/nlParser";
 import { ChatDraftMeta } from "@/components/ChatBox";
 import {
+  ConflictError,
   WorkflowRecord,
-  getOrgId,
+  fetchExecutionAnalytics,
   listWorkflows,
   createWorkflow,
   updateWorkflow,
@@ -102,31 +103,27 @@ export default function WorkflowCreator({
   const [vocabSource, setVocabSource] = useState<VocabularySource | null>(null);
   const [syncTrigger, setSyncTrigger] = useState(0);
   const [analyticsHotspots, setAnalyticsHotspots] = useState<Record<string, number>>({});
+  // Phase 8 §12: a guarded save lost the race — hold the server's record until
+  // the user explicitly resolves (view / overwrite / reload). Never silent.
+  const [conflict, setConflict] = useState<{ current: WorkflowRecord } | null>(null);
+  const [showTheirs, setShowTheirs] = useState(false);
 
   useEffect(() => {
     loadLiveVocabulary().then(setVocabSource);
   }, [syncTrigger]);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function loadAnalyticsHotspots() {
-      try {
-        const orgId = await getOrgId();
-        const res = await fetch(`/api/workflows/analytics?orgId=${encodeURIComponent(orgId)}`, {
-          cache: "no-store",
-        });
-        if (!res.ok) return;
-        const body = (await res.json()) as { hotspots?: Record<string, number> };
-        if (!cancelled) setAnalyticsHotspots(body.hotspots ?? {});
-      } catch {
-        if (!cancelled) setAnalyticsHotspots({});
-      }
+  const loadAnalyticsHotspots = useCallback(async () => {
+    try {
+      const body = await fetchExecutionAnalytics();
+      setAnalyticsHotspots(body.hotspots ?? {});
+    } catch {
+      setAnalyticsHotspots({});
     }
-    void loadAnalyticsHotspots();
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  useEffect(() => {
+    void loadAnalyticsHotspots();
+  }, [loadAnalyticsHotspots]);
 
   useEffect(() => {
     const handleSync = () => {
@@ -173,7 +170,8 @@ export default function WorkflowCreator({
     } finally {
       setLoadingList(false);
     }
-  }, [pushToast]);
+    void loadAnalyticsHotspots();
+  }, [loadAnalyticsHotspots, pushToast]);
 
   useEffect(() => {
     refresh();
@@ -297,12 +295,17 @@ export default function WorkflowCreator({
         return;
       }
       if (activeId) {
-        const updated = await updateWorkflow(activeId, {
-          name: name.trim(),
-          description: description.trim() || null,
-          ruleJson: rule,
-          enabled,
-        });
+        // Phase 8 §12: arm the conflict guard with the version we last read.
+        const updated = await updateWorkflow(
+          activeId,
+          {
+            name: name.trim(),
+            description: description.trim() || null,
+            ruleJson: rule,
+            enabled,
+          },
+          workflows.find((w) => w.id === activeId)?.version
+        );
         pushToast("ok", "Workflow updated.");
         setWorkflows((list) => list.map((w) => (w.id === updated.id ? updated : w)));
       } else {
@@ -318,6 +321,12 @@ export default function WorkflowCreator({
       }
       setDirty(false);
     } catch (e: unknown) {
+      if (e instanceof ConflictError) {
+        // §12: someone saved this workflow underneath us — no silent overwrite.
+        setConflict({ current: e.current as WorkflowRecord });
+        pushToast("err", "Someone else saved this workflow while you were editing.");
+        return;
+      }
       pushToast("err", errMsg(e, "Save failed"));
     } finally {
       setSaving(false);
@@ -679,6 +688,90 @@ export default function WorkflowCreator({
           </div>
         ))}
       </div>
+
+      {/* Phase 8 §12 — save-conflict resolution. Three explicit outcomes; no
+          path silently drops either side's edits. */}
+      {conflict && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+          <div className="glass w-full max-w-lg rounded-2xl border p-5 shadow-xl" style={{ borderColor: "var(--panel-border)", background: "var(--panel)" }}>
+            <h2 className="flex items-center gap-2 text-base font-semibold" style={{ color: "var(--fg)" }}>
+              <AlertTriangle size={18} strokeWidth={2} style={{ color: "var(--warn-fg)" }} />
+              Someone else saved this workflow
+            </h2>
+            <p className="mt-2 text-sm" style={{ color: "var(--fg-muted)" }}>
+              “{conflict.current.name}” changed on the server (now version {conflict.current.version}) while you were
+              editing. Choose how to resolve — nothing is overwritten until you decide.
+            </p>
+            {showTheirs && (
+              <pre
+                className="mt-3 max-h-48 overflow-auto rounded-xl border p-3 text-[11px] leading-relaxed"
+                style={{ borderColor: "var(--panel-border)", color: "var(--fg-subtle)", background: "var(--bg)" }}
+              >
+                {JSON.stringify(
+                  { name: conflict.current.name, description: conflict.current.description, enabled: conflict.current.enabled, rule: conflict.current.ruleJson },
+                  null,
+                  2
+                )}
+              </pre>
+            )}
+            <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowTheirs((v) => !v)}
+                className="ring-accent rounded-xl border px-3.5 py-2 text-sm font-medium transition-colors hover:bg-[var(--accent-soft)]"
+                style={{ borderColor: "var(--panel-border)", color: "var(--fg-muted)" }}
+              >
+                {showTheirs ? "Hide their version" : "View their version"}
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  // Explicit, informed last-write-wins: retry with the fresh version.
+                  const theirs = conflict.current;
+                  setConflict(null);
+                  setShowTheirs(false);
+                  try {
+                    const updated = await updateWorkflow(
+                      theirs.id,
+                      { name: name.trim(), description: description.trim() || null, ruleJson: rule, enabled },
+                      theirs.version
+                    );
+                    setWorkflows((list) => list.map((w) => (w.id === updated.id ? updated : w)));
+                    setDirty(false);
+                    pushToast("ok", "Overwrote with your version.");
+                  } catch (e: unknown) {
+                    if (e instanceof ConflictError) {
+                      setConflict({ current: e.current as WorkflowRecord });
+                      pushToast("err", "It changed again — review the latest version.");
+                    } else {
+                      pushToast("err", errMsg(e, "Overwrite failed"));
+                    }
+                  }
+                }}
+                className="ring-accent rounded-xl border px-3.5 py-2 text-sm font-semibold transition-colors hover:bg-[var(--danger-bg)]"
+                style={{ borderColor: "var(--danger-br)", color: "var(--danger-fg)" }}
+              >
+                Overwrite anyway
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const theirs = conflict.current;
+                  setConflict(null);
+                  setShowTheirs(false);
+                  setWorkflows((list) => list.map((w) => (w.id === theirs.id ? theirs : w)));
+                  loadIntoEditor(theirs);
+                  pushToast("ok", "Reloaded their version — your edits were discarded.");
+                }}
+                className="ring-accent rounded-xl px-3.5 py-2 text-sm font-semibold text-white transition-all hover:brightness-110"
+                style={{ background: "var(--accent)" }}
+              >
+                Reload and lose my changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

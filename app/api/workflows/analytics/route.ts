@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { RuleExecutionService } from "@/lib/services/execution";
+import { prisma } from "@/lib/prisma";
 import { computeExecutionAnalytics } from "@/lib/executionAnalytics";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,12 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const rows = await RuleExecutionService.analyticsRows(orgId);
+    const rows = await prisma.ruleExecution.findMany({
+      where: { orgId },
+      orderBy: { createdAt: "desc" },
+      take: 1000,
+      select: { workflowId: true, requestId: true, status: true },
+    });
     return NextResponse.json(computeExecutionAnalytics(rows));
   } catch (error: unknown) {
     console.error("Failed to compute analytics:", error);

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ApprovalAuthority, Prisma } from "@prisma/client";
+import { VersionConflictError } from "@/lib/optimisticWrite";
 import {
   ApprovalRequirement,
   MAX_SEQUENCE_STEPS,
@@ -133,7 +134,9 @@ export class ApprovalAuthorityService {
       requirement: unknown;
       escalationId: string | null;
       autoApprove: boolean;
-    }>
+    }>,
+    /** Phase 8 §12: caller's last-read version. Absent → legacy last-write-wins. */
+    expectedVersion?: number
   ): Promise<AuthorityWithEscalation> {
     if (!id) {
       throw new Error("Authority ID is required for updates");
@@ -175,6 +178,42 @@ export class ApprovalAuthorityService {
       data.escalation = updates.escalationId
         ? { connect: { id: updates.escalationId } }
         : { disconnect: true };
+    }
+
+    if (typeof expectedVersion === "number") {
+      // Optimistic-concurrency guard (§12). updateMany cannot express relation
+      // connect/disconnect, so the guarded write sets the scalar FK directly.
+      const guarded: Prisma.ApprovalAuthorityUpdateManyMutationInput & { escalationId?: string | null } = {
+        version: { increment: 1 },
+      };
+      if (updates.name !== undefined) guarded.name = updates.name.trim();
+      if (updates.limit !== undefined) guarded.limit = updates.limit;
+      if (updates.riskGrade !== undefined) guarded.riskGrade = updates.riskGrade;
+      if (updates.product !== undefined) guarded.product = updates.product;
+      if (updates.userIds !== undefined) guarded.userIds = updates.userIds as Prisma.InputJsonValue;
+      if (updates.requirement !== undefined) {
+        const requirement = normalizeRequirementInput(updates.requirement);
+        guarded.requirement =
+          requirement === null ? Prisma.DbNull : (requirement as unknown as Prisma.InputJsonValue);
+      }
+      if (updates.autoApprove !== undefined) guarded.autoApprove = updates.autoApprove;
+      if (updates.escalationId !== undefined) guarded.escalationId = updates.escalationId;
+
+      const result = await prisma.approvalAuthority.updateMany({
+        where: { id, orgId, version: expectedVersion },
+        data: guarded,
+      });
+      const current = await prisma.approvalAuthority.findFirst({
+        where: { id, orgId },
+        include: ESCALATION_SELECT,
+      });
+      if (!current) {
+        throw new Error("Authority not found or access denied");
+      }
+      if (result.count === 0) {
+        throw new VersionConflictError(current.version, current);
+      }
+      return current;
     }
 
     return prisma.approvalAuthority.update({

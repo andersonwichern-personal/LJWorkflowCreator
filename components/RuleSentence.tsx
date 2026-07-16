@@ -527,9 +527,9 @@ export default function RuleSentence({
             <span
               className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
               style={{ borderColor: "var(--warn-fg)", background: "var(--warn-bg)", color: "var(--warn-fg)" }}
-              title={`Fired ${hotspotCount} times in recent simulations`}
+              title={`Evaluated ${hotspotCount} times in recent simulations (all outcomes — not all fired)`}
             >
-              <Flame size={11} strokeWidth={2.25} /> fired {hotspotCount}
+              <Flame size={11} strokeWidth={2.25} /> {hotspotCount} runs
             </span>
           )}
         </span>

@@ -33,18 +33,36 @@ export interface WorkflowRecord {
   description: string | null;
   enabled: boolean;
   ruleJson: WorkflowRule;
+  /** Phase 8 §12 — optimistic-concurrency version; echo back as expectedVersion on save. */
+  version: number;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Phase 8 §12 — a guarded save lost the race; `current` is the server's record. */
+export class ConflictError extends Error {
+  constructor(
+    message: string,
+    public readonly currentVersion: number,
+    public readonly current: unknown
+  ) {
+    super(message);
+    this.name = "ConflictError";
+  }
 }
 
 async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let msg = `Request failed (${res.status})`;
+    let body: { error?: string; conflict?: boolean; currentVersion?: number; current?: unknown } | null = null;
     try {
-      const body = await res.json();
+      body = await res.json();
       if (body?.error) msg = body.error;
     } catch {
       /* ignore parse errors */
+    }
+    if (res.status === 409 && body?.conflict) {
+      throw new ConflictError(msg, body.currentVersion ?? 0, body.current);
     }
     throw new Error(msg);
   }
@@ -86,13 +104,17 @@ export async function updateWorkflow(
     description: string | null;
     enabled: boolean;
     ruleJson: WorkflowRule;
-  }>
+  }>,
+  /** Pass the record's `version` to arm the conflict guard (§12); 409 → ConflictError. */
+  expectedVersion?: number
 ): Promise<WorkflowRecord> {
   const orgId = await getOrgId();
   const res = await fetch(`/api/workflows/${id}?orgId=${encodeURIComponent(orgId)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(updates),
+    body: JSON.stringify(
+      typeof expectedVersion === "number" ? { ...updates, expectedVersion } : updates
+    ),
   });
   return normalizeRecord(await handle<WorkflowRecord>(res));
 }
@@ -356,7 +378,8 @@ export type ExecutionStatus =
   | "SHADOW"
   | "PAUSED_ORG"
   | "SKIPPED_DUPLICATE"
-  | "PAUSED_RATE_LIMIT";
+  | "PAUSED_RATE_LIMIT"
+  | "INTEGRATION_UNAVAILABLE"; // Phase 8 §11 — sink circuit open (outage, not rule defect)
 
 export interface ExecutionRecord {
   id: string;

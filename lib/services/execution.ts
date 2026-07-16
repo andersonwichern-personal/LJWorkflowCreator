@@ -6,6 +6,11 @@ import { Prisma, RuleExecution } from "@prisma/client";
  * Phase 1: FIRED / CONDITIONS_NOT_MET / ERROR.
  * Phase 4 (fire route): SHADOW (matched but observe-only), and the guardrail
  * outcomes PAUSED_ORG / SKIPPED_DUPLICATE / PAUSED_RATE_LIMIT.
+ * Phase 8 §11: INTEGRATION_UNAVAILABLE — an external sink's circuit was open at
+ * dispatch time. Deliberately DISTINCT from ERROR, and the distinction is
+ * load-bearing: ERROR history suggests a misconfigured rule (a linter signal);
+ * INTEGRATION_UNAVAILABLE history is a healthy rule hitting a flaky dependency.
+ * Any future history-based linter check MUST ignore INTEGRATION_UNAVAILABLE rows.
  */
 export const EXECUTION_STATUSES = [
   "FIRED",
@@ -15,6 +20,7 @@ export const EXECUTION_STATUSES = [
   "PAUSED_ORG",
   "SKIPPED_DUPLICATE",
   "PAUSED_RATE_LIMIT",
+  "INTEGRATION_UNAVAILABLE",
 ] as const;
 export type ExecutionStatus = (typeof EXECUTION_STATUSES)[number];
 

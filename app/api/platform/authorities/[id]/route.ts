@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ApprovalAuthorityService } from "@/lib/services/authority";
+import { conflictPayload, isVersionConflict } from "@/lib/optimisticWrite";
 
 /** Fixed demo tenant fallback (real app derives org_id from the authed session). */
 const DEFAULT_ORG_ID = "test-org-uuid-999";
@@ -40,9 +41,17 @@ export async function PATCH(
     if (body.escalationId !== undefined) updates.escalationId = body.escalationId;
     if (body.autoApprove !== undefined) updates.autoApprove = Boolean(body.autoApprove);
 
-    const updated = await ApprovalAuthorityService.updateAuthority(id, orgIdFrom(req), updates);
+    const updated = await ApprovalAuthorityService.updateAuthority(
+      id,
+      orgIdFrom(req),
+      updates,
+      typeof body.expectedVersion === "number" ? body.expectedVersion : undefined
+    );
     return NextResponse.json(updated);
   } catch (error: unknown) {
+    if (isVersionConflict(error)) {
+      return NextResponse.json(conflictPayload(error), { status: 409 });
+    }
     console.error("Failed to update authority:", error);
     return errorResponse(error, "Failed to update authority");
   }

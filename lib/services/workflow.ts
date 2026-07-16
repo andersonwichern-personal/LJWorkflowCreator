@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Workflow, Prisma } from "@prisma/client";
 import { validateRule } from "@/lib/ruleValidation";
+import { VersionConflictError } from "@/lib/optimisticWrite";
 
 /**
  * The versioned rule JSON contract lives in `@/lib/vocabulary` (the single
@@ -93,7 +94,9 @@ export class WorkflowService {
       description: string | null;
       enabled: boolean;
       ruleJson: Prisma.InputJsonValue;
-    }>
+    }>,
+    /** Phase 8 §12: caller's last-read version. Absent → legacy last-write-wins. */
+    expectedVersion?: number
   ): Promise<Workflow> {
     if (!id) {
       throw new Error("Workflow ID is required for updates");
@@ -129,6 +132,24 @@ export class WorkflowService {
 
     if (updates.ruleJson !== undefined) {
       data.ruleJson = assertValidRule(updates.ruleJson);
+    }
+
+    if (typeof expectedVersion === "number") {
+      // Optimistic-concurrency guard: the write lands only if nobody else has
+      // bumped the version since the caller read it. Zero rows = conflict, and
+      // the caller gets the current record to resolve with (never silent loss).
+      const result = await prisma.workflow.updateMany({
+        where: { id, orgId, version: expectedVersion },
+        data: { ...data, version: { increment: 1 } } as Prisma.WorkflowUpdateManyMutationInput,
+      });
+      const current = await prisma.workflow.findFirst({ where: { id, orgId } });
+      if (!current) {
+        throw new Error("Workflow not found or access denied");
+      }
+      if (result.count === 0) {
+        throw new VersionConflictError(current.version, current);
+      }
+      return current;
     }
 
     return prisma.workflow.update({

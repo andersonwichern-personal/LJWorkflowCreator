@@ -14,6 +14,8 @@
 import { getAction, scopeLabel, ScopeValue, RuleOutput, paramKeyFor } from "@/lib/vocabulary";
 import { decideAuthority, AuthorityInput } from "@/lib/authorityEngine";
 import { ApprovalAuthorityService } from "@/lib/services/authority";
+import { SinkHealthService } from "@/lib/services/sinkHealth";
+import { breakerAllows } from "@/lib/circuitBreaker";
 
 /** Demo tenant fallback, matching the authorities routes. */
 const DEFAULT_ORG_ID = "test-org-uuid-999";
@@ -42,11 +44,19 @@ export interface ActionResult {
  * Failure taxonomy:
  *  - "failed"          → a real runner error (Novu HTTP error / thrown) — transient, retry-eligible.
  *  - "invalid"         → bad input (no recipient, missing context) — a failure, but retrying won't help.
+ *  - "integration-unavailable" → the sink's circuit is OPEN (Phase 8 §11): a failure for
+ *                        sequencing (halt applies), but never retried — the breaker is the
+ *                        one deciding when the sink may be tried again. Kept distinct from
+ *                        "failed" so outage noise doesn't read as rule misconfiguration.
  *  - everything else   → a completed side effect ("sent") or an honest no-op
  *                        ("backend-required"/"mocked-surface"/"not-configured"): not a failure.
  */
 function isFailure(result: ActionResult): boolean {
-  return result.status === "failed" || result.status === "invalid";
+  return (
+    result.status === "failed" ||
+    result.status === "invalid" ||
+    result.status === "integration-unavailable"
+  );
 }
 function isRetryable(result: ActionResult): boolean {
   return result.status === "failed";
@@ -164,21 +174,54 @@ async function executeNotify(params: Record<string, ScopeValue>, ctx: ExecuteCon
     };
   }
 
-  const res = await fetch("https://api.novu.co/v1/events/trigger", {
-    method: "POST",
-    headers: { Authorization: `ApiKey ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name: workflowId,
-      to: { subscriberId: recipient },
-      payload: { requestId: ctx.request?.requestId ?? null, source: "lj-workflow-creator" },
-    }),
-    cache: "no-store",
-  });
+  // Phase 8 §11 — circuit breaker: an open Novu circuit fails fast instead of
+  // hanging on a known-down sink. Breaker bookkeeping never blocks the dispatch
+  // path itself (a health-table hiccup must not take notifications down).
+  const orgId = ctx.orgId || DEFAULT_ORG_ID;
+  const nowIso = new Date().toISOString();
+  try {
+    const state = await SinkHealthService.getState(orgId, "novu");
+    if (!breakerAllows(state, nowIso)) {
+      return {
+        executed: false,
+        action: "notify",
+        status: "integration-unavailable",
+        sink: "novu",
+        detail: "Novu circuit is open after repeated failures — failing fast until the cooldown elapses.",
+      };
+    }
+  } catch {
+    /* health lookup failed — proceed with the real call */
+  }
+
+  let res: Response;
+  try {
+    res = await fetch("https://api.novu.co/v1/events/trigger", {
+      method: "POST",
+      headers: { Authorization: `ApiKey ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: workflowId,
+        to: { subscriberId: recipient },
+        payload: { requestId: ctx.request?.requestId ?? null, source: "lj-workflow-creator" },
+      }),
+      cache: "no-store",
+    });
+  } catch (error: unknown) {
+    await SinkHealthService.record(orgId, "novu", "failure", nowIso).catch(() => {});
+    return {
+      executed: false,
+      action: "notify",
+      status: "failed",
+      detail: error instanceof Error ? error.message : "Novu request failed",
+    };
+  }
 
   if (!res.ok) {
     const detail = await res.text().catch(() => `HTTP ${res.status}`);
+    await SinkHealthService.record(orgId, "novu", "failure", nowIso).catch(() => {});
     return { executed: false, action: "notify", status: "failed", detail };
   }
+  await SinkHealthService.record(orgId, "novu", "success", nowIso).catch(() => {});
   const out = (await res.json().catch(() => ({}))) as { data?: { transactionId?: string } };
   return { executed: true, action: "notify", status: "sent", transactionId: out.data?.transactionId ?? null };
 }

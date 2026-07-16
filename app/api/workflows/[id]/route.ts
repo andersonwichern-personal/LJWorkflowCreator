@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { WorkflowService } from "@/lib/services/workflow";
+import { conflictPayload, isVersionConflict } from "@/lib/optimisticWrite";
 
 /**
  * Helper to retrieve orgId from the request query params
@@ -61,10 +62,21 @@ export async function PATCH(
     }
 
     const body = await req.json();
+    // Phase 8 §12: expectedVersion rides beside the field updates; a stale
+    // version surfaces as 409 + the server's current record (no silent loss).
+    const { expectedVersion, ...updates } = body ?? {};
 
-    const workflow = await WorkflowService.updateWorkflow(id, orgId, body);
+    const workflow = await WorkflowService.updateWorkflow(
+      id,
+      orgId,
+      updates,
+      typeof expectedVersion === "number" ? expectedVersion : undefined
+    );
     return NextResponse.json(workflow);
   } catch (error: any) {
+    if (isVersionConflict(error)) {
+      return NextResponse.json(conflictPayload(error), { status: 409 });
+    }
     console.error(`Failed to update workflow ${req.url}:`, error);
     return NextResponse.json(
       { error: error.message || "Failed to update workflow" },

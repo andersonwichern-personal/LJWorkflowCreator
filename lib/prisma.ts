@@ -6,6 +6,9 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient() {
+  if (!process.env.DATABASE_URL) {
+    process.loadEnvFile?.(".env.local");
+  }
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
     throw new Error(

@@ -176,8 +176,39 @@ Do not carry over:
 - [ ] Demo-bridge live path: fill `.env.local` `LANDJOURNEY_*` + set
       `LANDJOURNEY_EXTRA_HEADERS` to the 4 headers above (needs a real admin
       session token + the tenant dnsPrefix — human step).
-- [ ] Angular embed (`/workflows` lazy route, `lj-page` chrome, ApiService
-      services) — this is Antigravity's repo, not this Next.js tree.
+
+## Angular track — first cut LANDED (`angular-workflows/`, Claude)
+
+Branch `feature/angular-embed`. Workspace: Angular 20 (CLI v20; Node 24.14 is
+below CLI v21's floor), standalone components, SCSS, no SSR.
+
+- [x] Rule core ported VERBATIM (`src/app/core/`): vocabulary, fuzzy,
+      conditionTree, ruleValidation, nlParser — provenance headers, zero edits.
+      Workspace tsconfig relaxes `noPropertyAccessFromIndexSignature` so the
+      core stays byte-identical (documented in tsconfig).
+- [x] Drift guard: 6 Vercel-track assertion suites re-pointed at the ported
+      core (`core-tests/`), wired to workspace `npm test` — **149 assertions
+      exit 0**.
+- [x] `ApiService` mirroring the admin contract (bearer + the 4 headers,
+      `x-organization` = dnsPrefix, sessionId once per browser session).
+- [x] `lj-*` primitive stand-ins with the admin selectors (lj-page, lj-box,
+      lj-box-row, lj-page-heading, lj-button) — markup transplants unchanged.
+- [x] `/workflows` lazy route in the scan's exact registration shape
+      (`canMatch` guard seam), list page (Templates idiom), builder page:
+      WHEN/IF/THEN sentence (multi-trigger OR, 2-level condition groups via
+      ported conditionTree, else lane), token pickers with unconfirmed badges
+      + numeric author-time validation, safety-controls panel, shared-validator
+      issues panel gating Save, plain-English drafting (ported nlParser with
+      uncovered/ambiguity/unresolved surfaces), JSON editor over validateRule,
+      2s draft autosave (`workflowCreatorDrafts`, NEW_WORKFLOW_ID sentinel).
+- [x] Data seam: `WorkflowsService` abstract → in-memory mock (default) or
+      `/workflows/rules` API impl (presumed resource — confirm Q1 before use).
+- [x] Verify: `ng build` clean (lazy chunks split correctly), dev server
+      serves `/workflows`, workspace tests 149/149. NOT yet verified: a human
+      click-through (no browser automation in this session).
+
+Next tranche candidates (product call): simulator/backtest port, proposals
+UI, live vocabulary service, ScopeRef authoring, Monaco, real guard wiring.
 
 ---
 

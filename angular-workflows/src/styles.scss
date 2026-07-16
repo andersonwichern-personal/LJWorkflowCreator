@@ -1,0 +1,58 @@
+/* Workspace-global tokens. Brand values observed on the live admin console
+   (teal #4FC6A5 primary, Inter type). Fonts stay system-stack — no external
+   fetches; the admin repo already ships Inter. */
+:root {
+  --brand: #4fc6a5;
+  --brand-hover: #43b294;
+  --brand-text: #0f8a68;
+  --rail-bg: #123f33;
+
+  --bg: #f6f8f7;
+  --surface: #ffffff;
+  --surface-inset: #f1f4f3;
+  --surface-hover: #eaf0ee;
+  --border: #dde4e1;
+
+  --text: #1c2b26;
+  --text-dim: #64756e;
+
+  --danger: #c94f42;
+  --warn: #d9a13c;
+  --warn-bg: #fdf3df;
+  --warn-text: #8a6114;
+  --info: #3572b0;
+
+  --token-bg: #ffffff;
+  --token-border: #cfd9d5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+.lj-page-heading {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}

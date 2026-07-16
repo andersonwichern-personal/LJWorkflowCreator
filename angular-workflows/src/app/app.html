@@ -1,0 +1,19 @@
+<!--
+  DEV HARNESS ONLY. This shell exists so the /workflows feature can run
+  standalone; it deliberately mimics the admin console's collapsed icon rail
+  but is NOT the transplant target. In the admin monorepo the feature mounts
+  inside lj-shell / lj-main-layout / lj-main-sidebar-v2 and this file dies.
+-->
+<aside class="rail" aria-label="Primary navigation">
+  <div class="logo" title="Sweet · dev harness">S</div>
+  <nav class="links">
+    <a class="link active" title="Workflows" routerLink="/workflows">⚙︎</a>
+    <span class="link inert" title="Not part of the standalone workspace">▢</span>
+    <span class="link inert" title="Not part of the standalone workspace">▢</span>
+  </nav>
+  <div class="foot" title="Standalone workspace — mock backend unless configured">dev</div>
+</aside>
+
+<main class="content">
+  <router-outlet />
+</main>

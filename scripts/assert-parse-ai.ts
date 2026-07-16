@@ -105,7 +105,7 @@ async function main() {
 
   t("404 model fallback returns Gemini response", gemini.engine === "gemini");
   t("env model is attempted first", calls[0]?.includes("/retired-test-model:generateContent"));
-  t("default fast model is attempted second", calls[1]?.includes("/gemini-3.1-flash-lite:generateContent"));
+  t("default fast model is attempted second", calls[1]?.includes("/gemini-3.5-flash:generateContent"));
   t("404 fallback makes exactly two calls", calls.length === 2, JSON.stringify(calls));
   t("404 fallback is logged", warnings.some((warning) => warning.includes("retired-test-model")));
   t("shape drift: trigger key becomes event", gemini.rule?.triggers[0]?.event === "LOAN APPROVED");

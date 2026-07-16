@@ -44,18 +44,22 @@ type GeminiResponse = {
 };
 
 /**
- * Model selection: `GEMINI_MODEL` env override, else the `gemini-flash-latest`
- * alias — Google retires pinned model names for new users (the spec's
- * gemini-2.5-flash now 404s), and the alias tracks the current flash model,
- * mirroring this repo's anti-rot stance. On a model-level 404 we retry once
- * with a recent pinned fallback before degrading to the heuristic parser.
+ * Model selection: `GEMINI_MODEL` env override, then pinned Flash candidates
+ * newest-first, with the `gemini-flash-latest` alias as the anti-rot backstop —
+ * Google retires pinned names for new users (the Phase 8 spec's
+ * gemini-2.5-flash now 404s). Model-level 404/429/503 errors fall through
+ * before the route degrades to the deterministic parser.
+ *
+ * Every name here must be one ListModels actually serves: a candidate that
+ * doesn't exist costs a 404 round-trip on each fall-through and never serves
+ * traffic. `gemini-3.5-flash-lite` (Phase 10 spec) is not a real model — it
+ * 404s — so it is deliberately omitted; 3.1-flash-lite is the live lite tier.
  */
 const GEMINI_MODELS = [
   ...(process.env.GEMINI_MODEL?.trim() ? [process.env.GEMINI_MODEL.trim()] : []),
+  "gemini-3.5-flash",
   "gemini-3.1-flash-lite",
-  "gemini-3.1-flash-lite-preview",
   "gemini-flash-latest",
-  "gemini-3-flash-preview",
 ];
 const GEMINI_TIMEOUT_MS = 60_000; // JSON-mode rule drafts measured 12-40s live
 
@@ -548,6 +552,8 @@ function buildSystemInstruction(context: PromptContext): string {
     "Return exactly this top-level shape: {\"rule\": WorkflowRule | null, \"notes\": string[], \"suggestions\": string[], \"unresolved\": UnresolvedSlot[], \"uncovered\": string[]}.",
     "WorkflowRule must use schemaVersion 3: triggers[], conditions {logic, children}, actions[], optional else[], and controls.",
     "Use EXACTLY these field names (do NOT copy the vocabulary snapshot's 'key' naming into the rule).",
+    "Actions may include delayMinutes as a sibling of action and params. Parse SLA phrases like 'after 2 days', 'in 24 hours', and 'with a 3-day delay' into minutes: 2 days = 2880, 24 hours = 1440, 3 days = 4320.",
+    "For covenant reviews, use trigger event SCHEDULED COVENANT REVIEW and the covenant fields days_since_financials_pulled, compliance_status, and covenant_type. For numeric age wording like 'worse than 90 days' or 'older than 90 days', use operator gt with value '90'.",
     "",
     "--- FEW-SHOT EXAMPLES ---",
     "Example 1: 'when a document is approved and checklists status is complete, assign to Wael'",
@@ -611,7 +617,50 @@ function buildSystemInstruction(context: PromptContext): string {
       uncovered: []
     }),
     "",
-    "Example 4: 'when a loan is approved or rejected and loan amount over 500k, escalate to the credit committee and add tag jumbo'",
+    "Example 4: 'when a loan is approved, notify Wael after 2 days'",
+    JSON.stringify({
+      rule: {
+        schemaVersion: 3,
+        triggers: [{ event: "LOAN APPROVED" }],
+        conditions: { logic: "AND", children: [] },
+        actions: [
+          {
+            action: "notify",
+            params: { value: { level: "instance", id: "u-wael", label: "Wael" } },
+            delayMinutes: 2880,
+          }
+        ],
+        controls: { mode: "shadow", oncePerRequest: true, maxFiresPerHour: 25, missingData: "no_match", priority: 100 }
+      },
+      notes: ["Configured approval notification for Wael.", "Translated 'after 2 days' to delayMinutes 2880."],
+      suggestions: [],
+      unresolved: [],
+      uncovered: []
+    }),
+    "",
+    "Example 5: 'when a scheduled covenant review fires, if days since financials pulled is worse than 90 days, notify Omar'",
+    JSON.stringify({
+      rule: {
+        schemaVersion: 3,
+        triggers: [{ event: "SCHEDULED COVENANT REVIEW" }],
+        conditions: {
+          logic: "AND",
+          children: [
+            { field: "days_since_financials_pulled", operator: "gt", value: "90" }
+          ]
+        },
+        actions: [
+          { action: "notify", params: { value: { level: "instance", id: "u-omar", label: "Omar" } } }
+        ],
+        controls: { mode: "shadow", oncePerRequest: true, maxFiresPerHour: 25, missingData: "no_match", priority: 100 }
+      },
+      notes: ["Configured covenant review trigger.", "Added condition for financials pulled offset exceeding 90 days."],
+      suggestions: [],
+      unresolved: [],
+      uncovered: []
+    }),
+    "",
+    "Example 6: 'when a loan is approved or rejected and loan amount over 500k, escalate to the credit committee and add tag jumbo'",
     JSON.stringify({
       rule: {
         schemaVersion: 3,

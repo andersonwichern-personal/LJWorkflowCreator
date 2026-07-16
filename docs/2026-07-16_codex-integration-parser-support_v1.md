@@ -8,6 +8,8 @@ Purpose: support Claude's Integration and Parser upgrade work without touching C
 
 Do not attempt to transplant the Vercel prototype into the admin console. Treat it as a mature prototype and domain-model reference, then rebuild the production host as a native Angular admin feature.
 
+**Two-track amendment (Anderson, 2026-07-16):** the Vercel app is an independent, continuing product line — not a frozen donor. Both tracks evolve in parallel: the Next.js prototype (repo root) for demos/parser/phase work, and the Angular rebuild (`angular-workflows/`, Claude-owned) for admin-console integration. The shared contract between tracks is the rule core (schema v3, vocabulary, normalization, validation, parser result shape); everything else may diverge per track.
+
 Salvage from the prototype:
 
 - `lib/vocabulary.ts`: rule schema, vocabulary, `ScopeRef`, normalization, controls, operators, verified/unconfirmed confidence.

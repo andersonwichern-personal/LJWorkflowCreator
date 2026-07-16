@@ -114,11 +114,36 @@ UI-configuration `dnsPrefix` from `GET /organizations/external/ui-configuration`
 Vocabulary sources confirmed: `/documents/templates/forms`, `/products/fields`
 (new — fields live in the Products service), `/workflows/templates{,/{id}}`.
 
+## Two-track doctrine — Anderson's decision, 2026-07-16
+
+The repo now carries **two independent tracks**:
+
+1. **Vercel track (Next.js app, repo root)** — the deployed prototype stays a
+   *living, independently evolving product line* (demos, parser engine, phase
+   work). It is NOT frozen and NOT a dead donor: parser/engine improvements,
+   Phase 14/15, and demo features continue to land here on `feature/*` branches
+   as before.
+2. **Angular track (`angular-workflows/`)** — the native admin-console rebuild
+   per the salvage doctrine below. Structured so `src/app/features/workflows/`
+   transplants into the admin monorepo (BitBucket / Antigravity) when access
+   lands. Branch: `feature/angular-embed`.
+
+Divergence is expected and fine. The **shared contract between the tracks is
+the rule core** (schema v3, vocabulary, normalization, validation, parser
+result shape) — a change to those semantics must be made on both tracks or
+called out under Blocked. UI, persistence, and tenancy are per-track and free
+to diverge.
+
+Ownership: Claude owns `angular-workflows/**` (it is UI-layer work). Codex:
+same support role as the prototype — fixtures, checklists, standalone drafts
+outside `angular-workflows/`, unless the ledger says otherwise.
+
 ## Integration salvage doctrine — system-wide decision
 
 Do **not** attempt to transplant the Vercel prototype into the admin console.
 Treat it as a mature prototype/domain reference and rebuild the production host
-natively.
+natively. (Per the two-track doctrine above, "reference" means the Angular
+track salvages from it — not that the Vercel app stops evolving.)
 
 Salvage from the prototype:
 

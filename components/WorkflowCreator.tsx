@@ -471,6 +471,21 @@ export default function WorkflowCreator({
 
         {/* Designer canvas — hierarchy: title bar → AI console → tokens → simulation */}
         <div className="flex flex-col gap-5">
+          {activeId && workflows.find((w) => w.id === activeId)?.pendingProposalId && (
+            <div
+              className="flex items-center gap-2 rounded-2xl border p-4 text-sm font-medium"
+              style={{
+                borderColor: "var(--warn-br)",
+                background: "var(--warn-bg)",
+                color: "var(--warn-fg)",
+              }}
+            >
+              <AlertTriangle size={16} />
+              <span>
+                Pending review: a proposed change to this workflow is awaiting peer approval.
+              </span>
+            </div>
+          )}
           {/* 1. Workflow Title Bar — anchors what rule you are editing */}
           <div className="glass rounded-2xl p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

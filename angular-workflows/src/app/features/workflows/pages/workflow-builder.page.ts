@@ -16,14 +16,16 @@ import {
   walkLeaves,
 } from '../../../core/vocabulary';
 import { RuleIssue, validateRule } from '../../../core/ruleValidation';
+import { shouldProposeWorkflowWrite } from '../../../core/fourEyes';
 import { CacheService, DRAFT_AUTOSAVE_MS, NEW_WORKFLOW_ID, WORKFLOW_DRAFTS_KEY } from '../../../shared/cache.service';
 import { LJ_PRIMITIVES } from '../../../shared/lj/lj';
-import { WorkflowsService } from '../data/workflows.service';
+import { SaveOutcome, WorkflowsService } from '../data/workflows.service';
 import { ChatDraft } from '../ui/chat-draft';
 import { ControlsPanel } from '../ui/controls-panel';
 import { IssuesPanel } from '../ui/issues-panel';
 import { JsonEditor } from '../ui/json-editor';
 import { RuleSentence } from '../ui/rule-sentence';
+import { SimulationPanel } from '../ui/simulation-panel';
 
 interface DraftEnvelope {
   rule: WorkflowRule;
@@ -39,7 +41,7 @@ interface DraftEnvelope {
  */
 @Component({
   selector: 'wf-workflow-builder-page',
-  imports: [...LJ_PRIMITIVES, RuleSentence, ControlsPanel, IssuesPanel, ChatDraft, JsonEditor],
+  imports: [...LJ_PRIMITIVES, RuleSentence, ControlsPanel, IssuesPanel, ChatDraft, JsonEditor, SimulationPanel],
   template: `
     <lj-page>
       <header header>
@@ -65,12 +67,21 @@ interface DraftEnvelope {
               <button lj-button class="danger" (click)="remove()">Delete</button>
             }
             <button lj-button class="primary" [disabled]="saving() || hasErrors()" (click)="save()">
-              {{ saving() ? 'Saving…' : 'Save' }}
+              {{ saving() ? 'Saving…' : wouldPropose() ? 'Propose changes' : 'Save' }}
             </button>
           </lj-box-row>
         </lj-box>
       </header>
 
+      @if (pendingProposal(); as proposalId) {
+        <div class="pending">
+          <span>
+            A change to this workflow is <b>awaiting a second pair of eyes</b> — it was saved as a
+            proposal, not applied.
+          </span>
+          <button type="button" (click)="goProposals()">Review proposals</button>
+        </div>
+      }
       @if (draftBanner(); as draft) {
         <div class="restore">
           <span>Unsaved draft from {{ draft.savedAt.slice(11, 16) }} found.</span>
@@ -100,6 +111,11 @@ interface DraftEnvelope {
           <section class="card">
             <h2 class="card-title">Safety controls</h2>
             <wf-controls-panel [controls]="rule().controls" (controlsChange)="setControls($event)" />
+          </section>
+
+          <section class="card">
+            <h2 class="card-title">Simulate against seed requests</h2>
+            <wf-simulation-panel [rule]="rule()" />
           </section>
         } @else {
           <section class="card">
@@ -132,12 +148,15 @@ interface DraftEnvelope {
       background: var(--surface); color: var(--text-dim); border: 0; cursor: pointer;
     }
     .seg button.active { background: var(--surface-inset); color: var(--text); }
-    .restore {
+    .restore, .pending {
       display: flex; align-items: center; gap: 10px; font-size: 13px;
       background: var(--warn-bg); color: var(--warn-text);
       border-radius: 10px; padding: 10px 14px; margin: 16px 0 0;
     }
-    .restore button {
+    .pending {
+      background: color-mix(in srgb, var(--info) 10%, transparent); color: var(--info);
+    }
+    .restore button, .pending button {
       font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
       border: 1px solid currentColor; background: none; color: inherit;
       border-radius: 999px; padding: 3px 12px;
@@ -177,6 +196,11 @@ export class WorkflowBuilderPage {
   protected readonly name = signal('New workflow');
   protected readonly rule = signal<WorkflowRule>(emptyRule());
   protected readonly draftBanner = signal<DraftEnvelope | null>(null);
+  protected readonly pendingProposal = signal<string | null>(null);
+
+  /** Server-side state at load, for the four-eyes gate preview. */
+  private readonly baselineRule = signal<WorkflowRule | null>(null);
+  private readonly baselineEnabled = signal(true);
 
   private version: number | undefined;
   private dirty = false;
@@ -185,6 +209,20 @@ export class WorkflowBuilderPage {
   protected readonly hasErrors = computed(() =>
     this.issues().some((issue) => issue.severity === 'error')
   );
+
+  /**
+   * Will this save land as a proposal? Same shared-core gate the service
+   * enforces — the button label states what will actually happen (§2.3).
+   */
+  protected readonly wouldPropose = computed(() => {
+    const baseline = this.baselineRule();
+    if (this.isNew() || !baseline) return false;
+    return shouldProposeWorkflowWrite({
+      currentRule: baseline,
+      currentEnabled: this.baselineEnabled(),
+      nextRule: this.rule(),
+    });
+  });
 
   protected readonly summary = computed(() => {
     const rule = this.rule();
@@ -233,6 +271,9 @@ export class WorkflowBuilderPage {
         this.name.set(record.name);
         this.rule.set(record.ruleJson);
         this.version = record.version;
+        this.baselineRule.set(record.ruleJson);
+        this.baselineEnabled.set(record.enabled);
+        this.pendingProposal.set(record.pendingProposalId ?? null);
         const draft = drafts[this.id];
         if (draft && draft.savedAt > record.updatedAt) this.draftBanner.set(draft);
         this.loading.set(false);
@@ -299,20 +340,48 @@ export class WorkflowBuilderPage {
       ruleJson: this.rule(),
       expectedVersion: this.version,
     };
-    const request = this.isNew() ? this.service.create(write) : this.service.update(this.id, write);
-    request.subscribe({
-      next: (record) => {
+
+    if (this.isNew()) {
+      this.service.create(write).subscribe({
+        next: (record) => {
+          this.saving.set(false);
+          this.dirty = false;
+          this.clearDraft();
+          void this.router.navigate(['/workflows', record.id, 'edit']);
+        },
+        error: (error: Error) => {
+          this.saving.set(false);
+          this.error.set(error.message);
+        },
+      });
+      return;
+    }
+
+    this.service.update(this.id, write).subscribe({
+      next: (outcome: SaveOutcome) => {
         this.saving.set(false);
         this.dirty = false;
         this.clearDraft();
-        this.version = record.version;
-        if (this.isNew()) void this.router.navigate(['/workflows', record.id, 'edit']);
+        this.version = outcome.record.version;
+        if (outcome.kind === 'proposed') {
+          // The write did NOT land — it became a proposal (four-eyes). Reflect
+          // the server truth: baseline unchanged, banner up.
+          this.pendingProposal.set(outcome.proposalId);
+        } else {
+          this.baselineRule.set(outcome.record.ruleJson);
+          this.baselineEnabled.set(outcome.record.enabled);
+          this.pendingProposal.set(null);
+        }
       },
       error: (error: Error) => {
         this.saving.set(false);
         this.error.set(error.message);
       },
     });
+  }
+
+  protected goProposals() {
+    void this.router.navigate(['/workflows', 'proposals']);
   }
 
   protected remove() {

@@ -18,6 +18,10 @@ export const routes: Routes = [
           import('./pages/workflows-list.page').then((m) => m.WorkflowsListPage),
       },
       {
+        path: 'proposals',
+        loadComponent: () => import('./pages/proposals.page').then((m) => m.ProposalsPage),
+      },
+      {
         path: ':id/edit',
         loadComponent: () =>
           import('./pages/workflow-builder.page').then((m) => m.WorkflowBuilderPage),

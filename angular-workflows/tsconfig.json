@@ -16,7 +16,13 @@
     "experimentalDecorators": true,
     "importHelpers": true,
     "target": "ES2022",
-    "module": "preserve"
+    "module": "preserve",
+    // The Vercel track's "@/lib/*" alias, mapped onto the ported core so files
+    // like core/fourEyes.ts stay byte-identical across tracks.
+    "baseUrl": ".",
+    "paths": {
+      "@/lib/*": ["src/app/core/*"]
+    }
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,

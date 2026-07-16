@@ -2,6 +2,7 @@ import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { LJ_PRIMITIVES } from '../../../shared/lj/lj';
+import { VocabularyChip } from '../ui/vocabulary-chip';
 import { WorkflowRecord, WorkflowsService } from '../data/workflows.service';
 
 /**
@@ -10,13 +11,14 @@ import { WorkflowRecord, WorkflowsService } from '../data/workflows.service';
  */
 @Component({
   selector: 'wf-workflows-list-page',
-  imports: [...LJ_PRIMITIVES, RouterLink, DatePipe],
+  imports: [...LJ_PRIMITIVES, RouterLink, DatePipe, VocabularyChip],
   template: `
     <lj-page>
       <header header>
         <lj-box class="header" [padding]="4">
           <lj-box-row [paddingBlockEnd]="4">
             <h1 lj-page-heading>Workflows</h1>
+            <wf-vocabulary-chip />
             <span class="spacer"></span>
             <input
               class="search"
@@ -25,6 +27,12 @@ import { WorkflowRecord, WorkflowsService } from '../data/workflows.service';
               [value]="query()"
               (input)="query.set($any($event.target).value)"
             />
+            <button lj-button (click)="goProposals()">
+              Proposals
+              @if (pendingProposals() > 0) {
+                <span class="badge">{{ pendingProposals() }}</span>
+              }
+            </button>
             <button lj-button class="primary" (click)="create()">Create New</button>
           </lj-box-row>
         </lj-box>
@@ -58,6 +66,9 @@ import { WorkflowRecord, WorkflowsService } from '../data/workflows.service';
                   <span class="mode" [class.armed]="row.ruleJson.controls.mode === 'armed'">
                     {{ row.ruleJson.controls.mode }}
                   </span>
+                  @if (row.proposalStatus === 'pending') {
+                    <span class="mode proposal" title="A change is awaiting review">proposal pending</span>
+                  }
                 </td>
                 <td>
                   <button
@@ -107,6 +118,11 @@ import { WorkflowRecord, WorkflowsService } from '../data/workflows.service';
       background: var(--surface-inset); color: var(--text-dim);
     }
     .mode.armed { background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); }
+    .mode.proposal { margin-left: 6px; background: var(--warn-bg); color: var(--warn-text); }
+    .badge {
+      font-size: 10px; font-weight: 800; border-radius: 999px; padding: 1px 7px;
+      background: var(--warn-bg); color: var(--warn-text);
+    }
     .toggle {
       width: 36px; height: 20px; border-radius: 999px; border: 1px solid var(--border);
       background: var(--surface-inset); cursor: pointer; position: relative; padding: 0;
@@ -158,14 +174,26 @@ export class WorkflowsListPage {
     });
   }
 
+  protected readonly pendingProposals = computed(
+    () => this.rows().filter((row) => row.proposalStatus === 'pending').length
+  );
+
   protected create() {
     void this.router.navigate(['/workflows', 'new', 'edit']);
   }
 
+  protected goProposals() {
+    void this.router.navigate(['/workflows', 'proposals']);
+  }
+
   protected toggle(row: WorkflowRecord) {
     this.service.toggle(row.id, !row.enabled).subscribe({
-      next: (updated) =>
-        this.rows.update((rows) => rows.map((r) => (r.id === updated.id ? updated : r))),
+      next: (outcome) =>
+        // 'saved' applies the flip; 'proposed' leaves the row as-is but now
+        // carrying the pending-proposal marker — both are the outcome record.
+        this.rows.update((rows) =>
+          rows.map((r) => (r.id === outcome.record.id ? outcome.record : r))
+        ),
     });
   }
 

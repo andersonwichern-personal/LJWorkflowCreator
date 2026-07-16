@@ -11,6 +11,7 @@ import {
   type ConditionLeaf,
   type CondLogic,
   type RuleOutput,
+  type ScopeValue,
   type WorkflowRule,
   condFieldDef,
   condFieldKey,
@@ -20,10 +21,11 @@ import {
   isLegacyString,
   isScopeRef,
   paramKeyFor,
-  scopeInstanceId,
   scopeLabel,
   walkLeaves,
   FIELDS,
+  SCOPED_FIELDS,
+  SCOPED_PARAMS,
   getAction,
 } from "./vocabulary";
 import { validateRule, type RuleIssue } from "./ruleValidation";
@@ -35,15 +37,25 @@ export type { RuleIssue } from "./ruleValidation";
  * optional: without them, the reference/overlap/exposure checks are skipped
  * (they can't assert absence against a registry they weren't given).
  */
+/**
+ * A live registry the linter can check references against. `{ id, label }`
+ * entries carry the platform id, so an instance ref can be enforced against a
+ * real record; bare strings are the legacy label-only form, still accepted so
+ * older callers (and tests) keep working.
+ */
+export type LintRegistry = Array<string | { id: string; label: string }>;
+
 export interface LintContext {
   /** Other saved rules (for OVERLAP); the rule under lint should be excluded. */
   peers?: { id: string; name: string; rule: WorkflowRule; enabled: boolean }[];
-  /** Valid request stage names (BROKEN_REF on stage conditions). */
-  stages?: string[];
-  /** Valid assignee/user names (BROKEN_REF on assign_user / notify). */
-  users?: string[];
+  /** Valid request stages (BROKEN_REF on stage conditions). */
+  stages?: LintRegistry;
+  /** Valid assignees/users (BROKEN_REF on assign_user / notify / team_member). */
+  users?: LintRegistry;
   /** Valid template ids (BROKEN_REF on template-scoped trigger/condition refs). */
   templates?: string[];
+  /** Valid retailers (BROKEN_REF on retailer conditions). */
+  retailers?: LintRegistry;
   /** Configured authority level ids (BROKEN_REF on assign_authority instance refs). */
   authorityIds?: string[];
   /** Field keys populated by the live template set (MISSING_DATA_EXPOSURE). */
@@ -339,26 +351,104 @@ function collectAllLeaves(group: ConditionGroup, basePath: string): LeafRef[] {
 /* BROKEN_REF — dangling stage / field / user / template / authority refs      */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Registries whose bare-string entries are platform ids rather than display
+ * labels. A legacy free-text value on these can't be checked at all (the
+ * registry holds no labels to match against), so it degrades to "unverifiable"
+ * instead of a false BROKEN_REF.
+ */
+const ID_ONLY_REGISTRIES = new Set(["Template", "Authority Target"]);
+
+/**
+ * Check one reference against its live registry.
+ *
+ * - `instance` refs are the strict case: an id that the registry doesn't carry
+ *   is a dangling pointer to a deleted (or fabricated) record → blocking error.
+ * - `category` refs name a static type chip, never a live record, so they are
+ *   checked against the token's own category list — the instance registry does
+ *   not (and should not) contain them.
+ * - legacy strings are label-shaped: a match still resolves, so it warns and
+ *   invites an upgrade to an ID-bound ref rather than blocking the save.
+ *
+ * An absent or empty registry means "not loaded" — absence can't be asserted
+ * against a registry we were never given, so every branch skips.
+ */
+function validateRef(
+  value: ScopeValue | undefined,
+  registry: LintRegistry | undefined,
+  typeName: string,
+  path: string,
+  issues: RuleIssue[],
+  categories?: string[]
+) {
+  if (value == null) return;
+  if (!registry || registry.length === 0) return;
+
+  const hasId = (id: string) =>
+    registry.some((item) => (typeof item === "string" ? item === id : item.id === id));
+
+  const hasLabel = (lbl: string) =>
+    registry.some((item) =>
+      typeof item === "string"
+        ? item.toLowerCase() === lbl.toLowerCase()
+        : item.label.toLowerCase() === lbl.toLowerCase()
+    );
+
+  if (isLegacyString(value)) {
+    const trimmed = value.trim();
+    if (!trimmed || ID_ONLY_REGISTRIES.has(typeName)) return;
+    if (!hasLabel(trimmed)) {
+      push(issues, "error", "BROKEN_REF", `"${trimmed}" is not a known ${typeName}.`, path);
+      return;
+    }
+    push(
+      issues,
+      "warning",
+      "BROKEN_REF",
+      `"${trimmed}" is a legacy text reference. Consider re-selecting it to upgrade to an ID-bound reference.`,
+      path
+    );
+    return;
+  }
+
+  if (!isScopeRef(value)) return;
+
+  if (value.level === "instance") {
+    if (value.id) {
+      if (!hasId(value.id)) {
+        push(issues, "error", "BROKEN_REF", `${typeName} ID "${value.id}" (${value.label}) is not known.`, path);
+      }
+    } else if (value.label && !hasLabel(value.label)) {
+      push(issues, "error", "BROKEN_REF", `"${value.label}" is not a known ${typeName}.`, path);
+    }
+  } else if (value.level === "category") {
+    const category = value.category;
+    if (!category || !categories || categories.length === 0) return;
+    if (!categories.some((c) => c.toLowerCase() === category.toLowerCase())) {
+      push(issues, "error", "BROKEN_REF", `Category "${category}" is not a known ${typeName}.`, path);
+    }
+  }
+}
+
+/** Condition fields whose values point at a live registry. */
+const CONDITION_REGISTRIES: Record<string, { typeName: string; of: (ctx: LintContext) => LintRegistry | undefined }> = {
+  template: { typeName: "Template", of: (ctx) => ctx.templates },
+  stage: { typeName: "Stage", of: (ctx) => ctx.stages },
+  retailer: { typeName: "Retailer", of: (ctx) => ctx.retailers },
+  team_member: { typeName: "User", of: (ctx) => ctx.users },
+};
+
 function lintBrokenRefs(rule: WorkflowRule, ctx: LintContext, issues: RuleIssue[]) {
-  const templateIds = ctx.templates ?? [];
-  // Condition-side refs: unknown attribute fields + stages outside the live set.
+  // Condition-side refs: unknown attribute fields + values outside the live set.
   collectAllLeaves(rule.conditions, "conditions").forEach(({ leaf, path }) => {
     if (!isFormFieldRef(leaf.field) && !FIELDS[leaf.field as string]) {
       push(issues, "error", "BROKEN_REF", `Condition references an unknown field "${leaf.field as string}".`, path);
       return;
     }
-    if (condFieldKey(leaf.field) === "template" && templateIds.length > 0) {
-      const instId = scopeInstanceId(leaf.value);
-      if (instId && !templateIds.includes(instId)) {
-        push(issues, "error", "BROKEN_REF", `Template ${instId} is not a known request template.`, path);
-      }
-    }
-    if (condFieldKey(leaf.field) === "stage" && ctx.stages && ctx.stages.length > 0) {
-      const val = scopeLabel(leaf.value).trim();
-      if (val && !isScopeRef(leaf.value) && !ctx.stages.some((s) => s.toLowerCase() === val.toLowerCase())) {
-        push(issues, "error", "BROKEN_REF", `Stage "${val}" is not a known request stage.`, path);
-      }
-    }
+    const key = condFieldKey(leaf.field);
+    const target = CONDITION_REGISTRIES[key];
+    if (!target) return;
+    validateRef(leaf.value, target.of(ctx), target.typeName, path, issues, SCOPED_FIELDS[key]?.categories);
   });
 
   // Action-side refs: unknown actions, unknown users, dangling authority targets.
@@ -369,30 +459,20 @@ function lintBrokenRefs(rule: WorkflowRule, ctx: LintContext, issues: RuleIssue[
         push(issues, "error", "BROKEN_REF", `Unknown action "${a.action}".`, path);
         return;
       }
-      if ((a.action === "assign_user" || a.action === "notify") && ctx.users && ctx.users.length > 0) {
-        const val = a.params[paramKeyFor(a.action)];
-        if (val && isLegacyString(val) && !ctx.users.some((u) => u.toLowerCase() === val.trim().toLowerCase())) {
-          push(issues, "error", "BROKEN_REF", `"${val}" is not a known user for ${def.label}.`, path);
-        }
-      }
-      if (a.action === "assign_authority" && ctx.authorityIds) {
-        const instId = scopeInstanceId(a.params[paramKeyFor("assign_authority")]);
-        if (instId && !ctx.authorityIds.includes(instId)) {
-          push(issues, "error", "BROKEN_REF", `Escalation target no longer exists (authority ${instId}).`, path);
-        }
+      const param = a.params[paramKeyFor(a.action)];
+      const categories = SCOPED_PARAMS[a.action]?.categories;
+      if (a.action === "assign_user" || a.action === "notify") {
+        validateRef(param, ctx.users, "User", path, issues, categories);
+      } else if (a.action === "assign_authority") {
+        validateRef(param, ctx.authorityIds, "Authority Target", path, issues, categories);
       }
     }
   );
 
   // Trigger scopes are template instance refs in this phase.
-  if (templateIds.length > 0) {
-    rule.triggers.forEach((t, i) => {
-      const instId = scopeInstanceId(t.scope);
-      if (instId && !templateIds.includes(instId)) {
-        push(issues, "error", "BROKEN_REF", `Trigger template ${instId} is not a known request template.`, `triggers[${i}].scope`);
-      }
-    });
-  }
+  rule.triggers.forEach((t, i) => {
+    validateRef(t.scope, ctx.templates, "Template", `triggers[${i}].scope`, issues, SCOPED_FIELDS.template?.categories);
+  });
 }
 
 /* -------------------------------------------------------------------------- */

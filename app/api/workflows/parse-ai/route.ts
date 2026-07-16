@@ -373,8 +373,18 @@ function enforceKnownAssignees(
       if (typeof value === "string") {
         if (!knownLower.has(value.trim().toLowerCase())) heard = value;
       } else if (value.level === "instance") {
-        if (!knownIds.has(value.id) && !knownLower.has(value.label.trim().toLowerCase())) {
+        // With a live directory loaded, the id is the only thing that resolves —
+        // a model that invents one has invented the person, even if the label
+        // happens to read like a real name. Without one, every known assignee is
+        // a static label with no id, so any id the model emits is fabricated:
+        // blank it rather than let a made-up id reach the schema.
+        const liveUsersConfigured = context.users.some((u) => u.id !== "");
+        if (liveUsersConfigured) {
+          if (!knownIds.has(value.id)) heard = value.label;
+        } else if (!knownLower.has(value.label.trim().toLowerCase())) {
           heard = value.label;
+        } else if (value.id !== "") {
+          value.id = "";
         }
       } else if (
         value.level === "category" &&

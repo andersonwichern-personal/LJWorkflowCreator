@@ -369,11 +369,18 @@ export default function WorkflowCreator({
   const isBlank = !activeId && rule.conditions.children.length === 0 && rule.actions.length === 0;
 
   // Phase 4 linter: semantic checks over the live registries. Errors block save.
+  // Phase 11: stages/users/retailers carry their platform id so an instance ref
+  // is checked against the real record, not just its label snapshot. The static
+  // ASSIGNEES stay as id-less entries — they resolve by label only.
   const lintContext = useMemo<LintContext>(
     () => ({
-      users: [...ASSIGNEES, ...(overlay?.instances.users?.map((u) => u.label) ?? [])],
+      users: [
+        ...ASSIGNEES.map((label) => ({ id: "", label })),
+        ...(overlay?.instances.users ?? []),
+      ],
       templates: overlay?.instances.templates?.map((t) => t.id) ?? [],
-      stages: overlay?.instances.stages?.map((s) => s.label) ?? [],
+      stages: overlay?.instances.stages?.map((s) => ({ id: s.id, label: s.label })) ?? [],
+      retailers: overlay?.instances.retailers?.map((r) => ({ id: r.id, label: r.label })) ?? [],
       authorityIds: authorities.map((a) => a.id),
       liveFieldKeys: overlay?.liveFields?.map((f) => f.fieldId) ?? [],
       peers: workflows

@@ -4,6 +4,32 @@ Date: 2026-07-16
 
 Purpose: support Claude's Integration and Parser upgrade work without touching Claude-owned implementation files.
 
+## System-Wide Integration Decision
+
+Do not attempt to transplant the Vercel prototype into the admin console. Treat it as a mature prototype and domain-model reference, then rebuild the production host as a native Angular admin feature.
+
+Salvage from the prototype:
+
+- `lib/vocabulary.ts`: rule schema, vocabulary, `ScopeRef`, normalization, controls, operators, verified/unconfirmed confidence.
+- Parser contracts and behavior: deterministic fallback, structured result shape, unresolved/uncovered/ambiguity sidecars, fuzzy matching, and fixtures.
+- Rule evaluator, validator, linter, approval/maker-checker engines, and assertion suites.
+- UX concepts: plain-English drafting, WHEN/IF/THEN token grammar, simulator/backtest, safety controls, proposals, pause-all control, analytics, reference audit.
+
+Rebuild for production:
+
+- Angular `/workflows` lazy route under the authenticated admin shell.
+- Admin UI primitives and Dynamic Form builder-style interaction patterns.
+- `ApiService`-backed services using `authorization`, `x-session-id`, `x-landjourney-agent`, `x-landjourney-app-type`, and `x-organization`.
+- Production navigation, permission mapping, feature flags, draft autosave, version history, live vocabulary services, and real user/approver directory.
+
+Do not carry over:
+
+- Next.js app shell/runtime, React sidebar/layout, internal view-state routing.
+- Same-origin `/api` fetch assumptions.
+- `orgId` query/body tenancy.
+- Demo localStorage persona/theme state.
+- Hardcoded demo approvers/users.
+
 ## Current Coordination Boundary
 
 The live task ledger at `docs/agent/task.md` still marks Phase 14 as Claude-owned and says Codex is autocomplete-only for that phase. Until the ledger changes, Codex should not edit:

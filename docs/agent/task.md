@@ -114,6 +114,40 @@ UI-configuration `dnsPrefix` from `GET /organizations/external/ui-configuration`
 Vocabulary sources confirmed: `/documents/templates/forms`, `/products/fields`
 (new — fields live in the Products service), `/workflows/templates{,/{id}}`.
 
+## Integration salvage doctrine — system-wide decision
+
+Do **not** attempt to transplant the Vercel prototype into the admin console.
+Treat it as a mature prototype/domain reference and rebuild the production host
+natively.
+
+Salvage from the prototype:
+
+- portable rule core: `lib/vocabulary.ts`, schema v3, normalization, `ScopeRef`,
+  controls, operators, verified/unconfirmed confidence
+- parser contracts and behavior: deterministic fallback, structured result shape,
+  `unresolved`, `uncovered`, `ambiguities`, fuzzy matching, parser fixtures
+- evaluator/validator/linter/approval engines and their assertion suites
+- UX concepts: plain-English drafting, WHEN/IF/THEN token grammar, simulator,
+  backtest, safety controls, maker-checker proposals, pause-all automations,
+  execution analytics, reference audit
+
+Rebuild in the production admin repo:
+
+- Angular `/workflows` lazy route under the authenticated shell
+- `lj-page`/admin UI primitives and Dynamic Form builder-style editor patterns
+- `ApiService`-backed services with required headers and `x-organization`
+  tenancy
+- production navigation, permissions, feature flags, draft autosave, version
+  history, live vocabulary services, and real user/approver directory
+
+Do not carry over:
+
+- Next.js app shell, React/Tailwind sidebar, internal React view-state routing
+- direct same-origin `/api` fetch contract
+- `orgId` query/body tenancy
+- demo localStorage persona/theme state
+- hardcoded demo approvers/users
+
 - [ ] Demo-bridge live path: fill `.env.local` `LANDJOURNEY_*` + set
       `LANDJOURNEY_EXTRA_HEADERS` to the 4 headers above (needs a real admin
       session token + the tenant dnsPrefix — human step).

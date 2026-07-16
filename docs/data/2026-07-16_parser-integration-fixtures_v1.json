@@ -1,0 +1,208 @@
+{
+  "name": "Parser and integration upgrade fixtures",
+  "createdAt": "2026-07-16",
+  "sourceDocs": [
+    "Sweet Coding Work/docs/2026-07-16_codex-integration-parser-support_v1.md",
+    "/Users/andersonwichern/Documents/Codex/2026-07-16/perform-a-targeted-integration-scan-of/outputs/landjourney-workflow-creator-integration-report.md",
+    "/Users/andersonwichern/Documents/Codex/2026-07-16/perform-a-targeted-integration-scan-of/outputs/lj-workflow-creator-vercel-integration-report.md"
+  ],
+  "verifiedEvents": [
+    "SYSTEM ERROR",
+    "LOAN APPROVED",
+    "LOAN REJECTED",
+    "OFFER ACCEPTED",
+    "FISERV LOAN",
+    "FMAC LOAN"
+  ],
+  "integrationContracts": {
+    "adminShell": {
+      "route": "/workflows",
+      "routing": "lazy child route under authenticated shell",
+      "requiredShellPrimitives": [
+        "lj-shell",
+        "lj-main-layout",
+        "lj-main-sidebar-v2",
+        "router-outlet",
+        "lj-page"
+      ]
+    },
+    "apiHeaders": {
+      "required": [
+        "authorization",
+        "x-landjourney-agent",
+        "x-session-id",
+        "x-landjourney-app-type",
+        "x-organization"
+      ],
+      "tenancyHeader": "x-organization",
+      "prototypeOnlyTenancy": "orgId query string"
+    },
+    "vocabularySources": [
+      "/documents/templates/forms",
+      "/products/fields",
+      "/workflows/templates",
+      "/workflows/templates/{templateId}"
+    ]
+  },
+  "parserCases": [
+    {
+      "id": "known-system-error-booking-status",
+      "instruction": "When booking status is Error, assign to Wael",
+      "expected": {
+        "events": ["SYSTEM ERROR"],
+        "conditions": [
+          {
+            "field": "bookstatus",
+            "operator": "is",
+            "value": "Error"
+          }
+        ],
+        "actions": ["assign_user"],
+        "unresolved": []
+      }
+    },
+    {
+      "id": "loan-amount-threshold",
+      "instruction": "When a loan is approved and loan amount is at least 250k, assign to Underwriting Team",
+      "expected": {
+        "events": ["LOAN APPROVED"],
+        "conditions": [
+          {
+            "field": "loan_amount",
+            "operator": "gte",
+            "value": 250000
+          }
+        ],
+        "actions": ["assign_user"],
+        "unresolved": []
+      }
+    },
+    {
+      "id": "multi-trigger-approved-or-rejected",
+      "instruction": "When a loan over $500,000 is approved or rejected, notify Sara and add tag jumbo",
+      "expected": {
+        "events": ["LOAN APPROVED", "LOAN REJECTED"],
+        "conditions": [
+          {
+            "field": "loan_amount",
+            "operator": "gt",
+            "value": 500000
+          }
+        ],
+        "actions": ["notify", "add_tag"],
+        "unresolved": []
+      }
+    },
+    {
+      "id": "fiserv-booking-failure-else-tag",
+      "instruction": "When a Fiserv loan booking fails, notify the booking team, otherwise tag it clean",
+      "expected": {
+        "events": ["FISERV LOAN"],
+        "conditions": [
+          {
+            "field": "bookstatus",
+            "operator": "is",
+            "value": "Error"
+          }
+        ],
+        "actions": ["notify"],
+        "elseActions": ["add_tag"]
+      }
+    },
+    {
+      "id": "reject-unknown-assignee",
+      "instruction": "When a loan is approved, assign to Santa Claus",
+      "expected": {
+        "events": ["LOAN APPROVED"],
+        "mustNotContain": ["Santa Claus"],
+        "unresolvedIncludes": ["Santa Claus"]
+      }
+    },
+    {
+      "id": "partial-parse-reports-uncovered-clause",
+      "instruction": "When a loan over 250k is approved and DSCR is under 1.2, escalate to committee and request tax returns",
+      "expected": {
+        "events": ["LOAN APPROVED"],
+        "conditions": [
+          {
+            "field": "loan_amount",
+            "operator": "gt",
+            "value": 250000
+          }
+        ],
+        "uncoveredNonEmpty": true
+      }
+    },
+    {
+      "id": "unknown-event-does-not-fabricate",
+      "instruction": "When offer expires, send booking to Jack Henry",
+      "expected": {
+        "mustNotContainEvents": ["OFFER EXPIRED", "JACK HENRY LOAN"],
+        "unresolvedNonEmpty": true
+      }
+    },
+    {
+      "id": "schema-v3-output-shape",
+      "instruction": "When a loan is rejected, close the request",
+      "expected": {
+        "schemaVersion": 3,
+        "requiredRuleKeys": [
+          "schemaVersion",
+          "triggers",
+          "conditions",
+          "actions",
+          "controls"
+        ],
+        "conditionGroupKeys": ["logic", "children"]
+      }
+    }
+  ],
+  "normalizationCases": [
+    {
+      "id": "legacy-v2-single-trigger-normalizes-to-v3",
+      "inputRule": {
+        "schemaVersion": 2,
+        "trigger": {
+          "event": "SYSTEM ERROR"
+        },
+        "conditions": {
+          "logic": "AND",
+          "rules": [
+            {
+              "field": "bookstatus",
+              "operator": "is",
+              "value": "Error"
+            }
+          ]
+        },
+        "actions": [
+          {
+            "action": "assign_user",
+            "target": "Wael"
+          }
+        ]
+      },
+      "expected": {
+        "schemaVersion": 3,
+        "events": ["SYSTEM ERROR"],
+        "conditionGroupKeys": ["logic", "children"]
+      }
+    }
+  ],
+  "negativeIntegrationCases": [
+    {
+      "id": "admin-integration-should-not-use-prototype-org-id-tenancy",
+      "expected": {
+        "requiredTenancyHeader": "x-organization",
+        "disallowedTenancyPattern": "orgId query string"
+      }
+    },
+    {
+      "id": "admin-integration-should-not-bypass-api-service",
+      "expected": {
+        "requiredClientPattern": "ApiService-backed Angular service",
+        "disallowedClientPattern": "raw browser fetch"
+      }
+    }
+  ]
+}

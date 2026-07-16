@@ -52,12 +52,78 @@ Status: backend done and committed (`bf4b01b`, `a2a53f1`); §2.3 UI outstanding.
 
 ---
 
-# Phase 14 — not started
+# Integration + Parser Upgrade (Anderson's redirect, 2026-07-16)
 
-**No spec exists.** `docs/` contains specs for phases 8, 9, 10, 11, 12, 13 only.
-Gemini owns spec authorship; do not infer requirements. Blocked until
-`docs/2026-07-*_phase-14-*-specs_v1.md` lands.
+Anderson redirected mid-session: park Phase 14 webhooks, work the **integration
+and parser upgrade plan** the architect laid out in the two 2026-07-16 scan
+reports (NOT the older 07-14 reverse-engineering docs):
 
-# Phase 15 — not started
+- `~/Documents/Codex/2026-07-16/…/outputs/landjourney-workflow-creator-integration-report.md`
+  — live admin-console source-map scan (the Angular target).
+- `~/Documents/Codex/2026-07-16/…/outputs/lj-workflow-creator-vercel-integration-report.md`
+  — deployed-prototype scan; §7 is the parser-upgrade plan, §5 the integration gap map.
 
-**No spec exists.** Same as above.
+Codex left a support note + fixtures (`docs/2026-07-16_codex-integration-parser-support_v1.md`,
+`docs/data/2026-07-16_parser-integration-fixtures_v1.json`) and respected the
+file boundary — it did not touch parser files.
+
+Branch: `feature/parser-upgrade`.
+
+## Claude — parser upgrade (report §7)
+
+- [x] Multi-action extraction fix — action regexes end in a zero-width
+      lookahead, not a connector-consuming group (probe 1 dropped `add_tag`).
+      `stripTrailingPunct` on captures (probe 2's `"wael."`). `change_stage`
+      delay suffix. `lib/nlParser.ts`, committed `285a5f7`.
+- [x] **Bug found + fixed**: `change_stage` delay took its quantity from a
+      capture but the *unit* from re-scanning the whole match — a stage name
+      containing "day" (e.g. "monday review") turned 3 weeks into 3 days, a
+      silent 7× timer error. Unit is now a capture. `scripts/assert-multi-action.ts`
+      (18 assertions) pins it; wired into `npm run test`.
+- [x] Gemini structured output — `responseSchema` on the parse call (report §7
+      "Use Structured Outputs, Not Freeform JSON"). `app/api/workflows/parse-ai/route.ts`.
+- [x] **Bug found + fixed**: the model chain caught only HTTP 404/429/503, so a
+      per-model timeout (AbortError) threw out of the chain and never tried the
+      healthy candidates; timeout was per-model (60s × 3 = 180s) with no
+      `maxDuration`. Now: timeouts fall through, 25s/attempt + 50s total budget,
+      `maxDuration=60`. Committed `7ce287c`; 3 new assertions in assert-parse-ai.ts.
+
+Verify: full suite **619 assertions exit 0**, build clean, lint clean.
+
+## Open — needs Anderson / Gemini (not code)
+
+- **Model ordering (latency vs accuracy).** Live probing today: the lead
+  candidate `gemini-3.5-flash` is persistently slow/busy (503 + 25s timeouts),
+  so requests pay the cascade cost before landing on `gemini-3.1-flash-lite`
+  (~2s, correct). The fixed cascade makes this survivable, not free. Reordering
+  the chain to lead with the lite tier is an accuracy-vs-latency call — Gemini
+  owns model choice; not changed unilaterally.
+- **Parser §7 next tranche (larger, deferred to a spec):** live-vocabulary
+  retrieval before parsing, embeddings for vocab lookup, negation ("unless"),
+  form-backed fields (crop_type/use_of_funds), scheduler/time triggers, a
+  coverage gate before Save/Arm. These are new capability, not fixes — worth a
+  Gemini spec before building.
+
+## Integration — Q2 is ANSWERED (was the July-14 blocker)
+
+The admin scan resolved the interceptor mystery that blocked the live path since
+2026-07-14. `ApiService.getHeaders()` attaches, beyond the bearer:
+`x-landjourney-agent: web`, `x-session-id: <id>`, `x-landjourney-app-type:
+backoffice`, `x-organization: <dnsPrefix>` (NOT `X-Org-Id`; org context =
+UI-configuration `dnsPrefix` from `GET /organizations/external/ui-configuration`).
+Vocabulary sources confirmed: `/documents/templates/forms`, `/products/fields`
+(new — fields live in the Products service), `/workflows/templates{,/{id}}`.
+
+- [ ] Demo-bridge live path: fill `.env.local` `LANDJOURNEY_*` + set
+      `LANDJOURNEY_EXTRA_HEADERS` to the 4 headers above (needs a real admin
+      session token + the tenant dnsPrefix — human step).
+- [ ] Angular embed (`/workflows` lazy route, `lj-page` chrome, ApiService
+      services) — this is Antigravity's repo, not this Next.js tree.
+
+---
+
+# Phase 14 (webhooks) / Phase 15 (digests) — parked
+
+Specs exist (`docs/2026-07-16_phase-14-webhooks-specs_v1.md`,
+`…phase-15-digests-specs_v1.md`). Parked by Anderson's redirect above; resume
+after the parser/integration work.

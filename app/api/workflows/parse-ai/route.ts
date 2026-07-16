@@ -455,6 +455,17 @@ async function loadVocab(): Promise<LoadedVocab> {
 
 type PromptContext = ReturnType<typeof buildPromptContext>;
 
+function cleanPromptText(value: string): string {
+  return value
+    .replace(/[`$<>]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function limitItems<T>(items: T[], limit = 20): T[] {
+  return items.slice(0, limit);
+}
+
 function buildPromptContext({ live, overlay }: LoadedVocab) {
   const liveUsers = overlay?.instances.users ?? [];
   const liveTemplates = overlay?.instances.templates ?? [];
@@ -474,7 +485,14 @@ function buildPromptContext({ live, overlay }: LoadedVocab) {
         uncovered: "string[]",
       },
     },
-    source: live.source === "live" ? { kind: "live", fetchedAt: live.fetchedAt, errors: live.errors } : live,
+    source:
+      live.source === "live"
+        ? {
+            kind: "live",
+            fetchedAt: live.fetchedAt,
+            errors: limitItems((live.errors ?? []).map(cleanPromptText)),
+          }
+        : { ...live, reason: cleanPromptText((live as { reason?: string }).reason ?? "static fallback") },
     events: EVENTS.map((e) => ({
       key: e.key,
       label: e.label,
@@ -501,19 +519,22 @@ function buildPromptContext({ live, overlay }: LoadedVocab) {
     })),
     scopedFields: SCOPED_FIELDS,
     scopedParams: SCOPED_PARAMS,
-    teams: ASSIGNEES.filter((a) => /team$/i.test(a)),
-    users: liveUsers.length ? liveUsers : ASSIGNEES.map((label) => ({ id: "", label })),
-    templates: liveTemplates,
-    retailers: liveRetailers,
-    templateStages: liveStages.length
-      ? liveStages
-      : (FIELDS.stage.options ?? []).map((label) => ({ id: "", label })),
-    liveFormFields: liveFields.map((f) => ({
+    teams: limitItems(ASSIGNEES.filter((a) => /team$/i.test(a)).map((t) => cleanPromptText(t))),
+    users: limitItems(liveUsers.length ? liveUsers : ASSIGNEES.map((label) => ({ id: "", label }))).map((u) => ({
+      id: cleanPromptText(u.id),
+      label: cleanPromptText(u.label),
+    })),
+    templates: limitItems(liveTemplates).map((t) => ({ id: cleanPromptText(t.id), label: cleanPromptText(t.label) })),
+    retailers: limitItems(liveRetailers).map((r) => ({ id: cleanPromptText(r.id), label: cleanPromptText(r.label) })),
+    templateStages: limitItems(
+      liveStages.length ? liveStages : (FIELDS.stage.options ?? []).map((label) => ({ id: "", label }))
+    ).map((s) => ({ id: cleanPromptText(s.id), label: cleanPromptText(s.label) })),
+    liveFormFields: limitItems(liveFields).map((f) => ({
       formTemplateId: f.formTemplateId,
       formName: f.formName,
       fieldId: f.fieldId,
-      name: f.name,
-      label: f.label,
+      name: cleanPromptText(f.name),
+      label: cleanPromptText(f.label),
       kind: fieldKindForType(f.fieldType),
       required: f.required,
     })),
@@ -526,21 +547,104 @@ function buildSystemInstruction(context: PromptContext): string {
     "Convert the user's plain-English instruction into structured JSON only. Do not include markdown or commentary outside JSON.",
     "Return exactly this top-level shape: {\"rule\": WorkflowRule | null, \"notes\": string[], \"suggestions\": string[], \"unresolved\": UnresolvedSlot[], \"uncovered\": string[]}.",
     "WorkflowRule must use schemaVersion 3: triggers[], conditions {logic, children}, actions[], optional else[], and controls.",
-    "Use EXACTLY these field names (do NOT copy the vocabulary snapshot's 'key' naming into the rule). Example rule:",
+    "Use EXACTLY these field names (do NOT copy the vocabulary snapshot's 'key' naming into the rule).",
+    "",
+    "--- FEW-SHOT EXAMPLES ---",
+    "Example 1: 'when a document is approved and checklists status is complete, assign to Wael'",
     JSON.stringify({
-      schemaVersion: 3,
-      triggers: [{ event: "LOAN APPROVED" }, { event: "LOAN REJECTED" }],
-      conditions: { logic: "AND", children: [
-        { field: "loan_amount", operator: "gte", value: "250000" },
-        { logic: "OR", children: [
-          { field: "retailer", operator: "is", value: { level: "instance", id: "<id-from-vocabulary>", label: "Growmark" } },
-          { field: "customer_name", operator: "is", value: { level: "category", category: "Business" } },
+      rule: {
+        schemaVersion: 3,
+        triggers: [{ event: "DOCUMENT APPROVED" }],
+        conditions: { logic: "AND", children: [
+          { field: "checklist_status", operator: "is", value: "Complete" }
         ] },
-      ] },
-      actions: [{ action: "assign_user", params: { assignee: "Wael" } }],
-      else: [{ action: "add_tag", params: { value: "review-skipped" } }],
-      controls: { mode: "shadow", oncePerRequest: true, maxFiresPerHour: 25, missingData: "no_match", priority: 100 },
+        actions: [{ action: "assign_user", params: { assignee: { level: "instance", id: "u-wael", label: "Wael" } } }],
+        controls: { mode: "shadow", oncePerRequest: true, maxFiresPerHour: 25, missingData: "no_match", priority: 100 }
+      },
+      notes: ["Matched trigger event DOCUMENT APPROVED.", "Added condition for checklist status is Complete.", "Routed assignment to Wael."],
+      suggestions: ["Add a tag?", "Change stage instead?"],
+      unresolved: [],
+      uncovered: []
     }),
+    "",
+    "Example 2: 'when a loan is approved, if risk grade is A and amount is at least 150k route to Underwriting Team, otherwise change stage to Rejected'",
+    JSON.stringify({
+      rule: {
+        schemaVersion: 3,
+        triggers: [{ event: "LOAN APPROVED" }],
+        conditions: { logic: "AND", children: [
+          { field: "risk_grade", operator: "is", value: "A" },
+          { field: "loan_amount", operator: "gte", value: "150000" }
+        ] },
+        actions: [{ action: "assign_user", params: { assignee: { level: "category", category: "Underwriting Team" } } }],
+        else: [{ action: "change_stage", params: { value: "Rejected" } }],
+        controls: { mode: "shadow", oncePerRequest: true, maxFiresPerHour: 25, missingData: "no_match", priority: 100 }
+      },
+      notes: ["Configured matching rule with trigger LOAN APPROVED.", "Structured dual routing lanes: else-branch reverts stage to Rejected when conditions fail."],
+      suggestions: [],
+      unresolved: [],
+      uncovered: []
+    }),
+    "",
+    "Example 3: 'when an offer is accepted, assign to omar and split 30% to target-uuid-444'",
+    JSON.stringify({
+      rule: {
+        schemaVersion: 3,
+        triggers: [{ event: "OFFER ACCEPTED" }],
+        conditions: { logic: "AND", children: [] },
+        actions: [{ action: "assign_user", params: { assignee: { level: "instance", id: "u-omar", label: "Omar" } } }],
+        controls: {
+          mode: "shadow",
+          oncePerRequest: true,
+          maxFiresPerHour: 25,
+          missingData: "no_match",
+          priority: 100,
+          abSplit: {
+            targetWorkflowId: "target-uuid-444",
+            weightPercent: 30
+          }
+        }
+      },
+      notes: ["Staged A/B split-routing: 30% of traffic directed to alternative workflow."],
+      suggestions: [],
+      unresolved: [],
+      uncovered: []
+    }),
+    "",
+    "Example 4: 'when a loan is approved or rejected and loan amount over 500k, escalate to the credit committee and add tag jumbo'",
+    JSON.stringify({
+      rule: {
+        schemaVersion: 3,
+        triggers: [{ event: "LOAN APPROVED" }, { event: "LOAN REJECTED" }],
+        conditions: {
+          logic: "AND",
+          children: [
+            { field: "loan_amount", operator: "gt", value: "500000" }
+          ]
+        },
+        actions: [
+          { action: "assign_user", params: { assignee: { level: "category", category: "Credit Committee" } } },
+          { action: "add_tag", params: { value: "jumbo" } }
+        ],
+        controls: {
+          mode: "shadow",
+          oncePerRequest: true,
+          maxFiresPerHour: 25,
+          missingData: "no_match",
+          priority: 100
+        }
+      },
+      notes: [
+        "Captured the compound trigger as two OR'd events.",
+        "Translated 'over 500k' into a gt 500000 condition.",
+        "Added escalation plus jumbo tagging."
+      ],
+      suggestions: [],
+      unresolved: [],
+      uncovered: []
+    }),
+    "-------------------------",
+    "",
     "Triggers use {event}. Actions use {action, params}. The assign_user param key is 'assignee'; every other action's param key is 'value'. Logic is uppercase AND/OR.",
     "Default controls to shadow mode, oncePerRequest true, maxFiresPerHour 25, missingData no_match, priority 100 unless the user clearly asks otherwise.",
     "When the user explicitly says to arm, activate, or enable live actions (for example, 'arm this rule'), set controls.mode to 'armed' and explain that choice in notes.",

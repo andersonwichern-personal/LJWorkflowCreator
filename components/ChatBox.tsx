@@ -20,6 +20,7 @@ import {
   walkLeaves,
 } from "@/lib/vocabulary";
 import { loadLiveVocabulary, buildOverlay, type VocabOverlay } from "@/lib/liveVocabulary";
+import { fuzzyMatches } from "@/lib/fuzzy";
 
 export interface ChatDraftMeta {
   unresolved: UnresolvedSlot[];
@@ -79,44 +80,104 @@ export default function ChatBox({ onDraft }: ChatBoxProps) {
     }
 
     const words = text.split(/[\s,]+/);
-    const lastToken = words[words.length - 1] || "";
-    if (lastToken.length < 2) {
+    const lastWord = words[words.length - 1] || "";
+    if (lastWord.length < 2) {
       setAutocomplete([]);
       return;
     }
 
-    // Build flat vocabulary completion dictionary
-    const candidates: string[] = [];
-    EVENTS.forEach(e => {
-      candidates.push(e.label);
-      candidates.push(e.key);
-    });
-    Object.values(FIELDS).forEach(f => {
-      candidates.push(f.label);
-    });
-    ASSIGNEES.filter(a => /team$/i.test(a)).forEach(t => {
-      candidates.push(t);
-    });
+    // Determine syntax context based on active/previous keyword cues.
+    const normalized = text.toLowerCase();
+    let priority: "events" | "fields" | "assignees" | "none" = "none";
 
-    if (vocab) {
-      vocab.instances.users.forEach(u => candidates.push(u.label));
-      vocab.instances.retailers.forEach(r => candidates.push(r.label));
-      vocab.instances.templates.forEach(t => candidates.push(t.label));
-      vocab.instances.stages.forEach(s => candidates.push(s.label));
+    if (/\b(?:when|whenever)\b\s*[^,\.]*$/.test(normalized)) {
+      priority = "events";
+    } else if (/\b(?:if|where|and|or)\b\s*[^,\.]*$/.test(normalized)) {
+      priority = "fields";
+    } else if (/\b(?:assign|route|escalate|notify|to)\b\s*[^,\.]*$/.test(normalized)) {
+      priority = "assignees";
     }
 
-    const needle = lastToken.toLowerCase();
-    const matches = Array.from(new Set(candidates))
-      .filter(c => c && c.toLowerCase().includes(needle) && c.toLowerCase() !== needle)
-      .slice(0, 5);
+    // Accumulate target options categorized by type.
+    const events: string[] = [];
+    EVENTS.forEach(e => {
+      events.push(e.label);
+      events.push(e.key);
+    });
 
-    setAutocomplete(matches);
+    const fields: string[] = [];
+    Object.values(FIELDS).forEach(f => {
+      fields.push(f.label);
+    });
+
+    const assignees: string[] = [];
+    ASSIGNEES.filter(a => /team$/i.test(a)).forEach(t => {
+      assignees.push(t);
+    });
+    if (vocab) {
+      vocab.instances.users.forEach(u => assignees.push(u.label));
+      vocab.instances.retailers.forEach(r => assignees.push(r.label));
+      vocab.instances.templates.forEach(t => assignees.push(t.label));
+      vocab.instances.stages.forEach(s => assignees.push(s.label));
+    }
+
+    // Prioritize candidates list based on grammar context
+    let candidates: string[] = [];
+    if (priority === "events") {
+      candidates = [...events, ...fields, ...assignees];
+    } else if (priority === "fields") {
+      candidates = [...fields, ...events, ...assignees];
+    } else if (priority === "assignees") {
+      candidates = [...assignees, ...fields, ...events];
+    } else {
+      candidates = [...events, ...fields, ...assignees];
+    }
+
+    // Check sliding window inputs to support multi-word queries
+    const tokensToSearch: string[] = [];
+    tokensToSearch.push(lastWord);
+    if (words.length >= 2) {
+      tokensToSearch.push(`${words[words.length - 2]} ${lastWord}`);
+    }
+    if (words.length >= 3) {
+      tokensToSearch.push(`${words[words.length - 3]} ${words[words.length - 2]} ${lastWord}`);
+    }
+
+    // Collect best matches over tokens
+    let matches: string[] = [];
+    for (const needle of tokensToSearch) {
+      const currentMatches = fuzzyMatches(needle, candidates, 5);
+      if (currentMatches.length > 0) {
+        matches = [...matches, ...currentMatches];
+      }
+    }
+
+    const uniqueMatches = Array.from(new Set(matches)).slice(0, 5);
+    setAutocomplete(uniqueMatches);
     setActiveSelectionIndex(0);
   }
 
   function acceptSuggestion(suggestion: string) {
     const words = input.split(/[\s,]+/);
-    words[words.length - 1] = suggestion;
+    // Find how many words in input match the suggestion suffix and swap them
+    const suggestionWords = suggestion.toLowerCase().split(/\s+/);
+    let matchedCount = 1;
+    if (words.length >= 2 && suggestionWords.length >= 2) {
+      const twoInputWords = `${words[words.length - 2]} ${words[words.length - 1]}`.toLowerCase();
+      const twoSuggestWords = `${suggestionWords[suggestionWords.length - 2]} ${suggestionWords[suggestionWords.length - 1]}`;
+      if (suggestion.toLowerCase().includes(twoInputWords)) {
+        matchedCount = 2;
+      }
+    }
+    if (words.length >= 3 && suggestionWords.length >= 3) {
+      const threeInputWords = `${words[words.length - 3]} ${words[words.length - 2]} ${words[words.length - 1]}`.toLowerCase();
+      if (suggestion.toLowerCase().includes(threeInputWords)) {
+        matchedCount = 3;
+      }
+    }
+
+    // Replace the trailing parsed tokens with the full suggestion
+    words.splice(words.length - matchedCount, matchedCount, suggestion);
     const joined = words.join(" ") + " ";
     setInput(joined);
     setAutocomplete([]);

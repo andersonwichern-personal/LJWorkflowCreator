@@ -113,6 +113,13 @@ t("orderedEnum: worse than → worse_than/B",
   leaves(r.rule).some((c) => c.field === "risk_grade" && c.operator === "worse_than" && c.value === "B") === true,
   JSON.stringify(leaves(r.rule)));
 
+r = parseInstruction("When a loan is approved or rejected and loan amount over 500k, assign to wael");
+t("P2: approved or rejected → multi-trigger rule",
+  r.rule?.triggers?.length === 2 &&
+    r.rule.triggers.some((t) => t.event === "LOAN APPROVED") &&
+    r.rule.triggers.some((t) => t.event === "LOAN REJECTED"),
+  JSON.stringify(r.rule?.triggers));
+
 /* ---- Phase 2: ScopeRef emission + category words ---------------------------- */
 r = parseInstruction("When a loan is approved, assign to Wael Hamdan", {
   assignees: ["Wael Hamdan"],

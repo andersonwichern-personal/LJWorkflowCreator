@@ -153,7 +153,7 @@ function matchEvent(
   text: string,
   spans: Spans,
   forceEvent?: string
-): { event: string | null; ambiguity: ParseAmbiguity | null } {
+): { event: string | null; ambiguity: ParseAmbiguity | null; extraEvents?: string[] } {
   if (forceEvent) {
     consumeEventKeywords(text, spans);
     return { event: forceEvent, ambiguity: null };
@@ -167,6 +167,69 @@ function matchEvent(
     return { event: key, ambiguity: null };
   }
 
+  const dualTriggerMatch = /\b(approved|rejected|denied|declined|accepted)\b\s+or\s+\b(approved|rejected|denied|declined|accepted)\b/.exec(text);
+  if (dualTriggerMatch) {
+    const [full, firstRaw, secondRaw] = dualTriggerMatch;
+    const subjectHasDocument = /\bdocument\b/.test(text);
+    const subjectHasOffer = /\boffer\b/.test(text);
+    const subjectHasLoan = /\bloan\b/.test(text) || /\brequest\b/.test(text) || /\bapplication\b/.test(text);
+    if (subjectHasLoan || subjectHasDocument || subjectHasOffer) {
+      consume(spans, dualTriggerMatch.index, full.length);
+      const subject = subjectHasDocument ? "DOCUMENT" : subjectHasOffer ? "OFFER" : "LOAN";
+      const first = firstRaw === "approved" ? `${subject} APPROVED` : firstRaw === "accepted" ? "OFFER ACCEPTED" : `${subject} REJECTED`;
+      const second =
+        secondRaw === "approved"
+          ? `${subject} APPROVED`
+          : secondRaw === "accepted"
+            ? "OFFER ACCEPTED"
+            : `${subject} REJECTED`;
+      return { event: first, extraEvents: first === second ? [] : [second], ambiguity: null };
+    }
+  }
+
+  // Multi-word phrase matches for unambiguous triggers.
+  if (/\bdocument\s+checklist\s+is\s+complete\b/.test(text) || /\bdocument\s+checklist\s+complete\b/.test(text)) {
+    const m = /\bdocument\s+checklist\s+is\s+complete\b/.exec(text) ?? /\bdocument\s+checklist\s+complete\b/.exec(text);
+    if (m) {
+      consume(spans, m.index, m[0].length);
+      return { event: "CHECKLIST COMPLETED", ambiguity: null };
+    }
+  }
+
+  if (/\bdocument\s+upload\s+is\s+(?:approved|approval)\b/.test(text) || /\bdocument\s+upload\s+(?:approved|approval)\b/.test(text)) {
+    const m = /\bdocument\s+upload\s+is\s+(?:approved|approval)\b/.exec(text) ?? /\bdocument\s+upload\s+(?:approved|approval)\b/.exec(text);
+    if (m) {
+      consume(spans, m.index, m[0].length);
+      return { event: "DOCUMENT APPROVED", ambiguity: null };
+    }
+  }
+
+  if (/\bdocument\s+upload\s+is\s+(?:rejected|denied|declined)\b/.test(text) || /\bdocument\s+upload\s+(?:rejected|denied|declined)\b/.test(text)) {
+    const m = /\bdocument\s+upload\s+is\s+(?:rejected|denied|declined)\b/.exec(text) ?? /\bdocument\s+upload\s+(?:rejected|denied|declined)\b/.exec(text);
+    if (m) {
+      consume(spans, m.index, m[0].length);
+      return { event: "DOCUMENT REJECTED", ambiguity: null };
+    }
+  }
+
+  if (/\bloan\s+application\s+is\s+(?:approved|approval)\b/.test(text) || /\bloan\s+application\s+(?:approved|approval)\b/.test(text)) {
+    const m = /\bloan\s+application\s+is\s+(?:approved|approval)\b/.exec(text) ?? /\bloan\s+application\s+(?:approved|approval)\b/.exec(text);
+    if (m) {
+      consume(spans, m.index, m[0].length);
+      return { event: "LOAN APPROVED", ambiguity: null };
+    }
+  }
+
+  if (/\bloan\s+application\s+is\s+(?:rejected|denied|declined)\b/.test(text) || /\bloan\s+application\s+(?:rejected|denied|declined)\b/.test(text)) {
+    const m = /\bloan\s+application\s+is\s+(?:rejected|denied|declined)\b/.exec(text) ?? /\bloan\s+application\s+(?:rejected|denied|declined)\b/.exec(text);
+    if (m) {
+      consume(spans, m.index, m[0].length);
+      return { event: "LOAN REJECTED", ambiguity: null };
+    }
+  }
+
+  // Keep offer rejected to fallback to default ambiguity checks
+
   const hasDocument = /\bdocument\b/.test(text);
   const hasOffer = /\boffer\b/.test(text);
 
@@ -178,7 +241,17 @@ function matchEvent(
 
   const approved = /\b(approved|approval)\b/.exec(text);
   if (approved) {
+    const hasRequestish = /\b(request|template|origination|covenant|loan application)\b/.test(text);
     if (hasDocument) {
+      return {
+        event: null,
+        ambiguity: {
+          question: "Did you mean loan approval or document approval?",
+          options: ["LOAN APPROVED", "DOCUMENT APPROVED"],
+        },
+      };
+    }
+    if (!/\bloan\b/.test(text) && !/\bdocument\b/.test(text) && !hasRequestish) {
       return {
         event: null,
         ambiguity: {
@@ -545,7 +618,7 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
     };
   }
 
-  const { event: eventKey, ambiguity } = matchEvent(text, spans, opts?.forceEvent);
+  const { event: eventKey, ambiguity, extraEvents } = matchEvent(text, spans, opts?.forceEvent);
   if (ambiguity) {
     // N3: never guess between competing readings — ask.
     return { rule: null, notes: [ambiguity.question], unresolved: [], uncovered: [], ambiguities: [ambiguity] };
@@ -572,7 +645,12 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
   const condLogic = matchLogic(text);
   const uncovered = uncoveredFragments(text, spans);
 
-  notes.push(`Event → ${eventKey}.`);
+  const triggers = [{ event: eventKey }];
+  if (extraEvents?.length) {
+    for (const ev of extraEvents) triggers.push({ event: ev });
+  }
+
+  notes.push(`Event → ${triggers.map((t) => t.event).join(" or ")}.`);
   if (conds.length) {
     notes.push(
       "Conditions → " +
@@ -611,7 +689,7 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
   return {
     rule: {
       schemaVersion: RULE_SCHEMA_VERSION,
-      triggers: [{ event: eventKey }],
+      triggers,
       conditions: { logic: condLogic, children: conds },
       actions: outputs,
       controls: defaultControls(),

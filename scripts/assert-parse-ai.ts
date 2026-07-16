@@ -61,13 +61,23 @@ process.env.LANDJOURNEY_API_BASE = "";
 process.env.LANDJOURNEY_API_TOKEN = "";
 process.env.LANDJOURNEY_ORG_ID = "";
 
-let mode: "fallback-success" | "server-error" = "fallback-success";
+let mode: "fallback-success" | "abort-then-success" | "server-error" = "fallback-success";
 let calls: string[] = [];
 globalThis.fetch = (async (input: RequestInfo | URL) => {
   const url = input instanceof Request ? input.url : input.toString();
   calls.push(url);
   if (mode === "fallback-success") {
     if (calls.length === 1) return new Response("retired", { status: 404 });
+    return geminiJson(rawGeminiPayload);
+  }
+  if (mode === "abort-then-success") {
+    // Simulate the first candidate exceeding its per-model timeout: fetch rejects
+    // with the same AbortError the route's own AbortController produces.
+    if (calls.length === 1) {
+      const abort = new Error("This operation was aborted");
+      abort.name = "AbortError";
+      throw abort;
+    }
     return geminiJson(rawGeminiPayload);
   }
   return geminiJson({ error: "temporary failure" }, 500);
@@ -117,6 +127,20 @@ async function main() {
   t("fabricated name does not survive in rule JSON", !JSON.stringify(gemini.rule).includes("Santa Claus"));
   t("suggestions are capped at three", gemini.suggestions.length === 3);
   t("assignee enforcement adds a personable note", gemini.notes.some((note) => note.includes("Santa Claus")));
+
+  /* ---- a timed-out model falls through to the next candidate --------------- */
+  // Regression guard: the chain used to catch only HTTP 404/429/503, so an
+  // AbortError (per-model timeout) threw straight out and the healthy candidates
+  // were never tried — one slow model burned the whole request.
+  mode = "abort-then-success";
+  calls = [];
+  const timeoutWarnings: string[] = [];
+  console.warn = (...args) => timeoutWarnings.push(args.join(" "));
+  const recovered = await parse("When loan approved assign Wael");
+  console.warn = originalWarn;
+  t("timeout on the first model falls through to Gemini, not heuristic", recovered.engine === "gemini");
+  t("timeout fallthrough tries exactly two candidates", calls.length === 2, JSON.stringify(calls));
+  t("timeout fallthrough is logged as a timeout", timeoutWarnings.some((w) => w.includes("timeout")));
 
   /* ---- non-model HTTP errors degrade without rotating ---------------------- */
   mode = "server-error";

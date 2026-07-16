@@ -22,6 +22,12 @@ import { fuzzyMatches } from "@/lib/fuzzy";
 
 export const dynamic = "force-dynamic";
 
+// The parse chain may try several Gemini candidates in sequence; give the
+// serverless function room for that (Vercel clamps to the plan's ceiling — this
+// is a request, not a guarantee). Without it the platform default (~10-15s)
+// kills the route mid-parse and every request silently degrades to heuristic.
+export const maxDuration = 60;
+
 type ParseAiBody = { instruction?: string; forceEvent?: string };
 
 type ParseAiResponse = {
@@ -61,7 +67,14 @@ const GEMINI_MODELS = [
   "gemini-3.1-flash-lite",
   "gemini-flash-latest",
 ];
-const GEMINI_TIMEOUT_MS = 60_000; // JSON-mode rule drafts measured 12-40s live
+// Per-attempt cap on a single model, and a wall-clock ceiling across the whole
+// candidate chain. The chain total must fit inside `maxDuration`, so it can't be
+// (per-model × candidates): two 25s attempts already reach the 50s budget, and a
+// third is skipped rather than run past the serverless deadline. JSON-mode drafts
+// measured 1.6-2.3s median on a healthy model; 25s is generous headroom, not the
+// expected latency. See the `GEMINI_MODELS` comment for why a slow model matters.
+const GEMINI_PER_MODEL_TIMEOUT_MS = 25_000;
+const GEMINI_TOTAL_BUDGET_MS = 50_000;
 
 /**
  * Gemini REST API responseSchema — OpenAPI Schema Object subset.
@@ -327,15 +340,25 @@ async function callGemini(
   context: PromptContext
 ): Promise<ParseAiResponse> {
   const models = [...new Set(GEMINI_MODELS)];
+  const deadline = Date.now() + GEMINI_TOTAL_BUDGET_MS;
   let lastUnavailable: Error | null = null;
   for (const model of models) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break; // budget spent — degrade to heuristic rather than run past maxDuration
+    const attemptMs = Math.min(GEMINI_PER_MODEL_TIMEOUT_MS, remaining);
     try {
-      return await callGeminiModel(apiKey, model, instruction, forceEvent, context);
+      return await callGeminiModel(apiKey, model, instruction, forceEvent, context, attemptMs);
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
-      if (/^Gemini HTTP (404|429|503)\b/.test(message)) {
-        console.warn(`Gemini model "${model}" unavailable (${message.slice(12, 15)}); trying next candidate.`);
-        lastUnavailable = error as Error;
+      const name = error && typeof error === "object" && "name" in error ? String((error as { name: unknown }).name) : "";
+      // A timed-out attempt is THIS model being too slow right now — the same
+      // kind of transient unavailability as a 503. Treat it as a fall-through so
+      // one slow candidate doesn't burn the whole request; without this the abort
+      // throws straight out of the chain and the healthy models are never tried.
+      if (name === "AbortError" || /^Gemini HTTP (404|429|503)\b/.test(message)) {
+        const cause = name === "AbortError" ? `timeout after ${attemptMs}ms` : message.slice(12, 15);
+        console.warn(`Gemini model "${model}" unavailable (${cause}); trying next candidate.`);
+        lastUnavailable = error instanceof Error ? error : new Error(String(error));
         continue;
       }
       throw error;
@@ -349,10 +372,11 @@ async function callGeminiModel(
   model: string,
   instruction: string,
   forceEvent: string | undefined,
-  context: PromptContext
+  context: PromptContext,
+  timeoutMs: number
 ): Promise<ParseAiResponse> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const res = await fetch(url, {

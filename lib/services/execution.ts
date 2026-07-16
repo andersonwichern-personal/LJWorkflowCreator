@@ -11,6 +11,7 @@ import { Prisma, RuleExecution } from "@prisma/client";
  * load-bearing: ERROR history suggests a misconfigured rule (a linter signal);
  * INTEGRATION_UNAVAILABLE history is a healthy rule hitting a flaky dependency.
  * Any future history-based linter check MUST ignore INTEGRATION_UNAVAILABLE rows.
+ * Phase 12: OVERRIDDEN marks audited break-glass bypasses.
  */
 export const EXECUTION_STATUSES = [
   "FIRED",
@@ -21,6 +22,7 @@ export const EXECUTION_STATUSES = [
   "SKIPPED_DUPLICATE",
   "PAUSED_RATE_LIMIT",
   "INTEGRATION_UNAVAILABLE",
+  "OVERRIDDEN",
 ] as const;
 export type ExecutionStatus = (typeof EXECUTION_STATUSES)[number];
 

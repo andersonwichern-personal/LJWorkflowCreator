@@ -37,6 +37,10 @@ export async function POST(req: NextRequest) {
       requirement: body.requirement ?? null,
       escalationId: body.escalationId ?? null,
       autoApprove: Boolean(body.autoApprove),
+      overageTolerancePercent:
+        body.overageTolerancePercent == null ? null : Number(body.overageTolerancePercent),
+      overageToleranceAmount:
+        body.overageToleranceAmount == null ? null : Number(body.overageToleranceAmount),
     });
     return NextResponse.json(created, { status: 201 });
   } catch (error: unknown) {

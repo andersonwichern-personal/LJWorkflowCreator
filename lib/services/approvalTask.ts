@@ -9,8 +9,9 @@ import {
   normalizeRequirement,
   requirementApprovers,
 } from "@/lib/authorityEngine";
+import { DelegationService } from "@/lib/services/delegation";
 
-export type TaskStatus = "open" | "approved" | "declined" | "expired";
+export type TaskStatus = "open" | "approved" | "declined" | "expired" | "overridden";
 
 const VERDICTS: ApprovalVerdict[] = ["approve", "decline", "abstain"];
 
@@ -77,6 +78,10 @@ function statusFrom(rs: RequirementStatus): TaskStatus {
   return rs.satisfied ? "approved" : rs.declined ? "declined" : "open";
 }
 
+function delegationFor(envelope: TaskRequirementEnvelope, approverId: string) {
+  return envelope.delegations.find((d) => d.toId === approverId) ?? null;
+}
+
 export class ApprovalTaskService {
   /** List review tasks for a tenant, newest first, optionally scoped to one request. */
   static async listTasks(orgId: string, requestId?: string): Promise<TaskWithDecisions[]> {
@@ -121,10 +126,14 @@ export class ApprovalTaskService {
       throw new Error("Requirement must name at least one approver");
     }
 
+    const delegations =
+      data.delegations ??
+      (await DelegationService.listActive(data.orgId, data.authorityId));
+
     const envelope: TaskRequirementEnvelope = {
       requirement,
       exclusions: (data.exclusions ?? []).map(String),
-      delegations: data.delegations ?? [],
+      delegations,
     };
 
     // A task nobody can ever satisfy (all seats excluded) must not be created.
@@ -196,10 +205,15 @@ export class ApprovalTaskService {
       throw new Error("Approver is not eligible at the current review step");
     }
 
+    const delegated = delegationFor(envelope, approverId);
     const label =
       input.approverLabel?.trim() ||
       seat.label ||
       approverId;
+    const note = [
+      input.note?.trim() || null,
+      delegated ? `${input.verdict} by ${approverId} as delegate of ${delegated.fromId}` : null,
+    ].filter(Boolean).join(" · ") || null;
 
     await prisma.approvalDecision.create({
       data: {
@@ -207,7 +221,7 @@ export class ApprovalTaskService {
         approverId,
         approverLabel: label,
         verdict: input.verdict,
-        note: input.note ?? null,
+        note,
       },
     });
 
@@ -224,5 +238,22 @@ export class ApprovalTaskService {
     });
 
     return { task: updated, status };
+  }
+
+  /** Emergency override for all open approval tasks on a request. */
+  static async overrideRequest(data: {
+    orgId: string;
+    requestId: string;
+    reason: string;
+  }): Promise<{ count: number }> {
+    if (!data.orgId) throw new Error("Organization ID is required to override approval tasks");
+    if (!data.requestId?.trim()) throw new Error("Request ID is required to override approval tasks");
+    if (!data.reason?.trim()) throw new Error("Break-glass reason is required");
+
+    const result = await prisma.approvalTask.updateMany({
+      where: { orgId: data.orgId, requestId: data.requestId.trim(), status: "open" },
+      data: { status: "overridden" },
+    });
+    return { count: result.count };
   }
 }

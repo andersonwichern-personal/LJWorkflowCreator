@@ -22,6 +22,8 @@ export interface AuthorityLevel {
   requirement?: unknown;
   escalationId: string | null;
   autoApprove: boolean;
+  overageTolerancePercent?: number | null;
+  overageToleranceAmount?: number | null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -269,7 +271,7 @@ export function authorityRequirement(level: AuthorityLevel): ApprovalRequirement
 export interface AuthorityDecision {
   /** The level that owns this request (lowest covering, or the covering escalation target). */
   authority: AuthorityLevel | null;
-  lane: "auto-approve" | "manual" | "escalate" | "none";
+  lane: "auto-approve" | "manual" | "co-sign" | "escalate" | "none";
   /** Escalation path walked when no level covered the request directly. */
   escalationChain: AuthorityLevel[];
   /** Human-readable explanation for the audit trail / matrix preview. */
@@ -299,6 +301,13 @@ function limitOf(a: AuthorityLevel): number {
   return Number(a.limit);
 }
 
+function toleranceLimitOf(a: AuthorityLevel): number {
+  const base = limitOf(a);
+  const percent = Number(a.overageTolerancePercent ?? 0);
+  const amount = Number(a.overageToleranceAmount ?? 0);
+  return base * (1 + Math.max(0, percent) / 100) + Math.max(0, amount);
+}
+
 function fmt(n: number): string {
   return `$${n.toLocaleString("en-US")}`;
 }
@@ -310,6 +319,22 @@ export function covers(level: AuthorityLevel, input: AuthorityInput): boolean {
   // level.riskGrade is the *minimum acceptable* grade: a level graded "C" covers A–C.
   const gradeOk = gradeIndex(input.riskGrade) <= gradeIndex(level.riskGrade);
   return productOk && limitOk && gradeOk;
+}
+
+function coversByProductAndGrade(level: AuthorityLevel, input: AuthorityInput): boolean {
+  const productOk = level.product === "All" || level.product === input.product;
+  const gradeOk = gradeIndex(input.riskGrade) <= gradeIndex(level.riskGrade);
+  return productOk && gradeOk;
+}
+
+function coSignRequirement(level: AuthorityLevel): ApprovalRequirement | null {
+  const base = authorityRequirement(level);
+  if (!base) return null;
+  const approvers = requirementApprovers(base);
+  if (approvers.length === 0) return null;
+  return approvers.length === 1
+    ? { type: "all_of", approvers }
+    : { type: "n_of", count: 2, approvers };
 }
 
 /**
@@ -337,7 +362,26 @@ export function decideAuthority(
 
   const describe = `${fmt(input.amount)} / grade ${input.riskGrade} / ${input.product}`;
 
-  // 1. Lowest level whose matrix covers the request.
+  // 1. A marginal overage stays at the owning level but requires co-sign.
+  const toleranceCovering = sorted.find((a) => {
+    if (!coversByProductAndGrade(a, input)) return false;
+    const limit = limitOf(a);
+    return input.amount > limit && input.amount <= toleranceLimitOf(a);
+  });
+  if (toleranceCovering) {
+    const limit = limitOf(toleranceCovering);
+    const toleranceLimit = toleranceLimitOf(toleranceCovering);
+    const requirement = coSignRequirement(toleranceCovering);
+    return {
+      authority: toleranceCovering,
+      lane: "co-sign",
+      escalationChain: [],
+      reason: `${describe} exceeds ${toleranceCovering.name}'s limit ${fmt(limit)} but is within tolerance ${fmt(toleranceLimit)} — co-sign required.`,
+      requirement,
+    };
+  }
+
+  // 2. Lowest level whose matrix covers the request.
   const covering = sorted.find((a) => covers(a, input));
   if (covering) {
     const lane = covering.autoApprove ? "auto-approve" : "manual";
@@ -358,7 +402,7 @@ export function decideAuthority(
     };
   }
 
-  // 2. Nothing covers — walk the escalation chain from the largest relevant level.
+  // 3. Nothing covers — walk the escalation chain from the largest relevant level.
   const byId = new Map(sorted.map((a) => [a.id, a]));
   const start =
     [...sorted].reverse().find((a) => a.product === "All" || a.product === input.product) ??

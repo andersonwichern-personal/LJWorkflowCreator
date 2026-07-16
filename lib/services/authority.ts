@@ -64,6 +64,26 @@ function validateMatrix(data: { riskGrade?: string; product?: string; limit?: nu
   }
 }
 
+function validateTolerance(data: {
+  overageTolerancePercent?: number | null;
+  overageToleranceAmount?: number | null;
+}) {
+  if (
+    data.overageTolerancePercent !== undefined &&
+    data.overageTolerancePercent !== null &&
+    (!Number.isFinite(data.overageTolerancePercent) || data.overageTolerancePercent < 0)
+  ) {
+    throw new Error("Overage tolerance percent must be a non-negative number");
+  }
+  if (
+    data.overageToleranceAmount !== undefined &&
+    data.overageToleranceAmount !== null &&
+    (!Number.isFinite(data.overageToleranceAmount) || data.overageToleranceAmount < 0)
+  ) {
+    throw new Error("Overage tolerance amount must be a non-negative number");
+  }
+}
+
 export class ApprovalAuthorityService {
   /** List all authority levels for a tenant, smallest limit first (matrix reads bottom-up). */
   static async listAuthorities(orgId: string): Promise<AuthorityWithEscalation[]> {
@@ -89,6 +109,8 @@ export class ApprovalAuthorityService {
     requirement?: unknown;
     escalationId?: string | null;
     autoApprove?: boolean;
+    overageTolerancePercent?: number | null;
+    overageToleranceAmount?: number | null;
   }): Promise<AuthorityWithEscalation> {
     if (!data.orgId) {
       throw new Error("Organization ID is required to create an authority");
@@ -97,6 +119,7 @@ export class ApprovalAuthorityService {
       throw new Error("Authority name is required");
     }
     validateMatrix(data);
+    validateTolerance(data);
     const requirement = normalizeRequirementInput(data.requirement);
 
     if (data.escalationId) {
@@ -116,6 +139,8 @@ export class ApprovalAuthorityService {
           : (requirement as unknown as Prisma.InputJsonValue),
         escalationId: data.escalationId || null,
         autoApprove: data.autoApprove ?? false,
+        overageTolerancePercent: data.overageTolerancePercent ?? 0,
+        overageToleranceAmount: data.overageToleranceAmount ?? 0,
       },
       include: ESCALATION_SELECT,
     });
@@ -134,6 +159,8 @@ export class ApprovalAuthorityService {
       requirement: unknown;
       escalationId: string | null;
       autoApprove: boolean;
+      overageTolerancePercent: number | null;
+      overageToleranceAmount: number | null;
     }>,
     /** Phase 8 §12: caller's last-read version. Absent → legacy last-write-wins. */
     expectedVersion?: number
@@ -151,6 +178,7 @@ export class ApprovalAuthorityService {
     }
 
     validateMatrix(updates);
+    validateTolerance(updates);
     if (updates.name !== undefined && !updates.name.trim()) {
       throw new Error("Authority name cannot be empty");
     }
@@ -174,6 +202,12 @@ export class ApprovalAuthorityService {
         : (requirement as unknown as Prisma.InputJsonValue);
     }
     if (updates.autoApprove !== undefined) data.autoApprove = updates.autoApprove;
+    if (updates.overageTolerancePercent !== undefined) {
+      data.overageTolerancePercent = updates.overageTolerancePercent ?? 0;
+    }
+    if (updates.overageToleranceAmount !== undefined) {
+      data.overageToleranceAmount = updates.overageToleranceAmount ?? 0;
+    }
     if (updates.escalationId !== undefined) {
       data.escalation = updates.escalationId
         ? { connect: { id: updates.escalationId } }
@@ -197,6 +231,12 @@ export class ApprovalAuthorityService {
           requirement === null ? Prisma.DbNull : (requirement as unknown as Prisma.InputJsonValue);
       }
       if (updates.autoApprove !== undefined) guarded.autoApprove = updates.autoApprove;
+      if (updates.overageTolerancePercent !== undefined) {
+        guarded.overageTolerancePercent = updates.overageTolerancePercent ?? 0;
+      }
+      if (updates.overageToleranceAmount !== undefined) {
+        guarded.overageToleranceAmount = updates.overageToleranceAmount ?? 0;
+      }
       if (updates.escalationId !== undefined) guarded.escalationId = updates.escalationId;
 
       const result = await prisma.approvalAuthority.updateMany({

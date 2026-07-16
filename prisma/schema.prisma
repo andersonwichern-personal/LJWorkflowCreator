@@ -22,6 +22,21 @@ model Workflow {
   @@map("workflows")
 }
 
+model WorkflowProposal {
+  id              String   @id @default(uuid())
+  orgId           String   @map("org_id")
+  workflowId      String   @map("workflow_id")
+  proposedRule    Json     @map("proposed_rule")
+  proposedEnabled Boolean? @map("proposed_enabled")
+  proposerId      String   @map("proposer_id")
+  status          String
+  taskId          String?  @map("task_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([orgId, workflowId])
+  @@map("workflow_proposals")
+}
+
 model RuleExecution {
   id                String   @id @default(uuid())
   orgId             String   @map("org_id")
@@ -29,7 +44,7 @@ model RuleExecution {
   requestId         String   @map("request_id")
   requestName       String   @map("request_name")
   eventName         String   @map("event_name")
-  status            String // "FIRED" | "CONDITIONS_NOT_MET" | "ERROR" | "SHADOW" | "PAUSED_ORG" | "SKIPPED_DUPLICATE" | "PAUSED_RATE_LIMIT"
+  status            String // "FIRED" | "CONDITIONS_NOT_MET" | "ERROR" | "SHADOW" | "PAUSED_ORG" | "SKIPPED_DUPLICATE" | "PAUSED_RATE_LIMIT" | "OVERRIDDEN"
   mode              String   @default("shadow") // "shadow" | "armed" — enforcement mode at fire time
   evaluationTrace   Json     @map("evaluation_trace")
   actionsDispatched Json     @map("actions_dispatched")
@@ -60,6 +75,8 @@ model ApprovalAuthority {
   requirement  Json?    @map("requirement") // ApprovalRequirement topology (quorum/sequence); null → legacy any-of userIds
   escalationId String?  @map("escalation_id")
   autoApprove  Boolean  @default(false) @map("auto_approve")
+  overageTolerancePercent Float? @default(0) @map("overage_tolerance_percent")
+  overageToleranceAmount  Float? @default(0) @map("overage_tolerance_amount")
   version      Int      @default(1) // Phase 8 §12 — optimistic concurrency guard
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -69,6 +86,21 @@ model ApprovalAuthority {
   tasks       ApprovalTask[]
 
   @@map("approval_authorities")
+}
+
+model Delegation {
+  id         String   @id @default(uuid())
+  orgId      String   @map("org_id")
+  fromUserId String   @map("from_user_id")
+  toUserId   String   @map("to_user_id")
+  scope      String
+  startsAt   DateTime @map("starts_at")
+  endsAt     DateTime @map("ends_at")
+  reason     String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([orgId, fromUserId])
+  @@map("delegations")
 }
 
 model ApprovalTask {

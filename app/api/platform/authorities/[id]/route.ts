@@ -40,6 +40,14 @@ export async function PATCH(
     if (body.requirement !== undefined) updates.requirement = body.requirement;
     if (body.escalationId !== undefined) updates.escalationId = body.escalationId;
     if (body.autoApprove !== undefined) updates.autoApprove = Boolean(body.autoApprove);
+    if (body.overageTolerancePercent !== undefined) {
+      updates.overageTolerancePercent =
+        body.overageTolerancePercent == null ? null : Number(body.overageTolerancePercent);
+    }
+    if (body.overageToleranceAmount !== undefined) {
+      updates.overageToleranceAmount =
+        body.overageToleranceAmount == null ? null : Number(body.overageToleranceAmount);
+    }
 
     const updated = await ApprovalAuthorityService.updateAuthority(
       id,

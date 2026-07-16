@@ -8,7 +8,11 @@ node_modules/
 out/
 
 # Prisma
-prisma/migrations/
+prisma/migrations/*
+!prisma/migrations/20260716130000_phase12_overrides/
+!prisma/migrations/20260716130000_phase12_overrides/migration.sql
+!prisma/migrations/20260716140000_phase13_four_eyes/
+!prisma/migrations/20260716140000_phase13_four_eyes/migration.sql
 
 # Environment variables — NEVER commit these
 .env

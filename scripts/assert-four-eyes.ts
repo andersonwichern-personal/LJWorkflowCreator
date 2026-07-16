@@ -1,13 +1,14 @@
-export {};
-
-// Phase 13 — maker-checker workflow proposal contract. Database-free coverage
-// for the same pure interception predicate and approval requirement builder the
-// API/service paths use.
-
-import { requiresProposal } from "../lib/fourEyes";
+/**
+ * Phase 13 four-eyes (maker-checker) suite — which writes need a second pair
+ * of eyes, and who is allowed to be that second pair. Database-free: the gate
+ * and the approver topology are pure, and the service writes call exactly
+ * these helpers.
+ * Run: npx tsx scripts/assert-four-eyes.ts
+ */
+import { proposalPayloadRule, shouldProposeWorkflowWrite } from "../lib/fourEyes";
 import { evaluateRequirement } from "../lib/authorityEngine";
 import { proposalRequirement } from "../lib/services/workflowProposal";
-import { emptyRule } from "../lib/vocabulary";
+import { emptyRule, normalizeRule } from "../lib/vocabulary";
 
 let failures = 0;
 function t(name: string, condition: boolean, detail?: string) {
@@ -25,77 +26,67 @@ const changedRule = {
   },
 };
 
+/* ---- the gate: protected is enabled OR armed -----------------------------
+ * Wider than the rule that actually executes (enabled AND armed), on purpose:
+ * an enabled shadow rule enforces nothing today but is one toggle away, so it
+ * must not be editable solo. Draft freely by leaving the rule disabled. */
 t(
-  "intercept: editing an enabled armed workflow creates a proposal",
-  requiresProposal({
-    enabled: true,
-    ruleJson: armedRule,
-  }, {
-    ruleJson: changedRule,
-  })
+  "gate: editing an enabled workflow needs a proposal",
+  shouldProposeWorkflowWrite({ currentRule: shadowDraft, currentEnabled: true, nextRule: changedRule })
 );
 t(
-  "intercept: editing a disabled armed workflow can save directly",
-  !requiresProposal({
-    enabled: false,
-    ruleJson: armedRule,
-  }, {
-    ruleJson: changedRule,
-  })
+  "gate: editing an armed workflow needs a proposal",
+  shouldProposeWorkflowWrite({ currentRule: armedRule, currentEnabled: false, nextRule: changedRule })
 );
 t(
-  "intercept: enabling an armed draft creates a proposal",
-  requiresProposal({
-    enabled: false,
-    ruleJson: armedRule,
-  }, {
-    enabled: true,
-  })
+  "gate: enabling a disabled draft needs a proposal",
+  shouldProposeWorkflowWrite({ currentRule: shadowDraft, currentEnabled: false, nextEnabled: true })
 );
 t(
-  "intercept: switching an enabled draft rule to armed creates a proposal",
-  requiresProposal({
-    enabled: true,
-    ruleJson: shadowDraft,
-  }, {
-    ruleJson: armedRule,
-  })
+  "gate: arming a disabled draft needs a proposal",
+  shouldProposeWorkflowWrite({ currentRule: shadowDraft, currentEnabled: false, nextRule: armedRule })
 );
 t(
-  "intercept: editing a disabled shadow draft can save directly",
-  !requiresProposal({
-    enabled: false,
-    ruleJson: shadowDraft,
-  }, {
-    ruleJson: changedRule,
-  })
-);
-t(
-  "intercept: metadata-only updates can save directly",
-  !requiresProposal({
-    enabled: true,
-    ruleJson: armedRule,
-  }, {
-  })
+  "gate: disabling a live rule needs a proposal",
+  shouldProposeWorkflowWrite({ currentRule: armedRule, currentEnabled: true, nextEnabled: false })
 );
 
+// The escape hatch that keeps the builder usable.
+t(
+  "gate: editing a disabled shadow draft lands directly",
+  !shouldProposeWorkflowWrite({ currentRule: shadowDraft, currentEnabled: false, nextRule: changedRule })
+);
+t(
+  "gate: a metadata-only write lands directly",
+  !shouldProposeWorkflowWrite({ currentRule: armedRule, currentEnabled: true })
+);
+
+/* ---- the proposal payload ------------------------------------------------- */
+t(
+  "payload: an edit carries the proposed rule",
+  JSON.stringify(proposalPayloadRule(changedRule, normalizeRule(shadowDraft))) ===
+    JSON.stringify(normalizeRule(changedRule))
+);
+t(
+  "payload: a status-only change carries the current rule unchanged",
+  JSON.stringify(proposalPayloadRule(undefined, normalizeRule(armedRule))) ===
+    JSON.stringify(normalizeRule(armedRule))
+);
+
+/* ---- maker-checker: the proposer can never be their own checker ----------- */
 const req = proposalRequirement("u-anderson");
-t("maker-checker: proposer is excluded from proposal approvers", !JSON.stringify(req).includes("u-anderson"));
-t("maker-checker: peer admin remains eligible", JSON.stringify(req).includes("u-aisha-admin"));
+t("maker-checker: the proposer is not in the approver pool", !JSON.stringify(req).includes("u-anderson"));
+t("maker-checker: a peer admin stays eligible", JSON.stringify(req).includes("u-aisha-admin"));
 
-const proposerVote = evaluateRequirement(req, {
-  decisions: [{ approverId: "u-anderson", verdict: "approve" }],
-  exclusions: ["u-anderson"],
-  delegations: [],
-});
-t("maker-checker: proposer vote does not satisfy approval", !proposerVote.satisfied);
+const vote = (approverId: string) =>
+  evaluateRequirement(req, {
+    decisions: [{ approverId, verdict: "approve" as const }],
+    exclusions: ["u-anderson"],
+    delegations: [],
+  });
 
-const peerVote = evaluateRequirement(req, {
-  decisions: [{ approverId: "u-aisha-admin", verdict: "approve" }],
-  exclusions: ["u-anderson"],
-  delegations: [],
-});
-t("maker-checker: peer admin approval satisfies proposal", peerVote.satisfied);
+t("maker-checker: the proposer's own approval does not satisfy their proposal", !vote("u-anderson").satisfied);
+t("maker-checker: a peer admin's approval satisfies the proposal", vote("u-aisha-admin").satisfied);
 
 if (failures) {
   console.error(`\n${failures} four-eyes assertion(s) FAILED`);

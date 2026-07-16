@@ -63,6 +63,173 @@ const GEMINI_MODELS = [
 ];
 const GEMINI_TIMEOUT_MS = 60_000; // JSON-mode rule drafts measured 12-40s live
 
+/**
+ * Gemini REST API responseSchema — OpenAPI Schema Object subset.
+ *
+ * Constrains the model's JSON output to the ParseAiResponse envelope so
+ * structural drift (wrong keys, missing fields, extra nesting) is caught by
+ * the API itself before our coerce layer runs. massageGeminiRule and
+ * coerceGeminiPayload remain as safety nets for value-level corrections
+ * (e.g. lowercase logic, {key} vs {event}).
+ *
+ * Gemini structured output only supports a subset of JSON Schema:
+ * - No `oneOf`/`anyOf` — use nullable OBJECT instead
+ * - `enum` allowed on STRING
+ * - ARRAY requires `items`
+ * - Top-level must be OBJECT
+ */
+const PARSE_RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    rule: {
+      type: "OBJECT",
+      nullable: true,
+      description: "The parsed WorkflowRule, or null if the instruction could not be parsed.",
+      properties: {
+        schemaVersion: { type: "INTEGER", description: "Always 3." },
+        triggers: {
+          type: "ARRAY",
+          items: {
+            type: "OBJECT",
+            properties: {
+              event: { type: "STRING", description: "Event key from the vocabulary." },
+              scope: {
+                type: "OBJECT",
+                nullable: true,
+                description: "Optional scope narrowing the trigger.",
+                properties: {
+                  level: { type: "STRING", enum: ["any", "category", "instance"] },
+                  category: { type: "STRING", description: "Category name when level=category." },
+                  id: { type: "STRING", description: "Instance ID when level=instance." },
+                  label: { type: "STRING", description: "Display label when level=instance." },
+                },
+                required: ["level"],
+              },
+            },
+            required: ["event"],
+          },
+        },
+        conditions: {
+          type: "OBJECT",
+          description: "Root condition group (recursive AND/OR tree).",
+          properties: {
+            logic: { type: "STRING", enum: ["AND", "OR"] },
+            children: {
+              type: "ARRAY",
+              description: "Condition leaves or nested groups. Leaves have field+operator+value; groups have logic+children.",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  field: { type: "STRING", description: "Condition field key." },
+                  operator: { type: "STRING", description: "Comparison operator." },
+                  value: { type: "STRING", description: "Comparison value (string form)." },
+                  logic: { type: "STRING", enum: ["AND", "OR"], description: "Present only for nested groups." },
+                  children: { type: "ARRAY", description: "Present only for nested groups.", items: { type: "OBJECT" } },
+                },
+              },
+            },
+          },
+          required: ["logic", "children"],
+        },
+        actions: {
+          type: "ARRAY",
+          items: {
+            type: "OBJECT",
+            properties: {
+              action: { type: "STRING", description: "Action key from the vocabulary." },
+              params: { type: "OBJECT", description: "Action parameters. Keys and values depend on the action." },
+              delayMinutes: { type: "INTEGER", nullable: true, description: "SLA delay in minutes before action executes." },
+              onFailure: { type: "STRING", nullable: true, enum: ["retry", "skip", "halt"] },
+            },
+            required: ["action", "params"],
+          },
+        },
+        else: {
+          type: "ARRAY",
+          nullable: true,
+          description: "Actions to run when triggers match but conditions do not.",
+          items: {
+            type: "OBJECT",
+            properties: {
+              action: { type: "STRING" },
+              params: { type: "OBJECT" },
+              delayMinutes: { type: "INTEGER", nullable: true },
+              onFailure: { type: "STRING", nullable: true, enum: ["retry", "skip", "halt"] },
+            },
+            required: ["action", "params"],
+          },
+        },
+        controls: {
+          type: "OBJECT",
+          properties: {
+            mode: { type: "STRING", enum: ["shadow", "armed"] },
+            oncePerRequest: { type: "BOOLEAN" },
+            maxFiresPerHour: { type: "INTEGER" },
+            missingData: { type: "STRING", enum: ["no_match", "alert"] },
+            priority: { type: "INTEGER" },
+            abSplit: {
+              type: "OBJECT",
+              nullable: true,
+              properties: {
+                targetWorkflowId: { type: "STRING" },
+                weightPercent: { type: "NUMBER" },
+              },
+              required: ["targetWorkflowId", "weightPercent"],
+            },
+          },
+          required: ["mode", "oncePerRequest", "maxFiresPerHour", "missingData", "priority"],
+        },
+      },
+      required: ["schemaVersion", "triggers", "conditions", "actions", "controls"],
+    },
+    notes: {
+      type: "ARRAY",
+      items: { type: "STRING" },
+      description: "Human-readable notes explaining the parse choices.",
+    },
+    suggestions: {
+      type: "ARRAY",
+      items: { type: "STRING" },
+      description: "At most 3 short clickable refinement chips.",
+    },
+    unresolved: {
+      type: "ARRAY",
+      description: "Slots the parser could not resolve to a known vocabulary item.",
+      items: {
+        type: "OBJECT",
+        properties: {
+          where: { type: "STRING", enum: ["action-param", "condition-value", "event"] },
+          lane: { type: "STRING", nullable: true, enum: ["then", "else"] },
+          actionIndex: { type: "INTEGER", nullable: true },
+          conditionIndex: { type: "INTEGER", nullable: true },
+          param: { type: "STRING", nullable: true },
+          heard: { type: "STRING", description: "The raw text the user wrote." },
+          suggestions: { type: "ARRAY", items: { type: "STRING" } },
+        },
+        required: ["where", "heard", "suggestions"],
+      },
+    },
+    uncovered: {
+      type: "ARRAY",
+      items: { type: "STRING" },
+      description: "Input fragments the parser did not consume or represent in the rule.",
+    },
+    ambiguities: {
+      type: "ARRAY",
+      description: "Questions for the user when the parse is ambiguous.",
+      items: {
+        type: "OBJECT",
+        properties: {
+          question: { type: "STRING" },
+          options: { type: "ARRAY", items: { type: "STRING" } },
+        },
+        required: ["question", "options"],
+      },
+    },
+  },
+  required: ["rule", "notes", "suggestions", "unresolved", "uncovered"],
+} as const;
+
 export async function POST(req: NextRequest) {
   let body: ParseAiBody;
   try {
@@ -211,6 +378,7 @@ async function callGeminiModel(
         ],
         generationConfig: {
           responseMimeType: "application/json",
+          responseSchema: PARSE_RESPONSE_SCHEMA,
           temperature: 0.2,
         },
       }),

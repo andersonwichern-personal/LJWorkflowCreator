@@ -100,6 +100,25 @@ function titleCase(s: string): string {
   return s.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** Strip trailing punctuation that leaks into regex captures (e.g. \"Wael.\" → \"Wael\"). */
+function stripTrailingPunct(s: string): string {
+  return s.trim().replace(/[.,;:!?]+$/, "").trim();
+}
+
+/** Parse a delay phrase like \"2 days\" or \"24 hours\" into minutes. */
+function parseDelayText(text: string): number | null {
+  const m = /(\d+)\s*(day|days|hour|hours|minute|minutes|min|mins|week|weeks)/i.exec(text);
+  if (!m) return null;
+  const qty = Number(m[1]);
+  if (!Number.isFinite(qty) || qty <= 0) return null;
+  const unit = m[2].toLowerCase();
+  if (unit.startsWith("day")) return qty * 24 * 60;
+  if (unit.startsWith("hour") || unit === "hr" || unit === "hrs") return qty * 60;
+  if (unit.startsWith("min")) return qty;
+  if (unit.startsWith("week")) return qty * 7 * 24 * 60;
+  return null;
+}
+
 /** Consumed [start, end) spans over the normalized text (N2 coverage). */
 type Spans = Array<[number, number]>;
 
@@ -634,12 +653,12 @@ function matchOutputs(
         attachActionGate(outputs.length - 1, authority[2]);
       } else {
         const assign =
-          /(?:assign|route|escalate|send it|send this)\s+(?:it\s+|this\s+)?to\s+([a-z0-9 ._-]{2,40}?)(?:\s+(?:if|when)\s+(.+?))?(?:\s+(?:and|then|,|\.)|$)/.exec(
+          /(?:assign|route|escalate|send it|send this)\s+(?:it\s+|this\s+)?to\s+([a-z0-9 ._-]{2,40}?)(?:\s+(?:if|when)\s+(.+?))?(?=\s*(?:and|then|unless|otherwise|except|,|\.|;|$))/.exec(
             text
           );
         if (assign) {
           consume(spans, assign.index, assign[0].length);
-          pushResolved("assign_user", assign[1].trim());
+          pushResolved("assign_user", stripTrailingPunct(assign[1]));
           attachActionGate(outputs.length - 1, assign[2]);
         }
       }
@@ -649,13 +668,13 @@ function matchOutputs(
   // notify <name>
   if (!excluded.has("notify")) {
     const remindWithDelay =
-      /\bremind\s+([a-z0-9 ._-]{2,40}?)\s+(\d{1,3})\s+days?\s+(before|after)\s+(?:the\s+)?([a-z0-9 _-]{3,40}?)(?:\s+(?:if|when)\s+(.+?))?(?=\s*(?:and|then|,|\.|;|$))/.
+      /\bremind\s+([a-z0-9 ._-]{2,40}?)\s+(\d{1,3})\s+days?\s+(before|after)\s+(?:the\s+)?([a-z0-9 _-]{3,40}?)(?:\s+(?:if|when)\s+(.+?))?(?=\s*(?:and|then|unless|otherwise|except|,|\.|;|$))/.
         exec(
         text
       );
     if (remindWithDelay) {
       consume(spans, remindWithDelay.index, remindWithDelay[0].length);
-      pushResolved("notify", remindWithDelay[1].trim());
+      pushResolved("notify", stripTrailingPunct(remindWithDelay[1]));
       const days = Number(remindWithDelay[2]);
       if (Number.isFinite(days) && days > 0 && outputs.length) {
         outputs[outputs.length - 1].delayMinutes = remindWithDelay[3] === "before" ? -(days * 24 * 60) : days * 24 * 60;
@@ -663,10 +682,10 @@ function matchOutputs(
       attachActionGate(outputs.length - 1, remindWithDelay[5]);
     } else {
       const notify =
-        /(?:notify|remind)\s+([a-z0-9 ._-]{2,40}?)(?:\s+(?:if|when)\s+(.+?))?(?:\s+(?:and|then|,|\.)|$)/.exec(text);
+        /(?:notify|remind)\s+([a-z0-9 ._-]{2,40}?)(?:\s+(?:if|when)\s+(.+?))?(?=\s*(?:and|then|unless|otherwise|except|,|\.|;|$))/.exec(text);
       if (notify) {
         consume(spans, notify.index, notify[0].length);
-        pushResolved("notify", notify[1].trim());
+        pushResolved("notify", stripTrailingPunct(notify[1]));
         attachActionGate(outputs.length - 1, notify[2]);
       }
     }
@@ -675,12 +694,12 @@ function matchOutputs(
   // change / set / move stage to <stage>
   if (!excluded.has("change")) {
     const stage =
-      /(?:change|set|move)\s+(?:the\s+)?stage\s+to\s+([a-z ]{3,20}?)(?:\s+(?:if|when)\s+(.+?))?(?:\s+(?:and|then|,|\.)|$)/.exec(
+      /(?:change|set|move)\s+(?:the\s+)?stage\s+to\s+([a-z ]{3,20}?)(?:\s+(?:after|in)\s+(\d{1,3})\s+(day|days|hour|hours|minute|minutes|min|mins|week|weeks))?(?:\s+(?:if|when)\s+(.+?))?(?=\s*(?:and|then|unless|otherwise|except|,|\.|;|$))/.exec(
         text
       );
     if (stage) {
       consume(spans, stage.index, stage[0].length);
-      const heard = stage[1].trim();
+      const heard = stripTrailingPunct(stage[1]);
       const options = FIELDS.stage.options ?? [];
       const exact = options.find((o) => norm(o) === norm(heard));
       if (exact) {
@@ -695,16 +714,25 @@ function matchOutputs(
           suggestions: fuzzyMatches(heard, options),
         });
       }
-      attachActionGate(outputs.length - 1, stage[2]);
+      // Delay suffix: "after 2 days", "in 24 hours". Quantity AND unit both come
+      // from the regex captures — re-scanning stage[0] for a unit word would find
+      // one embedded in the stage name first ("monday review in 3 weeks" → "day").
+      if (stage[2] && stage[3]) {
+        const delayMinutes = parseDelayText(`${stage[2]} ${stage[3]}`);
+        if (delayMinutes != null && outputs.length) {
+          outputs[outputs.length - 1].delayMinutes = delayMinutes;
+        }
+      }
+      attachActionGate(outputs.length - 1, stage[4]);
     }
   }
 
   // add tag <tag> — tags are self-identifying free text (hardening §4); normalize only.
   if (!excluded.has("tag")) {
-    const tag = /add\s+(?:a\s+)?tag\s+([a-z0-9 _-]{2,30}?)(?:\s+(?:if|when)\s+(.+?))?(?:\s+(?:and|then|,|\.)|$)/.exec(text);
+    const tag = /add\s+(?:a\s+)?tag\s+([a-z0-9 _-]{2,30}?)(?:\s+(?:if|when)\s+(.+?))?(?=\s*(?:and|then|unless|otherwise|except|,|\.|;|$))/.exec(text);
     if (tag) {
       consume(spans, tag.index, tag[0].length);
-      outputs.push({ action: "add_tag", params: { value: tag[1].trim().replace(/\s+/g, " ") } });
+      outputs.push({ action: "add_tag", params: { value: stripTrailingPunct(tag[1]).replace(/\s+/g, " ") } });
       attachActionGate(outputs.length - 1, tag[2]);
     }
   }

@@ -38,6 +38,9 @@ import {
   condFieldDef,
   isValuelessOperator,
   walkLeaves,
+  parseDelay,
+  formatDelay,
+  MAX_DELAY_MINUTES,
 } from "@/lib/vocabulary";
 import {
   addLeaf as tAddLeaf,
@@ -48,7 +51,7 @@ import {
   nodeAt,
   emptyGroup,
 } from "@/lib/conditionTree";
-import { SlidersHorizontal, Crosshair, CirclePlus, Flame, X } from "lucide-react";
+import { SlidersHorizontal, Crosshair, CirclePlus, Flame, Timer, X } from "lucide-react";
 import TokenPicker, { PickerOption, ScopedOptions } from "./TokenPicker";
 import { VocabOverlay, ScopedInstances, fieldKindForType } from "@/lib/liveVocabulary";
 import { UnresolvedSlot } from "@/lib/nlParser";
@@ -65,7 +68,11 @@ type Open =
   | { kind: "add-cond"; path: number[] }
   | { kind: "action"; lane: Lane; i: number }
   | { kind: "action-param"; lane: Lane; i: number }
+  | { kind: "action-delay"; lane: Lane; i: number }
   | { kind: "add-action"; lane: Lane };
+
+/** Presets for the SLA delay picker; any other value can be typed free-text. */
+const DELAY_PRESETS = ["15 minutes", "1 hour", "2 hours", "4 hours", "1 day", "3 days", "1 week"];
 
 /** Pseudo-team categories are unconfirmed (plan §4.2) — badge them. */
 const TEAM_CATEGORIES = new Set(["Underwriting Team", "Booking Team", "Escalation Team", "Operations Team"]);
@@ -502,6 +509,21 @@ export default function RuleSentence({
               ))}
             <button
               type="button"
+              onClick={(e) => openPicker({ kind: "action-delay", lane, i }, e.currentTarget)}
+              aria-label={o.delayMinutes ? `Delay: ${formatDelay(o.delayMinutes)} (not yet executed)` : "Add an SLA delay"}
+              title={
+                o.delayMinutes
+                  ? `Waits ${formatDelay(o.delayMinutes)} before running — saved, but NOT yet executed: this prototype has no scheduler, so the action runs immediately.`
+                  : "Delay this action (SLA timer)"
+              }
+              className="ring-accent inline-flex items-center gap-1 rounded-md px-1 text-[11px] font-medium transition-colors hover:bg-[var(--accent-soft)]"
+              style={{ color: o.delayMinutes ? "var(--warn-fg)" : "var(--fg-subtle)" }}
+            >
+              <Timer size={11} strokeWidth={2} />
+              {o.delayMinutes ? formatDelay(o.delayMinutes) : "now"}
+            </button>
+            <button
+              type="button"
               onClick={() => removeActionAt(lane, i)}
               aria-label="Remove action"
               className="ring-accent mr-0.5 flex h-5 w-5 items-center justify-center rounded-full transition-colors hover:bg-[var(--accent-soft)]"
@@ -827,6 +849,45 @@ export default function RuleSentence({
               onSelect={(v) => {
                 updateActionAt(open.lane, open.i, { params: { [key]: v } });
                 if (slot) onResolve?.(slot);
+                close();
+              }}
+              onClose={close}
+            />
+          );
+        })()}
+
+      {open?.kind === "action-delay" &&
+        (() => {
+          const current = laneActions(open.lane)[open.i]?.delayMinutes;
+          const isNow = (v: string) => v.trim().toLowerCase() === "immediately";
+          return (
+            <TokenPicker
+              anchor={anchor}
+              // The header carries the caveat: a delay saves and displays, but
+              // nothing runs it yet (no scheduler — see RuleOutput.delayMinutes).
+              title="Delay — saved, not yet executed"
+              options={[
+                { value: "immediately", label: "immediately (no delay)", hint: "Runs as soon as the rule fires." },
+                ...DELAY_PRESETS.map((preset) => ({
+                  value: preset,
+                  label: preset,
+                  confidence: "unconfirmed" as const,
+                  hint: "Persisted on the action. No scheduler exists yet, so the action still runs immediately.",
+                })),
+              ]}
+              value={current ? formatDelay(current) : "immediately"}
+              freeText
+              freeTextPlaceholder='e.g. "2 hours" or "3 days"'
+              validate={(v) =>
+                isNow(v) || parseDelay(v) !== null
+                  ? null
+                  : `Enter a delay like "2 hours" or "3 days" — up to ${formatDelay(MAX_DELAY_MINUTES)}.`
+              }
+              onSelect={(v) => {
+                const minutes = isNow(v) ? 0 : parseDelay(v);
+                if (minutes === null) return; // validate() already blocks this path
+                // 0 === instant: drop the key rather than storing a no-op delay.
+                updateActionAt(open.lane, open.i, { delayMinutes: minutes || undefined });
                 close();
               }}
               onClose={close}

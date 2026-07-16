@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeRule } from "@/lib/vocabulary";
 import { simulateRule } from "@/lib/ruleEvaluator";
+import { evaluationContextFor } from "@/lib/services/exposure";
 import { getRequest } from "@/lib/platformData";
 import { WorkflowService } from "@/lib/services/workflow";
 import { RuleExecutionService } from "@/lib/services/execution";
@@ -66,7 +67,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const result = simulateRule(routedRule, request);
+    // Resolve context fields (aggregate exposure) against the rule that actually
+    // evaluates — a routed A/B peer may reference fields the control never did.
+    const context = await evaluationContextFor(routedRule, orgId, request.id);
+    const result = simulateRule(routedRule, request, context);
 
     let logged = false;
     let logError: string | undefined;

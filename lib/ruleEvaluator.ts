@@ -7,6 +7,19 @@
  * Schema v3: multiple triggers (OR), recursive AND/OR condition groups (traces
  * flattened with a `depth` for indentation), `missingData:"alert"` fail-closed
  * alerts, and `else` (Otherwise) actions when triggers match but conditions don't.
+ *
+ * Phase 9 — why `aggregate_exposure` arrives as CONTEXT and not as a lookup:
+ * exposure lives in Postgres, but this module must stay pure and synchronous.
+ * It is imported by components/SimulationPanel.tsx (a "use client" component),
+ * so an `await calculateAggregateExposure(...)` in here would drag Prisma into
+ * the browser bundle and break the build, and would force every caller —
+ * ruleEngine.matchingRequests and its UI callers included — to become async.
+ * So the server-side caller resolves exposure first (services/exposure.ts) and
+ * passes it in. Same dynamic value, evaluator stays pure, tests stay sync.
+ *
+ * A context field the caller didn't resolve is UNKNOWN, never 0 — fail-closed,
+ * exactly like an absent request field. Treating "not looked up" as $0 exposure
+ * would silently pass every `aggregate_exposure >= threshold` covenant check.
  */
 
 import {
@@ -31,6 +44,37 @@ import {
 } from "./vocabulary";
 import { PlatformRequest } from "./platformData";
 import { requestMatchesEvent, resolveField } from "./ruleEngine";
+
+/**
+ * Values resolved by the (server-side, async) caller for fields that aren't on
+ * the request itself. Every entry is optional: omit it and the field resolves
+ * unknown and fails closed. See the module docblock for why this is injected.
+ */
+export interface EvaluationContext {
+  /** Total outstanding across the borrower's connected group, in dollars —
+   *  from services/exposure.ts `calculateAggregateExposure`. */
+  aggregateExposure?: number;
+}
+
+/**
+ * Condition fields answered from the context rather than from the request.
+ * `undefined` → the caller didn't resolve it → unknown → fail-closed.
+ */
+const CONTEXT_FIELDS: Record<string, (ctx: EvaluationContext) => string | number | undefined> = {
+  aggregate_exposure: (ctx) => ctx.aggregateExposure,
+};
+
+/** resolveField, with the caller-supplied context fields overlaid. */
+function resolveWithContext(
+  r: PlatformRequest,
+  fieldKey: string,
+  ctx: EvaluationContext
+): { known: boolean; value: string | number | string[] | null } {
+  const fromContext = CONTEXT_FIELDS[fieldKey];
+  if (!fromContext) return resolveField(r, fieldKey);
+  const value = fromContext(ctx);
+  return value === undefined ? { known: false, value: null } : { known: true, value };
+}
 
 export interface TriggerTrace {
   event: string;
@@ -178,9 +222,14 @@ function triggerScopeOk(t: TriggerRef, r: PlatformRequest): boolean {
   return scopeMatches(t.scope, null, label);
 }
 
-function traceCondition(r: PlatformRequest, c: RuleCondition, depth: number): ConditionTrace {
+function traceCondition(
+  r: PlatformRequest,
+  c: RuleCondition,
+  depth: number,
+  ctx: EvaluationContext
+): ConditionTrace {
   const key = condFieldKey(c.field);
-  const { known, value } = resolveField(r, key);
+  const { known, value } = resolveWithContext(r, key, ctx);
   const kind = condFieldKind(c.field);
   const options = condFieldDef(c.field)?.options;
   const actualStr = Array.isArray(value) ? value.join(", ") : String(value ?? "");
@@ -275,7 +324,11 @@ function describeAction(action: string, params: Record<string, ScopeValue>): str
  * `elseActions` populate when a trigger matched but the conditions failed.
  * `alerts` surface fields absent from the data model when missingData:"alert".
  */
-export function simulateRule(rule: WorkflowRule, request: PlatformRequest): SimulationTrace {
+export function simulateRule(
+  rule: WorkflowRule,
+  request: PlatformRequest,
+  context: EvaluationContext = {}
+): SimulationTrace {
   const alerts: string[] = [];
 
   const triggers: TriggerTrace[] = rule.triggers.map((t) => ({
@@ -287,7 +340,7 @@ export function simulateRule(rule: WorkflowRule, request: PlatformRequest): Simu
   const matchedTrigger = triggers.find((t) => t.matched)?.event ?? null;
 
   const onLeaf = (c: RuleCondition, depth: number): ConditionTrace => {
-    const t = traceCondition(request, c, depth);
+    const t = traceCondition(request, c, depth, context);
     // missingData:"alert": a field absent from the data model (actual === null)
     // with a value-requiring operator is fail-closed AND surfaced as an alert.
     if (rule.controls.missingData === "alert" && t.actual === null && !isValuelessOperator(c.operator)) {
@@ -315,6 +368,10 @@ export function simulateRule(rule: WorkflowRule, request: PlatformRequest): Simu
 }
 
 /** Boolean-only convenience for the list-match engine (single semantic source). */
-export function ruleMatches(rule: WorkflowRule, request: PlatformRequest): boolean {
-  return simulateRule(rule, request).matched;
+export function ruleMatches(
+  rule: WorkflowRule,
+  request: PlatformRequest,
+  context: EvaluationContext = {}
+): boolean {
+  return simulateRule(rule, request, context).matched;
 }

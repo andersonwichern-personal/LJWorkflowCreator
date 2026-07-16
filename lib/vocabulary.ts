@@ -88,6 +88,7 @@ export interface FieldDef {
 export const FIELD_GROUPS: { key: string; icon: string }[] = [
   { key: "Request", icon: "ClipboardList" },
   { key: "Customer", icon: "User" },
+  { key: "Covenant", icon: "ShieldCheck" },
   { key: "Application Data", icon: "Wheat" },
   { key: "Underwriting", icon: "Scale" },
   { key: "Offer", icon: "Mail" },
@@ -178,6 +179,47 @@ export const FIELDS: Record<string, FieldDef> = {
     confidence: "verified",
     group: "Customer",
     hint: "A customer on the request (Customers section).",
+  },
+  aggregate_exposure: {
+    key: "aggregate_exposure",
+    label: "aggregate exposure",
+    kind: "numeric",
+    confidence: "unconfirmed",
+    group: "Customer",
+    unit: "$",
+    hint: "Total outstanding across the borrower AND every connected entity. Computed from the relationship graph, not a platform field.",
+  },
+
+  /* ---- Covenant (Phase 9 — SCHEDULED COVENANT REVIEW) ----
+   * Registered ahead of their data source, exactly as reqtype/credit_score are
+   * (ruleEngine.ts `fieldValue` returns UNKNOWN for them). Until the platform
+   * supplies these, a condition on one resolves unknown and fails closed — it
+   * never silently matches. Badged `unconfirmed` so the picker says so. */
+  days_since_financials_pulled: {
+    key: "days_since_financials_pulled",
+    label: "days since financials pulled",
+    kind: "numeric",
+    confidence: "unconfirmed",
+    group: "Covenant",
+    hint: "Age of the latest financials on file. No platform source yet — resolves unknown (fails closed).",
+  },
+  compliance_status: {
+    key: "compliance_status",
+    label: "compliance status",
+    kind: "enum",
+    confidence: "unconfirmed",
+    group: "Covenant",
+    options: ["Compliant", "Waived", "In Breach", "Pending Review"],
+    hint: "Covenant compliance state. No platform source yet — resolves unknown (fails closed).",
+  },
+  covenant_type: {
+    key: "covenant_type",
+    label: "covenant type",
+    kind: "enum",
+    confidence: "unconfirmed",
+    group: "Covenant",
+    options: ["Financial", "Reporting", "Collateral", "Affirmative", "Negative"],
+    hint: "Class of covenant under review. No platform source yet — resolves unknown (fails closed).",
   },
 
   /* ---- Application Data (per-template form fields — the real palette) ---- */
@@ -770,6 +812,30 @@ export const EVENTS: EventDef[] = [
     condFields: ["loan_product", "loan_amount", "interest_rate", "term_months", "core", "loan_balance", ...COMMON],
     blurb: "A loan lands in the Loans (servicing) section — not confirmed as an emitted event.",
   },
+  {
+    key: "SCHEDULED COVENANT REVIEW",
+    label: "SCHEDULED COVENANT REVIEW",
+    confidence: "unconfirmed",
+    condFields: [
+      "days_since_financials_pulled",
+      "compliance_status",
+      "covenant_type",
+      "aggregate_exposure",
+      "loan_amount",
+      "loan_balance",
+      "risk_grade",
+      "main_borrower",
+      ...COMMON,
+    ],
+    // Unlike every event above, this one is a CLOCK tick, not a request state
+    // change — so ruleEngine.ts `requestMatchesEvent` has nothing to derive it
+    // from and returns false, and no worker/cron exists to fire it either (see
+    // lib/scheduledActions.ts: the scheduler is deferred prototype-wide). The
+    // vocabulary + rule shape ship now so covenant rules are authorable and
+    // storable; they stay inert until a scheduler exists. Says so on the pill.
+    blurb:
+      "A periodic covenant review comes due. NOT YET EMITTED — no scheduler exists in this prototype, so rules on this trigger save but never fire.",
+  },
 ];
 
 export function getEvent(key: string): EventDef | undefined {
@@ -1187,10 +1253,88 @@ export interface RuleOutput {
   /** Optional per-action gate (same node type as the root conditions). Persisted;
    *  the evaluator ignores it until the executor honors it (Phase 4). */
   when?: ConditionGroup;
-  /** Reserved for the timer engine (Phase 5). Persisted, ignored by the evaluator. */
+  /**
+   * SLA action delay — minutes to wait before this action runs. Absent or 0 =
+   * execute instantly; negative = before the anchor (the NL parser emits e.g.
+   * -7200 for "7 days before"). Authorable via the timer control on the action
+   * pill (Phase 9).
+   *
+   * STILL NOT EXECUTED. There is no worker or cron in this serverless prototype
+   * (lib/scheduledActions.ts), so a delay is persisted and shown, and then the
+   * executor runs the action immediately. The UI must keep saying so — a banker
+   * who sets "3 days" and is not told otherwise will assume it waits 3 days.
+   */
   delayMinutes?: number;
   /** Failure policy for the executor (Phase 4). Default "retry". */
   onFailure?: "retry" | "skip" | "halt";
+}
+
+/* ---- SLA delays (Phase 9) — one parser for the picker and the NL parser ---- */
+
+const MINUTES_PER: Record<string, number> = {
+  minute: 1,
+  hour: 60,
+  day: 60 * 24,
+  week: 60 * 24 * 7,
+};
+
+/** Unit aliases a human might type. Longest-first so "min" can't shadow "minute". */
+const DELAY_UNIT_ALIASES: { alias: string; unit: string }[] = [
+  { alias: "minutes", unit: "minute" },
+  { alias: "minute", unit: "minute" },
+  { alias: "mins", unit: "minute" },
+  { alias: "min", unit: "minute" },
+  { alias: "m", unit: "minute" },
+  { alias: "hours", unit: "hour" },
+  { alias: "hour", unit: "hour" },
+  { alias: "hrs", unit: "hour" },
+  { alias: "hr", unit: "hour" },
+  { alias: "h", unit: "hour" },
+  { alias: "days", unit: "day" },
+  { alias: "day", unit: "day" },
+  { alias: "d", unit: "day" },
+  { alias: "weeks", unit: "week" },
+  { alias: "week", unit: "week" },
+  { alias: "w", unit: "week" },
+];
+
+/** Longest delay authorable — 90 days. Guards against a typo'd "5000 weeks". */
+export const MAX_DELAY_MINUTES = 90 * 24 * 60;
+
+/**
+ * Parse a human delay ("2 hours", "3 days", "90", "1 week") into minutes.
+ * A bare number means minutes. Returns null when the text isn't a delay, so
+ * callers can surface an author-time error instead of silently storing 0 —
+ * a delay that quietly becomes "immediately" is the dangerous failure here.
+ */
+export function parseDelay(text: string): number | null {
+  const s = text.trim().toLowerCase();
+  if (!s) return null;
+  const m = /^(\d+(?:\.\d+)?)\s*([a-z]*)$/.exec(s);
+  if (!m) return null;
+  const qty = Number(m[1]);
+  if (!isFinite(qty) || qty < 0) return null;
+  const raw = m[2];
+  const unit = raw ? DELAY_UNIT_ALIASES.find((u) => u.alias === raw)?.unit : "minute";
+  if (!unit) return null;
+  const minutes = Math.round(qty * MINUTES_PER[unit]);
+  if (minutes > MAX_DELAY_MINUTES) return null;
+  return minutes;
+}
+
+/** Render minutes back as the shortest exact phrase ("4320" → "3 days"). */
+export function formatDelay(minutes: number): string {
+  if (!minutes) return "immediately";
+  const abs = Math.abs(minutes);
+  const suffix = minutes < 0 ? " before" : "";
+  for (const unit of ["week", "day", "hour"]) {
+    const size = MINUTES_PER[unit];
+    if (abs >= size && abs % size === 0) {
+      const n = abs / size;
+      return `${n} ${unit}${n === 1 ? "" : "s"}${suffix}`;
+    }
+  }
+  return `${abs} minute${abs === 1 ? "" : "s"}${suffix}`;
 }
 
 export type CondLogic = "AND" | "OR";
@@ -1282,6 +1426,15 @@ export interface WorkflowRule {
   actions: RuleOutput[];
   else?: RuleOutput[];               // fires when triggers match but conditions don't
   controls: RuleControls;
+}
+
+/**
+ * Does any condition leaf reference this field key? Lets a caller skip the cost
+ * of resolving an expensive context field (aggregate_exposure hits the customer
+ * graph) for the rules that never ask for it.
+ */
+export function ruleReferencesField(rule: WorkflowRule, fieldKey: string): boolean {
+  return walkLeaves(rule.conditions).some((leaf) => condFieldKey(leaf.field) === fieldKey);
 }
 
 export function emptyRule(): WorkflowRule {

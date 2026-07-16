@@ -9,6 +9,7 @@ import {
   type LucideIcon,
   Mail,
   Scale,
+  ShieldCheck,
   Siren,
   Store,
   Tag,
@@ -37,6 +38,7 @@ const VOCAB_ICONS: Record<string, LucideIcon> = {
   Siren,
   CircleCheck,
   Banknote,
+  ShieldCheck,
 };
 
 export default function VocabIcon({

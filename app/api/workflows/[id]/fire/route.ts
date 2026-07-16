@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { normalizeRule } from "@/lib/vocabulary";
-import { simulateRule } from "@/lib/ruleEvaluator";
+import { normalizeRule, ruleReferencesField } from "@/lib/vocabulary";
+import { EvaluationContext, simulateRule } from "@/lib/ruleEvaluator";
 import { getRequest } from "@/lib/platformData";
 import { WorkflowService } from "@/lib/services/workflow";
 import { RuleExecutionService } from "@/lib/services/execution";
 import { OrgControlsService } from "@/lib/services/orgControls";
 import { executeActions } from "@/lib/services/actionExecutor";
+import { evaluationContextFor } from "@/lib/services/exposure";
 
 export const dynamic = "force-dynamic";
 
@@ -107,8 +108,10 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       });
     }
 
-    // 4. Evaluate the rule against the request.
-    const sim = simulateRule(rule, request);
+    // 4. Evaluate the rule against the request. Context fields (aggregate
+    //    exposure) are resolved here — the evaluator is pure and can't read them.
+    const context = await evaluationContextFor(rule, orgId, request.id);
+    const sim = simulateRule(rule, request, context);
     const eventName = sim.trace.matchedTrigger ?? firstEvent;
 
     if (!sim.matched) {

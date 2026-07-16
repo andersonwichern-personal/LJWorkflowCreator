@@ -22,8 +22,9 @@ export interface MergeResult {
  * an edit to the duplicate. Principle B (one scanner): workflow rules pointing at
  * the duplicate are repointed to the survivor via the shared ref rewriter.
  *
- * Aggregate-exposure recompute (T6) is intentionally out of scope for this slice
- * (deferred — no cross-request query path yet); no fabricated exposure is written.
+ * Aggregate-exposure recompute (T6) needs no explicit step here: exposure is
+ * derived on read (services/exposure.ts `calculateAggregateExposure`), never
+ * stored, so repointing the roles above IS the recompute. Nothing to invalidate.
  */
 export async function mergeCustomers(
   survivorId: string,

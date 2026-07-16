@@ -20,12 +20,12 @@ Status: backend done and committed (`bf4b01b`, `a2a53f1`); §2.3 UI outstanding.
       `requiresProposal` was deleted after Anderson picked the OR semantics
 - [x] `lib/services/workflow.ts` — interception + `ProposalRequiredError`
 - [x] `scripts/assert-four-eyes.ts` — 13 assertions, wired into `npm run test`
-- [ ] §2.3 "Propose Changes" button — swap the save label when the gate would
+- [x] §2.3 "Propose Changes" button — swap the save label when the gate would
       fire, so the button states what will actually happen
-- [ ] §2.3 pending-proposal banner in the builder canvas
-- [ ] §2.3 "Proposals" dashboard tab — list pending, diff proposed vs current
+- [x] §2.3 pending-proposal banner in the builder canvas
+- [x] §2.3 "Proposals" dashboard tab — list pending, diff proposed vs current
       rule JSON, approve/reject
-- [ ] Surface the route's `202 { pendingProposalId, proposalStatus }` in
+- [x] Surface the route's `202 { pendingProposalId, proposalStatus }` in
       `lib/api.ts` — the gate works but nothing shows the user their change
       became a proposal
 
@@ -34,7 +34,8 @@ Status: backend done and committed (`bf4b01b`, `a2a53f1`); §2.3 UI outstanding.
 - [x] `app/api/workflows/[id]/route.ts` — catches `ProposalRequiredError` → 202
 - [x] `lib/services/workflowProposal.ts` — create/apply/reject + task spawn
 - [x] `prisma/schema.prisma` + `20260716140000_phase13_four_eyes` migration
-- [ ] `lib/proposals.ts` — started; unfinished
+- [x] `lib/proposals.ts` — legacy local draft markers preserved; durable
+      proposal flow now uses `WorkflowProposal` APIs instead
 
 ## Blocked / needs a human
 

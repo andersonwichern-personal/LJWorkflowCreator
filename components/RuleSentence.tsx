@@ -951,52 +951,57 @@ function ControlsPanel({
           />
         </div>
         {controls.abSplit && (
-          <div className="space-y-2">
-            <div className={row}>
-              <span className={labelCls} style={{ color: "var(--fg)" }}>Peer workflow</span>
-              <select
-                value={controls.abSplit.targetWorkflowId}
-                onChange={(e) =>
-                  onChange({
-                    abSplit: {
-                      targetWorkflowId: e.target.value,
-                      weightPercent: controls.abSplit?.weightPercent ?? 10,
-                    },
-                  })
-                }
-                className="ring-accent min-w-0 rounded-lg border px-2 py-1 text-sm"
-                style={{ borderColor: "var(--panel-border)", background: "var(--panel)", color: "var(--fg)" }}
-              >
-                <option value="">Select workflow</option>
-                {(workflowOptions ?? []).map((wf) => (
-                  <option key={wf.value} value={wf.value}>
-                    {wf.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className={row}>
-              <span className={labelCls} style={{ color: "var(--fg)" }}>Peer weight</span>
-              <input
-                type="range"
-                min={1}
-                max={99}
-                value={controls.abSplit.weightPercent}
-                onChange={(e) =>
-                  onChange({
-                    abSplit: {
-                      targetWorkflowId: controls.abSplit?.targetWorkflowId ?? "",
-                      weightPercent: Number(e.target.value) || 10,
-                    },
-                  })
-                }
-                className="w-32 accent-[var(--accent)]"
-              />
-            </div>
-            <div className="text-xs" style={{ color: "var(--fg-subtle)" }}>
-              {controls.abSplit.weightPercent}% to peer, {100 - controls.abSplit.weightPercent}% to this rule.
-            </div>
-          </div>
+          (() => {
+            const split = controls.abSplit;
+            return (
+              <div className="space-y-2">
+                <div className={row}>
+                  <span className={labelCls} style={{ color: "var(--fg)" }}>Peer workflow</span>
+                  <select
+                    value={split.targetWorkflowId}
+                    onChange={(e) =>
+                      onChange({
+                        abSplit: {
+                          targetWorkflowId: e.target.value,
+                          weightPercent: split.weightPercent,
+                        },
+                      })
+                    }
+                    className="ring-accent min-w-0 rounded-lg border px-2 py-1 text-sm"
+                    style={{ borderColor: "var(--panel-border)", background: "var(--panel)", color: "var(--fg)" }}
+                  >
+                    <option value="">Select workflow</option>
+                    {(workflowOptions ?? []).map((wf) => (
+                      <option key={wf.value} value={wf.value}>
+                        {wf.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className={row}>
+                  <span className={labelCls} style={{ color: "var(--fg)" }}>Peer weight</span>
+                  <input
+                    type="range"
+                    min={1}
+                    max={99}
+                    value={split.weightPercent}
+                    onChange={(e) =>
+                      onChange({
+                        abSplit: {
+                          targetWorkflowId: split.targetWorkflowId,
+                          weightPercent: Number(e.target.value) || 10,
+                        },
+                      })
+                    }
+                    className="w-32 accent-[var(--accent)]"
+                  />
+                </div>
+                <div className="text-xs" style={{ color: "var(--fg-subtle)" }}>
+                  {split.weightPercent}% to peer, {100 - split.weightPercent}% to this rule.
+                </div>
+              </div>
+            );
+          })()
         )}
       </div>
     </div>

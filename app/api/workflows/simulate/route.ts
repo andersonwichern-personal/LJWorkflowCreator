@@ -4,19 +4,12 @@ import { simulateRule } from "@/lib/ruleEvaluator";
 import { getRequest } from "@/lib/platformData";
 import { WorkflowService } from "@/lib/services/workflow";
 import { RuleExecutionService } from "@/lib/services/execution";
+import { routesToPeer } from "@/lib/abSplit";
 
 export const dynamic = "force-dynamic";
 
 /** Fixed demo tenant fallback, matching the platform routes. */
 const DEFAULT_ORG_ID = "test-org-uuid-999";
-
-function hashToPercent(input: string): number {
-  let h = 0;
-  for (let i = 0; i < input.length; i++) {
-    h = (h * 33 + input.charCodeAt(i)) | 0;
-  }
-  return Math.abs(h) % 100;
-}
 
 /**
  * POST /api/workflows/simulate — dry-run a rule against a request.
@@ -65,14 +58,11 @@ export async function POST(req: NextRequest) {
   try {
     let routedRule = rule;
     let routed: "ab-split" | undefined;
-    if (abSplit?.targetWorkflowId) {
-      const roll = hashToPercent(body.requestId);
-      if (roll < abSplit.weightPercent) {
-        const peer = await WorkflowService.getWorkflowById(abSplit.targetWorkflowId, orgId);
-        if (peer) {
-          routedRule = normalizeRule(peer.ruleJson);
-          routed = "ab-split";
-        }
+    if (abSplit?.targetWorkflowId && routesToPeer(body.requestId, abSplit.weightPercent)) {
+      const peer = await WorkflowService.getWorkflowById(abSplit.targetWorkflowId, orgId);
+      if (peer) {
+        routedRule = normalizeRule(peer.ruleJson);
+        routed = "ab-split";
       }
     }
 

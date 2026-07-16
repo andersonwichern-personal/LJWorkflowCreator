@@ -286,6 +286,13 @@ export interface AuthorityDecision {
 
 export interface AuthorityInput {
   amount: number;
+  /**
+   * Aggregate connected-party exposure, when the caller has resolved it. Phase
+   * 5 keeps the query/runtime deferred, but this seam lets the authority engine
+   * treat a precomputed exposure as the amount basis without changing callers
+   * that only know the request amount.
+   */
+  exposure?: number;
   riskGrade: string;
   product: string; // "Term Loan" | "Line of Credit"
 }
@@ -312,10 +319,14 @@ function fmt(n: number): string {
   return `$${n.toLocaleString("en-US")}`;
 }
 
+function exposureBasis(input: AuthorityInput): number {
+  return Number.isFinite(input.exposure) ? Number(input.exposure) : input.amount;
+}
+
 /** Does a level's matrix (limit + min grade + product) cover the request? */
 export function covers(level: AuthorityLevel, input: AuthorityInput): boolean {
   const productOk = level.product === "All" || level.product === input.product;
-  const limitOk = limitOf(level) >= input.amount;
+  const limitOk = limitOf(level) >= exposureBasis(input);
   // level.riskGrade is the *minimum acceptable* grade: a level graded "C" covers A–C.
   const gradeOk = gradeIndex(input.riskGrade) <= gradeIndex(level.riskGrade);
   return productOk && limitOk && gradeOk;
@@ -360,13 +371,18 @@ export function decideAuthority(
     };
   }
 
-  const describe = `${fmt(input.amount)} / grade ${input.riskGrade} / ${input.product}`;
+  const basis = exposureBasis(input);
+  const exposureSuffix =
+    input.exposure !== undefined && Number.isFinite(input.exposure)
+      ? ` exposure basis (request ${fmt(input.amount)})`
+      : "";
+  const describe = `${fmt(basis)}${exposureSuffix} / grade ${input.riskGrade} / ${input.product}`;
 
   // 1. A marginal overage stays at the owning level but requires co-sign.
   const toleranceCovering = sorted.find((a) => {
     if (!coversByProductAndGrade(a, input)) return false;
     const limit = limitOf(a);
-    return input.amount > limit && input.amount <= toleranceLimitOf(a);
+    return basis > limit && basis <= toleranceLimitOf(a);
   });
   if (toleranceCovering) {
     const limit = limitOf(toleranceCovering);

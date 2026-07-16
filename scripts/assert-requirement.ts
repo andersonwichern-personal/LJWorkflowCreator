@@ -232,6 +232,31 @@ t(
     legacyDecision.requirement.approvers.map((a) => a.label).join(",") === "Wael,Sara"
 );
 
+const exposureDecision = decideAuthority(
+  { amount: 100_000, exposure: 750_000, riskGrade: "B", product: "Term Loan" },
+  [committeeAuthority]
+);
+t(
+  "decideAuthority: exposure can be used as the amount basis",
+  exposureDecision.authority?.id === committeeAuthority.id,
+  exposureDecision.reason
+);
+t(
+  "decideAuthority: exposure basis is named in the audit reason",
+  exposureDecision.reason.includes("exposure basis") && exposureDecision.reason.includes("request $100,000"),
+  exposureDecision.reason
+);
+
+const exposureTooHigh = decideAuthority(
+  { amount: 100_000, exposure: 1_500_000, riskGrade: "B", product: "Term Loan" },
+  [committeeAuthority]
+);
+t(
+  "decideAuthority: exposure above the limit does not fall back to request amount",
+  exposureTooHigh.authority === null,
+  exposureTooHigh.reason
+);
+
 if (failures) {
   console.error(`\n${failures} requirement assertion(s) FAILED`);
   process.exit(1);

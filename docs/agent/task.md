@@ -139,6 +139,28 @@ Ownership: Claude owns `angular-workflows/**` (it is UI-layer work). Codex:
 same support role as the prototype — fixtures, checklists, standalone drafts
 outside `angular-workflows/`, unless the ledger says otherwise.
 
+### Rule core is now a package + sync gate (2026-07-17)
+
+The shared rule core was extracted out of `lib/` into
+**`packages/rule-core` (`@sweet/rule-core`)** — the single source of truth for
+both tracks (commits `dbc38f1` + `f9475b4`, landed on `feature/angular-embed`).
+
+- **Vercel track** imports it directly (`from "@sweet/rule-core"`, npm
+  workspace + `transpilePackages`). The old `lib/vocabulary.ts` etc. paths are
+  gone.
+- **Angular track** consumes a **generated vendored copy** at
+  `angular-workflows/src/app/core/`. It is written by
+  `npm run sync:angular-core` (repo root) and carries a GENERATED banner.
+  **Never hand-edit those files — Codex especially** — the next sync
+  overwrites them. `api.ts` and `fourEyes.ts` in that folder are
+  Angular-owned and NOT managed by the sync.
+- **To change the rule core**: edit `packages/rule-core/src/`, run
+  `npm run sync:angular-core`, commit both. That *is* the
+  "must land on both tracks" rule — now mechanical instead of manual.
+- **Gates in `npm test`** (root): `assert-core-purity` fails the suite if
+  react/next/prisma/DOM leaks into the package; `sync-angular-core --check`
+  fails it if the vendored copy drifts. A red gate names the fix command.
+
 ## Integration salvage doctrine — system-wide decision
 
 Do **not** attempt to transplant the Vercel prototype into the admin console.

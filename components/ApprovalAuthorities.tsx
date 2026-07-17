@@ -22,7 +22,7 @@ import {
 } from "@/lib/authorityEngine";
 import { Check, Landmark, X } from "lucide-react";
 import { approverIdFor, makerCheckerExclusions, useViewpoint } from "@/lib/viewpoint";
-import { formatCurrency, REQUESTS } from "@/lib/platformData";
+import { formatCurrency, REQUESTS } from "@sweet/rule-core";
 import PageHeader from "@/components/ui/PageHeader";
 import RequirementEditor from "@/components/RequirementEditor";
 import Toggle from "@/components/Toggle";

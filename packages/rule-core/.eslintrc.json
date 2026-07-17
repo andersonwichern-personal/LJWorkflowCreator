@@ -1,0 +1,24 @@
+{
+  "root": true,
+  "rules": {
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["react", "react-dom", "react/*", "next", "next/*"],
+            "message": "@sweet/rule-core is framework-neutral. UI/framework code belongs to a track, not the core."
+          },
+          {
+            "group": ["@prisma/*", "prisma", "@supabase/*", "pg"],
+            "message": "@sweet/rule-core must not touch persistence/transport. Keep DB and API bindings in the track."
+          },
+          {
+            "group": ["../*", "../../*", "@/*"],
+            "message": "@sweet/rule-core may only import from within itself. Reaching into the host tree (lib/, app/) reverses the dependency."
+          }
+        ]
+      }
+    ]
+  }
+}

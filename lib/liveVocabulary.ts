@@ -14,8 +14,8 @@
  * client-mocked in test) and never builds a role/authority ladder.
  */
 
-import { ACTIONS, ASSIGNEES, FIELDS, FieldKind } from "@/lib/vocabulary";
-import { REQUESTS } from "@/lib/platformData";
+import { ACTIONS, ASSIGNEES, FIELDS, FieldKind } from "@sweet/rule-core";
+import { REQUESTS } from "@sweet/rule-core";
 
 /* ---- Shapes shared with the server proxy (lib/platform.ts) ---- */
 

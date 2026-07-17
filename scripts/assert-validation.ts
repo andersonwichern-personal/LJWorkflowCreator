@@ -3,7 +3,7 @@
  * fixture, plus a clean rule that produces none. Run:
  *   npx tsx scripts/assert-validation.ts
  */
-import { validateRule } from "../lib/ruleValidation";
+import { validateRule } from "@sweet/rule-core";
 
 let failures = 0;
 function t(name: string, cond: boolean, detail?: string) {

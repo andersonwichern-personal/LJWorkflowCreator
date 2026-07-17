@@ -41,7 +41,7 @@ import {
   parseDelay,
   formatDelay,
   MAX_DELAY_MINUTES,
-} from "@/lib/vocabulary";
+} from "@sweet/rule-core";
 import {
   addLeaf as tAddLeaf,
   addGroup as tAddGroup,
@@ -50,11 +50,11 @@ import {
   setGroupLogic as tSetGroupLogic,
   nodeAt,
   emptyGroup,
-} from "@/lib/conditionTree";
+} from "@sweet/rule-core";
 import { SlidersHorizontal, Crosshair, CirclePlus, Flame, Timer, X } from "lucide-react";
 import TokenPicker, { PickerOption, ScopedOptions } from "./TokenPicker";
 import { VocabOverlay, ScopedInstances, fieldKindForType } from "@/lib/liveVocabulary";
-import { UnresolvedSlot } from "@/lib/nlParser";
+import { UnresolvedSlot } from "@sweet/rule-core";
 
 type Lane = "then" | "else";
 

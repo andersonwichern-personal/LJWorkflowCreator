@@ -4,7 +4,7 @@
  *   npx tsx scripts/assert-linter.ts
  */
 
-import { lintRule, type LintContext } from "../lib/ruleLinter";
+import { lintRule, type LintContext } from "@sweet/rule-core";
 
 let failures = 0;
 function t(name: string, cond: boolean, detail?: string) {

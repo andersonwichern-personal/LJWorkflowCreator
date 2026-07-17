@@ -15,8 +15,8 @@
  * - FUZZY (§2): fuzzyMatches, not substring, so typos still land.
  */
 
-import { fuzzyMatches } from "./fuzzy";
-import { ASSIGNEES, EVENTS, FIELDS } from "./vocabulary";
+import { fuzzyMatches } from "@sweet/rule-core";
+import { ASSIGNEES, EVENTS, FIELDS } from "@sweet/rule-core";
 import type { VocabOverlay } from "./liveVocabulary";
 
 /**

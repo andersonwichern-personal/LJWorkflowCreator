@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Check, Link2 } from "lucide-react";
 import { WorkflowRecord } from "@/lib/api";
-import { getEvent } from "@/lib/vocabulary";
+import { getEvent } from "@sweet/rule-core";
 import type { RefAuditResult } from "@/lib/refAudit";
 import Toggle from "./Toggle";
 

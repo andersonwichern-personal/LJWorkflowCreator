@@ -3,7 +3,7 @@
  * data — deterministic, no runtime clock.
  */
 
-import { REQUESTS, RETAILERS, formatCurrency, PlatformRequest, BookStatus } from "./platformData";
+import { REQUESTS, RETAILERS, formatCurrency, PlatformRequest, BookStatus } from "@sweet/rule-core";
 
 export function totalPipelineVolume(): number {
   return REQUESTS.filter((r) => r.stage !== "Closed").reduce((s, r) => s + r.loanAmount, 0);

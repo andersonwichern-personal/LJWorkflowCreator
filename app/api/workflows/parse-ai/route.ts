@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseInstruction, type ParseAmbiguity, type ParseOptions, type UnresolvedSlot } from "@/lib/nlParser";
+import { parseInstruction, type ParseAmbiguity, type ParseOptions, type UnresolvedSlot } from "@sweet/rule-core";
 import {
   ACTIONS,
   ASSIGNEES,
@@ -13,12 +13,12 @@ import {
   getAction,
   normalizeRule,
   paramKeyFor,
-} from "@/lib/vocabulary";
+} from "@sweet/rule-core";
 import { fetchLiveVocabulary, platformConfigured } from "@/lib/platform";
 import { buildOverlay, fieldKindForType, type VocabOverlay, type VocabularySource } from "@/lib/liveVocabulary";
-import { hasBlockingIssues, lintRuleIssues } from "@/lib/ruleLinter";
-import { validateRule } from "@/lib/ruleValidation";
-import { fuzzyMatches } from "@/lib/fuzzy";
+import { hasBlockingIssues, lintRuleIssues } from "@sweet/rule-core";
+import { validateRule } from "@sweet/rule-core";
+import { fuzzyMatches } from "@sweet/rule-core";
 
 export const dynamic = "force-dynamic";
 

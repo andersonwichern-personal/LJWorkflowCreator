@@ -1,4 +1,4 @@
-import { REQUESTS } from "@/lib/platformData";
+import { REQUESTS } from "@sweet/rule-core";
 import { approverIdFor } from "@/lib/viewpoint";
 
 export interface CustomerRecord {

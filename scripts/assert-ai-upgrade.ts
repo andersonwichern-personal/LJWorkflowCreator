@@ -2,8 +2,8 @@
  * Phase 10 AI upgrade assertions — no network calls.
  * Run: npx tsx scripts/assert-ai-upgrade.ts
  */
-import type { UnresolvedSlot } from "../lib/nlParser";
-import type { RuleCondition, WorkflowRule } from "../lib/vocabulary";
+import type { UnresolvedSlot } from "@sweet/rule-core";
+import type { RuleCondition, WorkflowRule } from "@sweet/rule-core";
 
 interface ParseAiResponse {
   rule: WorkflowRule | null;

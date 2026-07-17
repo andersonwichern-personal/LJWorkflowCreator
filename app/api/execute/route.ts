@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAction, ScopeValue } from "@/lib/vocabulary";
+import { getAction, ScopeValue } from "@sweet/rule-core";
 import { AuthorityInput } from "@/lib/authorityEngine";
 import { executeAction } from "@/lib/services/actionExecutor";
 

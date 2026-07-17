@@ -3,9 +3,9 @@ export {};
 // Exercises the REAL evaluator path for customer_name conditions against the real
 // seed requests (customer_name resolves to a request's mainBorrower, ruleEngine.ts).
 
-import { WorkflowRule, defaultControls } from "../lib/vocabulary";
-import { matchingRequests } from "../lib/ruleEngine";
-import { REQUESTS } from "../lib/platformData";
+import { WorkflowRule, defaultControls } from "@sweet/rule-core";
+import { matchingRequests } from "@sweet/rule-core";
+import { REQUESTS } from "@sweet/rule-core";
 
 let failures = 0;
 function t(name: string, cond: boolean) {

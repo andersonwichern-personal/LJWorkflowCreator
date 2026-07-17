@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
-import { normalizeRule } from "@/lib/vocabulary";
-import { simulateRule } from "@/lib/ruleEvaluator";
+import { normalizeRule } from "@sweet/rule-core";
+import { simulateRule } from "@sweet/rule-core";
 import { evaluationContextFor } from "@/lib/services/exposure";
 import { executeActions } from "@/lib/services/actionExecutor";
 import { RuleExecutionService } from "@/lib/services/execution";
 import { OrgControlsService } from "@/lib/services/orgControls";
-import { PlatformRequest, CustomerType, LoanProduct, Stage, UwStatus, UwQueue, BookStatus, Core } from "@/lib/platformData";
+import { PlatformRequest, CustomerType, LoanProduct, Stage, UwStatus, UwQueue, BookStatus, Core } from "@sweet/rule-core";
 
 export const dynamic = "force-dynamic";
 

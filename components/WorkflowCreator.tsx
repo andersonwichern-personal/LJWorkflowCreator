@@ -24,8 +24,8 @@ import {
   isGroup,
   walkLeaves,
   ASSIGNEES,
-} from "@/lib/vocabulary";
-import { UnresolvedSlot } from "@/lib/nlParser";
+} from "@sweet/rule-core";
+import { UnresolvedSlot } from "@sweet/rule-core";
 import { ChatDraftMeta } from "@/components/ChatBox";
 import {
   ConflictError,
@@ -45,7 +45,7 @@ import SimulationPanel from "@/components/SimulationPanel";
 import LintPanel from "@/components/LintPanel";
 import PageHeader from "@/components/ui/PageHeader";
 import Toggle from "@/components/Toggle";
-import { lintRuleIssues, hasBlockingIssues, type LintContext } from "@/lib/ruleLinter";
+import { lintRuleIssues, hasBlockingIssues, type LintContext } from "@sweet/rule-core";
 import {
   VocabularySource,
   buildOverlay,

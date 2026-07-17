@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { normalizeRule } from "@/lib/vocabulary";
-import { simulateRule } from "@/lib/ruleEvaluator";
-import { getRequest } from "@/lib/platformData";
+import { normalizeRule } from "@sweet/rule-core";
+import { simulateRule } from "@sweet/rule-core";
+import { getRequest } from "@sweet/rule-core";
 import { WorkflowService } from "@/lib/services/workflow";
 import { RuleExecutionService } from "@/lib/services/execution";
 import { OrgControlsService } from "@/lib/services/orgControls";

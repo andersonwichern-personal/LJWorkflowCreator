@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { FlaskConical } from "lucide-react";
-import { WorkflowRule, getAction, paramKeyFor, ActionExecution, scopeLabel } from "@/lib/vocabulary";
-import { formatCurrency, PlatformRequest, REQUESTS } from "@/lib/platformData";
-import { matchingRequests } from "@/lib/ruleEngine";
+import { WorkflowRule, getAction, paramKeyFor, ActionExecution, scopeLabel } from "@sweet/rule-core";
+import { formatCurrency, PlatformRequest, REQUESTS } from "@sweet/rule-core";
+import { matchingRequests } from "@sweet/rule-core";
 import { SimulateResult, simulateWorkflowRule, backtestRule, BacktestResult } from "@/lib/api";
 import StatusBadge from "@/components/ui/StatusBadge";
 import TraceView from "@/components/TraceView";

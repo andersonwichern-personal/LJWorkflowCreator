@@ -4,9 +4,9 @@
  * fetches are stubbed).
  * Run: npx tsx scripts/assert-id-enforcement.ts
  */
-import { lintRuleIssues, type LintContext, type RuleIssue } from "../lib/ruleLinter";
-import { normalizeRule, type ScopeValue, type WorkflowRule } from "../lib/vocabulary";
-import type { UnresolvedSlot } from "../lib/nlParser";
+import { lintRuleIssues, type LintContext, type RuleIssue } from "@sweet/rule-core";
+import { normalizeRule, type ScopeValue, type WorkflowRule } from "@sweet/rule-core";
+import type { UnresolvedSlot } from "@sweet/rule-core";
 
 interface ParseAiResponse {
   rule: WorkflowRule | null;

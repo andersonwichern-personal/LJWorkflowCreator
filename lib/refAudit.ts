@@ -25,7 +25,7 @@ import {
   paramKeyFor,
   isFormFieldRef,
   normalizeRule,
-} from "./vocabulary";
+} from "@sweet/rule-core";
 import type { ScopedInstances } from "./liveVocabulary";
 
 export interface RefAuditEntry {

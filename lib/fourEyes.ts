@@ -7,7 +7,7 @@
  * The service layer owns the writes; this module owns the decision.
  */
 
-import { WorkflowRule, normalizeRule } from "@/lib/vocabulary";
+import { WorkflowRule, normalizeRule } from "@sweet/rule-core";
 
 /**
  * Does this write need a second pair of eyes?

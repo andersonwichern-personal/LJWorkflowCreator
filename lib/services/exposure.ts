@@ -19,8 +19,8 @@
  * here: an unseeded customer sums to 0 rather than to an invented figure.
  */
 
-import { ruleReferencesField, WorkflowRule } from "@/lib/vocabulary";
-import { EvaluationContext } from "@/lib/ruleEvaluator";
+import { ruleReferencesField, WorkflowRule } from "@sweet/rule-core";
+import { EvaluationContext } from "@sweet/rule-core";
 import {
   buildCustomerGraph,
   canonicalizeCustomerNode,
@@ -202,7 +202,7 @@ export async function calculateAggregateExposure(customerId: string): Promise<nu
     prisma.requestCustomerRole.findMany({ where: { orgId } }),
   ]);
 
-  const { REQUESTS } = await import("@/lib/platformData");
+  const { REQUESTS } = await import("@sweet/rule-core");
   return computeAggregateExposure(
     customers.map((row) => ({
       id: row.id,

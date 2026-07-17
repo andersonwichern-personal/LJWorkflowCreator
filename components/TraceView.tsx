@@ -2,7 +2,7 @@
 
 import { AlertTriangle, Check, X } from "lucide-react";
 import { EvaluationTrace } from "@/lib/api";
-import { opLabel, FIELDS } from "@/lib/vocabulary";
+import { opLabel, FIELDS } from "@sweet/rule-core";
 
 /**
  * Colored evaluation-trace tree (schema v3): the OR-combined trigger line, each

@@ -19,7 +19,7 @@ import {
   isGroup,
   isScopeRef,
   normalizeRule,
-} from "@/lib/vocabulary";
+} from "@sweet/rule-core";
 
 function rewriteNode(
   node: ConditionNode,

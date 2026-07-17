@@ -4,7 +4,7 @@
  */
 import { auditWorkflowRefs } from "../lib/refAudit";
 import { emptyInstances } from "../lib/liveVocabulary";
-import { defaultControls, RULE_SCHEMA_VERSION } from "../lib/vocabulary";
+import { defaultControls, RULE_SCHEMA_VERSION } from "@sweet/rule-core";
 
 let failures = 0;
 function t(name: string, cond: boolean, detail?: string) {

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma, WorkflowProposal } from "@prisma/client";
-import { validateRule } from "@/lib/ruleValidation";
+import { validateRule } from "@sweet/rule-core";
 import { ApprovalTaskService } from "@/lib/services/approvalTask";
 import { ApprovalRequirement } from "@/lib/authorityEngine";
 

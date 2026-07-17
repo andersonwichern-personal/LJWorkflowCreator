@@ -11,8 +11,8 @@ import {
   nodeAt,
   groupDepth,
   emptyGroup,
-} from "../lib/conditionTree";
-import { ConditionGroup, ConditionLeaf, isGroup } from "../lib/vocabulary";
+} from "@sweet/rule-core";
+import { ConditionGroup, ConditionLeaf, isGroup } from "@sweet/rule-core";
 
 let failures = 0;
 function t(name: string, cond: boolean, detail?: string) {

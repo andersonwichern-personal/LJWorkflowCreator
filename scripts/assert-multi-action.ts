@@ -16,9 +16,9 @@
  * "monday review" contains "day" and silently turned 3 weeks into 3 days).
  */
 
-import { parseInstruction } from "../lib/nlParser";
-import type { ParseResult } from "../lib/nlParser";
-import { paramKeyFor, scopeLabel } from "../lib/vocabulary";
+import { parseInstruction } from "@sweet/rule-core";
+import type { ParseResult } from "@sweet/rule-core";
+import { paramKeyFor, scopeLabel } from "@sweet/rule-core";
 
 let failures = 0;
 function t(name: string, cond: boolean, detail?: string) {

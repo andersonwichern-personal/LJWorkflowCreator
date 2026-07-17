@@ -24,6 +24,9 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@sweet/rule-core": [
+        "./packages/rule-core/src/index.ts"
       ]
     },
     "target": "ES2017"
@@ -36,6 +39,7 @@
   ],
   "exclude": [
     "node_modules",
-    "scratch"
+    "scratch",
+    "angular-workflows"
   ]
 }

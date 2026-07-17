@@ -1,7 +1,7 @@
 "use client";
 
 import { CircleCheck } from "lucide-react";
-import { RuleIssue } from "@/lib/ruleLinter";
+import { RuleIssue } from "@sweet/rule-core";
 
 /**
  * Linter dashboard (Phase 4 §4): renders the semantic lint issues below the

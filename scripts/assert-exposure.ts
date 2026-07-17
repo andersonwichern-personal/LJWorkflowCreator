@@ -13,9 +13,9 @@
  */
 import { computeAggregateExposure, isOutstandingExposure } from "../lib/services/exposure";
 import { CustomerNodeLike, CustomerEdgeLike } from "../lib/services/customerGraphPure";
-import { simulateRule } from "../lib/ruleEvaluator";
-import { WorkflowRule, defaultControls, parseDelay, formatDelay } from "../lib/vocabulary";
-import { getRequest } from "../lib/platformData";
+import { simulateRule } from "@sweet/rule-core";
+import { WorkflowRule, defaultControls, parseDelay, formatDelay } from "@sweet/rule-core";
+import { getRequest } from "@sweet/rule-core";
 
 let failures = 0;
 function t(name: string, cond: boolean, detail?: string) {

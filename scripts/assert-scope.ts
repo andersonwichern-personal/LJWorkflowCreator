@@ -15,11 +15,11 @@ import {
   walkLeaves,
   defaultControls,
   RULE_SCHEMA_VERSION,
-} from "../lib/vocabulary";
-import { scopeMatches, simulateRule } from "../lib/ruleEvaluator";
-import { describeActions, matchingRequests } from "../lib/ruleEngine";
-import { validateRule } from "../lib/ruleValidation";
-import { getRequest } from "../lib/platformData";
+} from "@sweet/rule-core";
+import { scopeMatches, simulateRule } from "@sweet/rule-core";
+import { describeActions, matchingRequests } from "@sweet/rule-core";
+import { validateRule } from "@sweet/rule-core";
+import { getRequest } from "@sweet/rule-core";
 
 let failures = 0;
 function t(name: string, cond: boolean, detail?: string) {

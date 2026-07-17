@@ -1,7 +1,7 @@
 "use client";
 
 import { ApprovalRequirement, ApproverRef, MAX_SEQUENCE_STEPS } from "@/lib/authorityEngine";
-import { ASSIGNEES } from "@/lib/vocabulary";
+import { ASSIGNEES } from "@sweet/rule-core";
 import { approverIdFor } from "@/lib/viewpoint";
 
 /** Quorum topologies a single step can take (sequences nest these). */

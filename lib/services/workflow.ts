@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { Workflow, Prisma } from "@prisma/client";
-import { validateRule } from "@/lib/ruleValidation";
+import { validateRule } from "@sweet/rule-core";
 import { VersionConflictError } from "@/lib/optimisticWrite";
 import { shouldProposeWorkflowWrite } from "@/lib/fourEyes";
 

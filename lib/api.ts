@@ -6,9 +6,13 @@
  * platform bridge). Falls back to the demo tenant when no live session exists.
  */
 
-import { WorkflowRule, normalizeRule } from "./vocabulary";
+import { WorkflowRule, normalizeRule, WorkflowRecord } from "@sweet/rule-core";
 import { ApprovalRequirement, ApprovalVerdict, RequirementStatus } from "./authorityEngine";
 import type { ConnectedCustomerSummary } from "./services/exposure";
+
+// Re-exported so existing `@/lib/api` consumers of WorkflowRecord keep working
+// while the type's canonical home is now the framework-neutral rule core.
+export type { WorkflowRecord } from "@sweet/rule-core";
 
 /** Demo tenant used only when /api/platform/me can't resolve a real org. */
 const DEMO_FALLBACK_ORG_ID = "test-org-uuid-999";
@@ -24,21 +28,6 @@ export function getOrgId(): Promise<string> {
       .catch(() => DEMO_FALLBACK_ORG_ID);
   }
   return orgPromise;
-}
-
-export interface WorkflowRecord {
-  id: string;
-  orgId: string;
-  name: string;
-  description: string | null;
-  enabled: boolean;
-  ruleJson: WorkflowRule;
-  /** Phase 8 §12 — optimistic-concurrency version; echo back as expectedVersion on save. */
-  version: number;
-  createdAt: string;
-  updatedAt: string;
-  pendingProposalId?: string;
-  proposalStatus?: string;
 }
 
 /** Phase 8 §12 — a guarded save lost the race; `current` is the server's record. */

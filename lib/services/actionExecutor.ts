@@ -11,7 +11,7 @@
  * `executeActions` runs a sequence, honoring halt-on-failure between steps.
  */
 
-import { getAction, scopeLabel, ScopeValue, RuleOutput, paramKeyFor } from "@/lib/vocabulary";
+import { getAction, scopeLabel, ScopeValue, RuleOutput, paramKeyFor } from "@sweet/rule-core";
 import { decideAuthority, AuthorityInput } from "@/lib/authorityEngine";
 import { ApprovalAuthorityService } from "@/lib/services/authority";
 import { SinkHealthService } from "@/lib/services/sinkHealth";

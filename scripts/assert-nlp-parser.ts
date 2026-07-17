@@ -7,7 +7,7 @@
  * loan and document approval are both live readings.
  */
 
-import { parseInstruction } from "../lib/nlParser";
+import { parseInstruction } from "@sweet/rule-core";
 
 console.log("Starting NLP Parser assertions...");
 

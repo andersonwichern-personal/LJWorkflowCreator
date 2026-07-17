@@ -5,7 +5,7 @@
 
 process.loadEnvFile?.(".env.local");
 
-import type { WorkflowRule } from "../lib/vocabulary";
+import type { WorkflowRule } from "@sweet/rule-core";
 
 let failures = 0;
 function t(name: string, cond: boolean, detail?: string) {
@@ -30,8 +30,8 @@ async function main() {
   const { WorkflowService } = await import("../lib/services/workflow");
   const { RuleExecutionService } = await import("../lib/services/execution");
   const { OrgControlsService } = await import("../lib/services/orgControls");
-  const { REQUESTS } = await import("../lib/platformData");
-  const { defaultControls, RULE_SCHEMA_VERSION } = await import("../lib/vocabulary");
+  const { REQUESTS } = await import("@sweet/rule-core");
+  const { defaultControls, RULE_SCHEMA_VERSION } = await import("@sweet/rule-core");
 
   const saved = {
     getWorkflowById: WorkflowService.getWorkflowById,

@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
-import { ScopeRef } from "@/lib/vocabulary";
+import { ScopeRef } from "@sweet/rule-core";
 import VocabIcon from "@/components/ui/VocabIcon";
 
 export interface PickerOption {

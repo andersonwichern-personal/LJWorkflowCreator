@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { normalizeRule } from "@/lib/vocabulary";
-import { simulateRule } from "@/lib/ruleEvaluator";
-import { REQUESTS } from "@/lib/platformData";
+import { normalizeRule } from "@sweet/rule-core";
+import { simulateRule } from "@sweet/rule-core";
+import { REQUESTS } from "@sweet/rule-core";
 
 export const dynamic = "force-dynamic";
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { AlertTriangle, ArrowDown, ArrowRight, Filter, Play, Zap } from "lucide-react";
-import { ParseAmbiguity, ParseOptions, UnresolvedSlot } from "@/lib/nlParser";
+import { ParseAmbiguity, ParseOptions, UnresolvedSlot } from "@sweet/rule-core";
 import {
   WorkflowRule,
   getEvent,
@@ -15,7 +15,7 @@ import {
   scopeLabel,
   isGroup,
   walkLeaves,
-} from "@/lib/vocabulary";
+} from "@sweet/rule-core";
 import { loadLiveVocabulary, buildOverlay, type VocabOverlay } from "@/lib/liveVocabulary";
 import {
   applyCompletion,

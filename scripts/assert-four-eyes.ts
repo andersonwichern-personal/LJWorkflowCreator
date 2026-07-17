@@ -8,7 +8,7 @@
 import { proposalPayloadRule, shouldProposeWorkflowWrite } from "../lib/fourEyes";
 import { evaluateRequirement } from "../lib/authorityEngine";
 import { proposalRequirement } from "../lib/services/workflowProposal";
-import { emptyRule, normalizeRule } from "../lib/vocabulary";
+import { emptyRule, normalizeRule } from "@sweet/rule-core";
 
 let failures = 0;
 function t(name: string, condition: boolean, detail?: string) {

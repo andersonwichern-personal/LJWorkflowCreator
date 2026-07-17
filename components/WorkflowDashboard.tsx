@@ -39,7 +39,7 @@ import {
   updateWorkflow,
 } from "@/lib/api";
 import { matchRatePct } from "@/lib/executionAnalytics";
-import { getEvent } from "@/lib/vocabulary";
+import { getEvent } from "@sweet/rule-core";
 import { useViewpoint } from "@/lib/viewpoint";
 import { clearProposed, useProposedIds } from "@/lib/proposals";
 import Toggle from "@/components/Toggle";

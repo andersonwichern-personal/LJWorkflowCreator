@@ -2,8 +2,8 @@
  * Parser honesty suite (hardening plan §2.7) — deterministic eval harness.
  * Run: npx tsx scripts/assert-parser.ts
  */
-import { parseInstruction } from "../lib/nlParser";
-import { walkLeaves, WorkflowRule } from "../lib/vocabulary";
+import { parseInstruction } from "@sweet/rule-core";
+import { walkLeaves, WorkflowRule } from "@sweet/rule-core";
 
 let failures = 0;
 function t(name: string, cond: boolean, detail?: string) {

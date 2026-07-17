@@ -8,7 +8,7 @@ import {
   isGroup,
   walkLeaves,
   WorkflowRule,
-} from "../lib/vocabulary";
+} from "@sweet/rule-core";
 
 let failures = 0;
 function t(name: string, cond: boolean, detail?: string) {

@@ -2,10 +2,10 @@
  * Operator semantics + evaluator-parity suite (hardening plan §2.4/§2.6).
  * Run: npx tsx scripts/assert-operators.ts
  */
-import { evaluateCondition, simulateRule } from "../lib/ruleEvaluator";
-import { matchingRequests } from "../lib/ruleEngine";
-import { REQUESTS } from "../lib/platformData";
-import { OPERATORS, FIELDS, WorkflowRule, normalizeRule } from "../lib/vocabulary";
+import { evaluateCondition, simulateRule } from "@sweet/rule-core";
+import { matchingRequests } from "@sweet/rule-core";
+import { REQUESTS } from "@sweet/rule-core";
+import { OPERATORS, FIELDS, WorkflowRule, normalizeRule } from "@sweet/rule-core";
 
 let failures = 0;
 function t(name: string, cond: boolean, detail?: string) {

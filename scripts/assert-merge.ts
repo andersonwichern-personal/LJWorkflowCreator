@@ -13,7 +13,7 @@ import {
   defaultControls,
   isGroup,
   isScopeRef,
-} from "../lib/vocabulary";
+} from "@sweet/rule-core";
 import { rewriteCustomerInstanceRefs } from "../lib/customerRefRewrite";
 
 let failures = 0;

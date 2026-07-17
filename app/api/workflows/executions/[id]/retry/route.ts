@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { normalizeRule } from "@/lib/vocabulary";
+import { normalizeRule } from "@sweet/rule-core";
 import { executeActions } from "@/lib/services/actionExecutor";
 import { RuleExecutionService } from "@/lib/services/execution";
-import { getRequest } from "@/lib/platformData";
+import { getRequest } from "@sweet/rule-core";
 
 export const dynamic = "force-dynamic";
 

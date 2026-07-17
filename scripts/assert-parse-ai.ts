@@ -3,8 +3,8 @@
  * assignee honesty, and deterministic degradation. No network calls are made.
  * Run: npx tsx scripts/assert-parse-ai.ts
  */
-import type { UnresolvedSlot } from "../lib/nlParser";
-import type { WorkflowRule } from "../lib/vocabulary";
+import type { UnresolvedSlot } from "@sweet/rule-core";
+import type { WorkflowRule } from "@sweet/rule-core";
 
 interface ParseAiResponse {
   rule: WorkflowRule | null;

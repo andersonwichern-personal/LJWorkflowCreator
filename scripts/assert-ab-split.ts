@@ -4,7 +4,7 @@ export {};
 // (lib/abSplit.ts) and abSplit normalization/clamping (lib/vocabulary.ts).
 
 import { hashToPercent, routesToPeer } from "../lib/abSplit";
-import { WorkflowRule, normalizeRule } from "../lib/vocabulary";
+import { WorkflowRule, normalizeRule } from "@sweet/rule-core";
 
 let failures = 0;
 function t(name: string, cond: boolean, detail?: string) {

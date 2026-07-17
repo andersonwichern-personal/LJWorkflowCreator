@@ -23,7 +23,7 @@ import {
   deriveDataStatus,
   deriveProcessingStatus,
 } from "./platformData";
-import { WorkflowRecord } from "./api";
+import { WorkflowRecord } from "./types";
 
 const UNKNOWN = Symbol("unknown");
 

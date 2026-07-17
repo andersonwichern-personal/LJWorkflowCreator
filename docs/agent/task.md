@@ -300,3 +300,35 @@ Status: Completed
 - [x] Implement ScopeRef output for live instance selections in `RuleSentence`
 - [x] Run Angular tests (`npm test` in `angular-workflows/`) and verify builds
 
+---
+
+# Angular Build Out — Levels 0 - 5
+Status: In progress
+
+## Level 0: Baseline Purity & Core Sync
+- [ ] Verify `assert-core-purity.ts` check works as a workspace sanity check
+- [ ] Verify `sync-angular-core.ts --check` check works as a workspace sanity check
+- [ ] Confirm no React/Next/Prisma remnants exist in configurations
+
+## Level 1: Live API Integration
+- [ ] Implement live workflows get/list/create/update/remove routes mapping in `WorkflowsApiService`
+- [ ] Enforce session organization context and custom HTTP headers in API service
+- [ ] Add optimistic concurrency expectedVersion support to workflows saving
+
+## Level 2: Advanced ScopeRef Authoring
+- [ ] Build ScopeRef selection dialogs and category search interfaces in UI
+- [ ] Connect ScopeRefs to all applicable vocab fields (assignees, stages, products)
+
+## Level 3: Simulator Traces & Backtesting
+- [ ] Port Simulator visual trace panels to Angular components
+- [ ] Implement one-click backtest UI showing historical request logs match rates
+
+## Level 4: Natural-Language Editor & Autocomplete
+- [ ] Implement visual drafting input panel with live keyword highlighting
+- [ ] Build inline context-aware suggestions panel based on active vocabulary
+
+## Level 5: Proposals Dashboard (Review UI)
+- [ ] Port proposals dashboard (list proposals, approve/reject, compare JSON diffs)
+- [ ] Verify review dashboard layout loads correctly (compliance and safety checks deferred)
+
+

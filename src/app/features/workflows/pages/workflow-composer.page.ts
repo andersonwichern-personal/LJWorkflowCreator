@@ -5,6 +5,7 @@ import { parseGateReport } from '../../../core/parseGate';
 import { interpretRule } from '../../../core/interpretation';
 import { Clarification, applyClarification, clarificationsFor } from '../../../core/clarifications';
 import { applyRevision } from '../../../core/revisions';
+import { ExplainedSimulation, SimOutcome, explainSimulation } from '../../../core/simulationExplainer';
 import { LJ_PRIMITIVES } from '../../../shared/lj/lj';
 import { WorkflowsService } from '../data/workflows.service';
 
@@ -135,6 +136,53 @@ import { WorkflowsService } from '../data/workflows.service';
           }
         </section>
 
+        @if (simulation(); as sim) {
+          <section class="card">
+            <h2 class="card-title">Tried against {{ sim.tested }} recent requests</h2>
+            <p class="sim-summary">
+              <b>{{ sim.wouldRun }}</b> would run · <b>{{ sim.wouldSkip }}</b> would be skipped ·
+              <b>{{ sim.needsData }}</b> could not be evaluated
+            </p>
+            <div class="sim-filters">
+              @for (f of FILTERS; track f.key) {
+                <button
+                  type="button"
+                  class="sim-filter"
+                  [class.active]="filter() === f.key"
+                  (click)="filter.set(f.key)"
+                >
+                  {{ f.label }}
+                </button>
+              }
+            </div>
+            @for (result of filteredResults(); track result.requestId) {
+              <div class="sim-result" [class.run]="result.outcome === 'run'" [class.needs]="result.outcome === 'needs_data'">
+                <p class="sim-name">
+                  {{ result.requestName }}
+                  <span class="sim-badge">{{
+                    result.outcome === 'run' ? 'Would run' : result.outcome === 'skip' ? 'Would skip' : 'Needs data'
+                  }}</span>
+                </p>
+                <p class="sim-explain">{{ result.explanation }}</p>
+                @if (result.actions.length) {
+                  <ul class="sim-actions">
+                    @for (action of result.actions; track $index) {
+                      <li>{{ action }}</li>
+                    }
+                  </ul>
+                }
+                <p class="sim-checks">
+                  @for (check of result.checks; track $index) {
+                    <span class="sim-check" [class.ok]="check.state === 'matched'" [class.miss]="check.state === 'missing'">
+                      {{ check.state === 'matched' ? '✓' : check.state === 'missing' ? '?' : '✗' }} {{ check.label }}
+                    </span>
+                  }
+                </p>
+              </div>
+            }
+          </section>
+        }
+
         @if (error(); as message) {
           <div class="error-bar">{{ message }}</div>
         }
@@ -224,6 +272,35 @@ import { WorkflowsService } from '../data/workflows.service';
     }
     .revision-ok { margin: 10px 0 0; font-size: 13px; color: var(--brand-text, var(--text)); }
     .revision-err { margin: 10px 0 0; font-size: 13px; color: var(--warn-text); }
+    .sim-summary { margin: 0 0 12px; font-size: 14px; color: var(--text); }
+    .sim-filters { display: flex; gap: 8px; margin-bottom: 12px; }
+    .sim-filter {
+      font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+      background: var(--surface); color: var(--text-dim);
+      border: 1px solid var(--border); border-radius: 999px; padding: 5px 14px;
+    }
+    .sim-filter.active { background: var(--surface-inset); color: var(--text); }
+    .sim-result {
+      border: 1px solid var(--border); border-left: 3px solid var(--border);
+      border-radius: 10px; padding: 12px 14px; margin-top: 10px;
+    }
+    .sim-result.run { border-left-color: var(--brand, var(--text-dim)); }
+    .sim-result.needs { border-left-color: var(--warn-text); }
+    .sim-name { margin: 0 0 6px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+    .sim-badge {
+      font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+      background: var(--surface-inset); color: var(--text-dim);
+      border-radius: 999px; padding: 2px 10px;
+    }
+    .sim-explain { margin: 0; font-size: 13px; color: var(--text); }
+    .sim-actions { margin: 8px 0 0; padding-left: 18px; font-size: 12px; color: var(--text); }
+    .sim-checks { margin: 10px 0 0; display: flex; flex-wrap: wrap; gap: 6px; }
+    .sim-check {
+      font-size: 11px; border-radius: 6px; padding: 2px 8px;
+      background: var(--surface-inset); color: var(--text-dim);
+    }
+    .sim-check.ok { color: var(--text); }
+    .sim-check.miss { background: var(--warn-bg); color: var(--warn-text); }
     .parse-failure {
       font-size: 13px; background: var(--warn-bg); color: var(--warn-text);
       border-radius: 10px; padding: 12px 16px; margin-top: 14px;
@@ -284,6 +361,33 @@ export class WorkflowComposerPage {
   protected readonly revisionText = signal('');
   protected readonly revisionNote = signal<string | null>(null);
   protected readonly revisionError = signal<string | null>(null);
+
+  protected readonly FILTERS: { key: SimOutcome | 'all'; label: string }[] = [
+    { key: 'all', label: 'All' },
+    { key: 'run', label: 'Would run' },
+    { key: 'skip', label: 'Would skip' },
+    { key: 'needs_data', label: 'Needs data' },
+  ];
+  protected readonly filter = signal<SimOutcome | 'all'>('all');
+
+  /**
+   * Explained simulation (MVP 4): auto-runs whenever the rule is whole,
+   * disabled while answers are missing (Phase 4). Computed from the CURRENT
+   * rule, so totals can never describe a stale version — any change to the
+   * rule (answer, revision, rebuild) invalidates old results by construction.
+   */
+  protected readonly simulation = computed<ExplainedSimulation | null>(() => {
+    const result = this.result();
+    if (!result?.rule || this.gaps().length > 0) return null;
+    return explainSimulation(result.rule);
+  });
+
+  protected readonly filteredResults = computed(() => {
+    const sim = this.simulation();
+    if (!sim) return [];
+    const key = this.filter();
+    return key === 'all' ? sim.results : sim.results.filter((r) => r.outcome === key);
+  });
 
   protected build() {
     this.error.set(null);

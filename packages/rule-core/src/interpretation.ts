@@ -125,6 +125,11 @@ function phraseAction(output: RuleOutput): LeafPhrases {
   }
 }
 
+/** Plain-language phrase for one action (shared with the simulation explainer). */
+export function actionPhrase(output: RuleOutput): string {
+  return phraseAction(output).summary;
+}
+
 /** Plain-language interpretation of a canonical rule. Deterministic. */
 export function interpretRule(rule: WorkflowRule): Interpretation {
   const subject = subjectFor(rule);

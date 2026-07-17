@@ -115,7 +115,25 @@ UI-configuration `dnsPrefix` from `GET /organizations/external/ui-configuration`
 Vocabulary sources confirmed: `/documents/templates/forms`, `/products/fields`
 (new — fields live in the Products service), `/workflows/templates{,/{id}}`.
 
-## Two-track doctrine — Anderson's decision, 2026-07-16
+## SUPERSEDED (2026-07-17): repo is now single-track Angular
+
+Anderson approved the Angular migration on 2026-07-17: the Next.js/Prisma
+Vercel track was **deleted from the working tree** and `angular-workflows/`
+was promoted to the repo root. The two-track doctrine below is retained for
+history only.
+
+- The full Vercel track (app/, components/, lib/, prisma/, its scripts and
+  configs) lives at git tag **`vercel-track-final`** (`fc6db89`) — one
+  `git checkout vercel-track-final` away. The deployed Vercel prototype keeps
+  serving until the Vercel project itself is redeployed or deleted.
+- `packages/rule-core` remains the **source of truth** for the rule core;
+  `npm run sync:angular-core` now generates `src/app/core/` (repo root).
+  Never hand-edit generated files — Codex especially.
+- `npm test` still ends with the purity + sync gates.
+- Root `.env.local` from the Next track was preserved on disk (gitignored) as
+  `.env.local.nextjs-backup`.
+
+## Two-track doctrine — Anderson's decision, 2026-07-16 [SUPERSEDED, see above]
 
 The repo now carries **two independent tracks**:
 

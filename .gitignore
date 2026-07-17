@@ -1,31 +1,45 @@
-# Dependencies
-node_modules/
-.pnp
-.pnp.js
+# See https://docs.github.com/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
 
-# Next.js
-.next/
-out/
+# Compiled output
+/dist
+/tmp
+/out-tsc
+/bazel-out
 
-# Prisma
-prisma/migrations/*
-!prisma/migrations/20260716130000_phase12_overrides/
-!prisma/migrations/20260716130000_phase12_overrides/migration.sql
-!prisma/migrations/20260716140000_phase13_four_eyes/
-!prisma/migrations/20260716140000_phase13_four_eyes/migration.sql
+# Node
+/node_modules
+npm-debug.log
+yarn-error.log
 
-# Environment variables — NEVER commit these
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# IDEs and editors
+.idea/
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
 
-# Debug
-npm-debug.log*
+# Visual Studio Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.history/*
 
-# Misc
+# Miscellaneous
+/.angular/cache
+.sass-cache/
+/connect.lock
+/coverage
+/libpeerconnection.log
+testem.log
+/typings
+__screenshots__/
+
+# System files
 .DS_Store
-*.pem
+Thumbs.db
 .vercel
 .env*

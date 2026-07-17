@@ -1,48 +1,54 @@
 {
-  "name": "workflow-creator",
-  "version": "0.1.0",
-  "private": true,
-  "workspaces": [
-    "packages/*"
-  ],
+  "name": "angular-workflows",
+  "version": "0.0.0",
   "scripts": {
-    "dev": "next dev",
-    "build": "prisma generate && next build",
-    "start": "next start",
-    "lint": "next lint",
-    "test": "tsx scripts/assert-parser.ts && tsx scripts/assert-operators.ts && tsx scripts/assert-normalize.ts && tsx scripts/assert-validation.ts && tsx scripts/assert-linter.ts && tsx scripts/assert-tree.ts && tsx scripts/assert-scope.ts && tsx scripts/assert-refaudit.ts && tsx scripts/assert-fire.ts && tsx scripts/assert-parse-ai.ts && tsx scripts/assert-ai-upgrade.ts && tsx scripts/assert-requirement.ts && tsx scripts/assert-merge.ts && tsx scripts/assert-exclusions.ts && tsx scripts/assert-customer-eval.ts && tsx scripts/assert-entity-integrity.ts && tsx scripts/assert-analytics.ts && tsx scripts/assert-nlp-parser.ts && tsx scripts/assert-multi-action.ts && tsx scripts/assert-autocomplete.ts && tsx scripts/assert-ab-split.ts && tsx scripts/assert-breaker.ts && tsx scripts/assert-scheduled.ts && tsx scripts/assert-doclinks.ts && tsx scripts/assert-version-guard.ts && tsx scripts/assert-exposure.ts && tsx scripts/assert-id-enforcement.ts && tsx scripts/assert-exceptions.ts && tsx scripts/assert-four-eyes.ts && tsx scripts/assert-webhooks.ts && tsx scripts/assert-core-purity.ts && tsx scripts/sync-angular-core.ts --check",
-    "assert:core-purity": "tsx scripts/assert-core-purity.ts",
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development",
+    "test": "tsx core-tests/assert-parser.ts && tsx core-tests/assert-normalize.ts && tsx core-tests/assert-validation.ts && tsx core-tests/assert-tree.ts && tsx core-tests/assert-multi-action.ts && tsx core-tests/assert-nlp-parser.ts && tsx core-tests/assert-operators.ts && tsx core-tests/assert-customer-eval.ts && tsx core-tests/assert-scope.ts && tsx core-tests/assert-angular-seam.ts && tsx scripts/assert-core-purity.ts && tsx scripts/sync-angular-core.ts --check",
     "sync:angular-core": "tsx scripts/sync-angular-core.ts",
-    "assert:angular-core-sync": "tsx scripts/sync-angular-core.ts --check",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:push": "prisma db push",
-    "db:seed": "prisma db seed",
-    "db:studio": "prisma studio"
+    "assert:core-purity": "tsx scripts/assert-core-purity.ts",
+    "assert:angular-core-sync": "tsx scripts/sync-angular-core.ts --check"
   },
+  "prettier": {
+    "printWidth": 100,
+    "singleQuote": true,
+    "overrides": [
+      {
+        "files": "*.html",
+        "options": {
+          "parser": "angular"
+        }
+      }
+    ]
+  },
+  "private": true,
   "dependencies": {
-    "@sweet/rule-core": "*",
-    "@prisma/adapter-pg": "^7.5.0",
-    "@prisma/client": "^7.5.0",
-    "@supabase/supabase-js": "^2.100.0",
-    "lucide-react": "^0.460.0",
-    "next": "^15.2.3",
-    "pg": "^8.20.0",
-    "react": "^18",
-    "react-dom": "^18"
+    "@angular/cdk": "^20.2.14",
+    "@angular/common": "^20.3.0",
+    "@angular/compiler": "^20.3.0",
+    "@angular/core": "^20.3.0",
+    "@angular/forms": "^20.3.0",
+    "@angular/material": "^20.2.14",
+    "@angular/platform-browser": "^20.3.0",
+    "@angular/router": "^20.3.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0",
+    "zone.js": "~0.15.0"
   },
   "devDependencies": {
-    "@types/node": "^20",
-    "@types/pg": "^8.20.0",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "autoprefixer": "^10.0.1",
-    "eslint": "^8",
-    "eslint-config-next": "^15.2.3",
-    "postcss": "^8",
-    "prisma": "^7.5.0",
-    "tailwindcss": "^3.3.0",
-    "tsx": "^4.21.0",
-    "typescript": "^5"
+    "@angular/build": "^20.3.32",
+    "@angular/cli": "^20.3.32",
+    "@angular/compiler-cli": "^20.3.0",
+    "@types/jasmine": "~5.1.0",
+    "jasmine-core": "~5.9.0",
+    "karma": "~6.4.0",
+    "karma-chrome-launcher": "~3.2.0",
+    "karma-coverage": "~2.2.0",
+    "karma-jasmine": "~5.1.0",
+    "karma-jasmine-html-reporter": "~2.1.0",
+    "tsx": "^4.23.1",
+    "typescript": "~5.9.2"
   }
 }

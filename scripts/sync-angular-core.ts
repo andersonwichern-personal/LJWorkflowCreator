@@ -1,6 +1,6 @@
 /**
  * sync-angular-core — one-way sync gate from @sweet/rule-core to the Angular
- * track's vendored copy at angular-workflows/src/app/core/.
+ * track's vendored copy at src/app/core/.
  *
  * The two-track doctrine (docs/agent/task.md) says a semantic change to the
  * rule core must land on both tracks. This script makes that mechanical:
@@ -18,7 +18,7 @@ import { basename, join } from "node:path";
 
 const ROOT = join(__dirname, "..");
 const PKG_SRC = join(ROOT, "packages", "rule-core", "src");
-const VENDOR_DIR = join(ROOT, "angular-workflows", "src", "app", "core");
+const VENDOR_DIR = join(ROOT, "src", "app", "core");
 
 const CHECK = process.argv.includes("--check");
 
@@ -79,6 +79,6 @@ if (CHECK) {
   console.log(
     written === 0
       ? `✓ Nothing to sync — ${managed.length} files already match.`
-      : `✓ Synced ${written}/${managed.length} files into angular-workflows/src/app/core/.`
+      : `✓ Synced ${written}/${managed.length} files into src/app/core/.`
   );
 }

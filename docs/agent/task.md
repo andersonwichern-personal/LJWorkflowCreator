@@ -249,3 +249,14 @@ ScopeRef authoring, analytics/audit-log port, Monaco, real guard wiring.
 - [x] Phase 15 (digests) Next.js implementation & tests completed
 
 All subsequent efforts are focused on the Angular workflows workspace (`angular-workflows/`).
+
+---
+
+# Angular Track — Live Vocabulary & ScopeRef Authoring
+Status: Completed
+
+- [x] Extend `VocabularyService` to fetch/store live users, retailers, templates, forms, and dynamic fields (`vocabulary-chip.ts`)
+- [x] Connect pickers to live options in `RuleSentence` (`rule-sentence.ts`)
+- [x] Implement ScopeRef output for live instance selections in `RuleSentence`
+- [x] Run Angular tests (`npm test` in `angular-workflows/`) and verify builds
+

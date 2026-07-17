@@ -1,12 +1,15 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, inject } from '@angular/core';
+import { VocabularyService } from './vocabulary-chip';
 import {
   ACTIONS,
+  ConditionFieldRef,
   ConditionGroup,
   ConditionLeaf,
   ConditionNode,
   EVENTS,
   FieldDef,
+  FieldKind,
   OPERATORS,
   RuleOutput,
   ScopeValue,
@@ -230,6 +233,8 @@ import { PickerOption, TokenPicker } from './token-picker';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class RuleSentence {
+  private readonly vocab = inject(VocabularyService);
+
   @Input({ required: true }) rule!: WorkflowRule;
   @Output() ruleChange = new EventEmitter<WorkflowRule>();
 
@@ -278,12 +283,20 @@ export class RuleSentence {
     return allowedFieldsForTriggers(this.rule.triggers.map((t) => t.event));
   }
   protected fieldOptions(): PickerOption[] {
-    return this.allowedFields().map((f) => ({
+    const staticOpts: PickerOption[] = this.allowedFields().map((f) => ({
       value: f.key,
       label: f.label,
       hint: f.group,
       unconfirmed: f.confidence !== 'verified',
     }));
+    const liveOpts = this.vocab.liveFields();
+    const merged = [...staticOpts];
+    liveOpts.forEach((lo) => {
+      if (!merged.some((mo) => mo.value === lo.value)) {
+        merged.push(lo);
+      }
+    });
+    return merged;
   }
   protected fieldLabel(leaf: ConditionLeaf): string {
     return condFieldLabel(leaf.field);
@@ -301,6 +314,15 @@ export class RuleSentence {
     return scopeLabel(leaf.value as ScopeValue) || '';
   }
   protected valueOptions(leaf: ConditionLeaf): PickerOption[] {
+    const fieldKeyStr = typeof leaf.field === 'object' ? leaf.field.key : leaf.field;
+    if (fieldKeyStr === 'stage') {
+      const live = this.vocab.liveStages();
+      if (live.length > 0) return live;
+    }
+    if (fieldKeyStr === 'retailer') {
+      const live = this.vocab.liveRetailers();
+      if (live.length > 0) return live;
+    }
     const def = this.fieldDef(leaf);
     return (def?.options ?? []).map((option) => ({ value: option, label: option }));
   }
@@ -317,12 +339,23 @@ export class RuleSentence {
   }
 
   protected addCondition(fieldKey: string, path: number[]) {
-    const def = this.allowedFields().find((f) => f.key === fieldKey);
-    if (!def) return;
+    const ref = this.refForPickerValue(fieldKey);
+    let operator = '=';
+    let defaultValue: any = '';
+
+    if (typeof ref === 'object') {
+      operator = OPERATORS[ref.fieldKind ?? 'text'][0].value;
+    } else {
+      const def = this.allowedFields().find((f) => f.key === ref);
+      if (!def) return;
+      operator = OPERATORS[def.kind][0].value;
+      defaultValue = defaultValueFor(def);
+    }
+
     const leaf: ConditionLeaf = {
-      field: def.key,
-      operator: OPERATORS[def.kind][0].value,
-      value: defaultValueFor(def),
+      field: ref,
+      operator,
+      value: defaultValue,
     };
     this.ruleChange.emit({ ...this.rule, conditions: addLeaf(this.rule.conditions, path, leaf) });
   }
@@ -346,19 +379,58 @@ export class RuleSentence {
     const leaf = { ...node, ...patch } as ConditionLeaf;
     this.ruleChange.emit({ ...this.rule, conditions: updateLeaf(this.rule.conditions, path, leaf) });
   }
+  private getLeaf(path: number[]): ConditionLeaf | undefined {
+    let node: ConditionNode = this.rule.conditions.children[path[0]];
+    if (path.length === 2 && isGroup(node)) node = node.children[path[1]];
+    if (!node || isGroup(node)) return undefined;
+    return node;
+  }
   protected setLeafField(path: number[], fieldKey: string) {
-    const def = this.allowedFields().find((f) => f.key === fieldKey);
-    if (!def) return;
+    const ref = this.refForPickerValue(fieldKey);
+    let operator = '=';
+    let defaultValue: any = '';
+
+    if (typeof ref === 'object') {
+      operator = OPERATORS[ref.fieldKind ?? 'text'][0].value;
+    } else {
+      const def = this.allowedFields().find((f) => f.key === ref);
+      if (!def) return;
+      operator = OPERATORS[def.kind][0].value;
+      defaultValue = defaultValueFor(def);
+    }
+
     this.patchLeaf(path, {
-      field: def.key,
-      operator: OPERATORS[def.kind][0].value,
-      value: defaultValueFor(def),
+      field: ref,
+      operator,
+      value: defaultValue,
     });
   }
   protected setLeafOperator(path: number[], operator: string) {
     this.patchLeaf(path, { operator });
   }
   protected setLeafValue(path: number[], value: string) {
+    const leaf = this.getLeaf(path);
+    if (leaf) {
+      const fieldKeyStr = typeof leaf.field === 'object' ? leaf.field.key : leaf.field;
+      if (fieldKeyStr === 'stage') {
+        const match = this.vocab.liveStages().find((o) => o.value === value);
+        if (match) {
+          this.patchLeaf(path, {
+            value: { level: 'instance', id: value, label: match.label }
+          });
+          return;
+        }
+      }
+      if (fieldKeyStr === 'retailer') {
+        const match = this.vocab.liveRetailers().find((o) => o.value === value);
+        if (match) {
+          this.patchLeaf(path, {
+            value: { level: 'instance', id: value, label: match.label }
+          });
+          return;
+        }
+      }
+    }
     this.patchLeaf(path, { value });
   }
   protected toggleRootLogic() {
@@ -393,6 +465,10 @@ export class RuleSentence {
     return scopeLabel(output.params[paramKeyFor(output.action)]) || '';
   }
   protected paramOptions(output: RuleOutput): PickerOption[] {
+    if (output.action === 'assign_user' || output.action === 'notify') {
+      const live = this.vocab.liveUsers();
+      if (live.length > 0) return live;
+    }
     return (getAction(output.action)?.paramOptions ?? []).map((o) => ({ value: o, label: o }));
   }
   protected delayText(output: RuleOutput): string {
@@ -417,7 +493,18 @@ export class RuleSentence {
   protected setActionParam(lane: 'actions' | 'else', index: number, value: string) {
     this.emit((draft) => {
       const output = this.lane(draft, lane)[index];
-      output.params = { ...output.params, [paramKeyFor(output.action)]: value };
+      const paramKey = paramKeyFor(output.action);
+      if (output.action === 'assign_user' || output.action === 'notify') {
+        const match = this.vocab.liveUsers().find((o) => o.value === value);
+        if (match) {
+          output.params = {
+            ...output.params,
+            [paramKey]: { level: 'instance', id: value, label: match.label }
+          };
+          return;
+        }
+      }
+      output.params = { ...output.params, [paramKey]: value };
     });
   }
   protected removeAction(lane: 'actions' | 'else', index: number) {
@@ -426,4 +513,29 @@ export class RuleSentence {
       if (lane === 'else' && draft.else?.length === 0) delete draft.else;
     });
   }
+
+  private refForPickerValue(v: string): ConditionFieldRef {
+    if (v.startsWith(FF_PREFIX)) {
+      const [formTemplateId, fieldId] = v.slice(FF_PREFIX.length).split(':');
+      const raw = this.vocab.liveFieldsRaw().find((f) => f.formTemplateId === formTemplateId && f.fieldId === fieldId);
+      return {
+        kind: 'formField',
+        formTemplateId,
+        fieldId,
+        key: raw?.name || fieldId,
+        label: raw?.label || fieldId,
+        fieldKind: raw ? fieldKindForType(raw.fieldType) : 'text',
+      };
+    }
+    return v;
+  }
+}
+
+const FF_PREFIX = 'ff:';
+
+function fieldKindForType(fieldType: string): FieldKind {
+  const t = fieldType.toUpperCase();
+  if (t === 'NUMBER' || t === 'MONEY' || t === 'COMPUTED') return 'numeric';
+  if (t === 'SELECT' || t === 'RADIO' || t === 'CHECKBOX' || t === 'YES_NO_QUESTIONNAIRE') return 'enum';
+  return 'text';
 }

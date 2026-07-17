@@ -52,6 +52,7 @@ Status: backend done and committed (`bf4b01b`, `a2a53f1`); §2.3 UI outstanding.
 
 ---
 
+<<<<<<< HEAD
 # Integration + Parser Upgrade (Anderson's redirect, 2026-07-16)
 
 Anderson redirected mid-session: park Phase 14 webhooks, work the **integration
@@ -242,8 +243,9 @@ ScopeRef authoring, analytics/audit-log port, Monaco, real guard wiring.
 
 ---
 
-# Phase 14 (webhooks) / Phase 15 (digests) — parked
+# Phase 14 (webhooks) / Phase 15 (digests) — Vercel implementation landed
 
-Specs exist (`docs/2026-07-16_phase-14-webhooks-specs_v1.md`,
-`…phase-15-digests-specs_v1.md`). Parked by Anderson's redirect above; resume
-after the parser/integration work.
+- [x] Phase 14 (webhooks) Next.js implementation & tests completed
+- [x] Phase 15 (digests) Next.js implementation & tests completed
+
+All subsequent efforts are focused on the Angular workflows workspace (`angular-workflows/`).

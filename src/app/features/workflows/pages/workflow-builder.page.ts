@@ -15,7 +15,8 @@ import {
   scopeLabel,
   walkLeaves,
 } from '../../../core/vocabulary';
-import { RuleIssue, validateRule } from '../../../core/ruleValidation';
+import { RuleIssue } from '../../../core/ruleValidation';
+import { LintContext, hasBlockingIssues, lintRule } from '../../../core/ruleLinter';
 import { shouldProposeWorkflowWrite } from '../../../core/fourEyes';
 import { CacheService, DRAFT_AUTOSAVE_MS, NEW_WORKFLOW_ID, WORKFLOW_DRAFTS_KEY } from '../../../shared/cache.service';
 import { LJ_PRIMITIVES } from '../../../shared/lj/lj';
@@ -36,8 +37,9 @@ interface DraftEnvelope {
 /**
  * The builder page: Dynamic-Form-builder chrome (Back / History placeholder /
  * Design–JSON toggle / Save), chat drafting, the WHEN/IF/THEN sentence,
- * safety controls, and the shared validator gating save. Drafts auto-save to
- * localStorage every 2s (admin draft contract) keyed by id or NEW_WORKFLOW_ID.
+ * safety controls, and the shared lint pipeline (validation + semantic linter)
+ * gating save on blocking findings. Drafts auto-save to localStorage every 2s
+ * (admin draft contract) keyed by id or NEW_WORKFLOW_ID.
  */
 @Component({
   selector: 'wf-workflow-builder-page',
@@ -205,10 +207,22 @@ export class WorkflowBuilderPage {
   private version: number | undefined;
   private dirty = false;
 
-  protected readonly issues = computed<RuleIssue[]>(() => validateRule(this.rule()).issues);
-  protected readonly hasErrors = computed(() =>
-    this.issues().some((issue) => issue.severity === 'error')
+  /**
+   * Peer workflows for the linter's OVERLAP check (the rule under edit is
+   * excluded). Loaded once, best-effort: if the list fails, lint runs without
+   * peers — reference checks are skipped by contract, never falsely raised.
+   */
+  private readonly lintPeers = signal<LintContext['peers']>(undefined);
+
+  /**
+   * Full lint pipeline (Phase B1): shared-core validation layered with the
+   * semantic linter. Registry-aware checks (BROKEN_REF, MISSING_DATA_EXPOSURE)
+   * stay dormant until the live vocabulary lands in Phase B2.
+   */
+  protected readonly issues = computed<RuleIssue[]>(
+    () => lintRule(this.rule(), { peers: this.lintPeers() }).issues
   );
+  protected readonly hasErrors = computed(() => hasBlockingIssues(this.issues()));
 
   /**
    * Will this save land as a proposal? Same shared-core gate the service
@@ -252,10 +266,29 @@ export class WorkflowBuilderPage {
 
   constructor() {
     this.load();
+    this.loadLintPeers();
     // Admin draft contract: steady 2s autosave of dirty state.
     interval(DRAFT_AUTOSAVE_MS)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.persistDraft());
+  }
+
+  private loadLintPeers() {
+    this.service.list().subscribe({
+      next: (records) =>
+        this.lintPeers.set(
+          records
+            .filter((record) => record.id !== this.id)
+            .map((record) => ({
+              id: record.id,
+              name: record.name,
+              rule: record.ruleJson,
+              enabled: record.enabled,
+            }))
+        ),
+      // Best-effort: no peers just means the OVERLAP check is skipped.
+      error: () => this.lintPeers.set(undefined),
+    });
   }
 
   private load() {

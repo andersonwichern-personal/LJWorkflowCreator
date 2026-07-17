@@ -1,4 +1,11 @@
 /**
+ * GENERATED from packages/rule-core/src/revisions.ts — DO NOT EDIT BY HAND.
+ * Vendored copy of the @sweet/rule-core contract for Angular.
+ * To change it, edit the package and run `npm run sync:angular-core` at
+ * the repo root. `npm test` fails
+ * on drift via this script's --check mode.
+ */
+/**
  * revisions — conversational edits to a canonical rule (composer roadmap
  * MVP 3 / Phase 3 editing behavior).
  *

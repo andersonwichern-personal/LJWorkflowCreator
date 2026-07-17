@@ -3,6 +3,8 @@ import { Router } from '@angular/router';
 import { ParseResult, parseInstruction } from '../../../core/nlParser';
 import { parseGateReport } from '../../../core/parseGate';
 import { interpretRule } from '../../../core/interpretation';
+import { Clarification, applyClarification, clarificationsFor } from '../../../core/clarifications';
+import { applyRevision } from '../../../core/revisions';
 import { LJ_PRIMITIVES } from '../../../shared/lj/lj';
 import { WorkflowsService } from '../data/workflows.service';
 
@@ -87,14 +89,51 @@ import { WorkflowsService } from '../data/workflows.service';
               <b>Draft interpretation</b> — needs {{ gaps().length }}
               answer{{ gaps().length === 1 ? '' : 's' }} before it can run.
             </p>
-            <ul>
-              @for (gap of gaps(); track $index) {
-                <li>{{ gap }}</li>
-              }
-            </ul>
-            <p class="needs-hint">Refine the description to answer these, then build again.</p>
+            @for (q of visibleQuestions(); track q.id) {
+              <div class="question">
+                <p class="q-text">{{ q.question }}</p>
+                <div class="q-answers">
+                  @for (option of q.options; track option) {
+                    <button type="button" class="q-option" (click)="answer(q, option)">
+                      {{ option }}
+                    </button>
+                  }
+                  @if (q.allowDismiss) {
+                    <button type="button" class="q-dismiss" (click)="dismiss(q)">Leave it out</button>
+                  }
+                </div>
+                <form class="q-free" (submit)="answerFree($event, q)">
+                  <input type="text" placeholder="Or answer in your own words…" />
+                  <button type="submit">Answer</button>
+                </form>
+              </div>
+            }
+            @if (gaps().length > visibleQuestions().length) {
+              <p class="needs-hint">
+                {{ gaps().length - visibleQuestions().length }} more after these.
+              </p>
+            }
           </div>
         }
+
+        <section class="card">
+          <h2 class="card-title">Make a change</h2>
+          <form class="revise" (submit)="revise($event)">
+            <input
+              type="text"
+              [value]="revisionText()"
+              (input)="revisionText.set($any($event.target).value)"
+              placeholder="e.g. Change the threshold to $500,000 · Notify Sara instead of Wael · Otherwise notify Operations"
+            />
+            <button lj-button type="submit" [disabled]="!revisionText().trim()">Apply</button>
+          </form>
+          @if (revisionNote(); as note) {
+            <p class="revision-ok">✓ {{ note }}</p>
+          }
+          @if (revisionError(); as message) {
+            <p class="revision-err">{{ message }}</p>
+          }
+        </section>
 
         @if (error(); as message) {
           <div class="error-bar">{{ message }}</div>
@@ -152,8 +191,39 @@ import { WorkflowsService } from '../data/workflows.service';
       border-radius: 10px; padding: 12px 16px; margin-top: 16px;
     }
     .needs-head { margin: 0 0 6px; }
-    .needs ul { margin: 0; padding-left: 18px; }
     .needs-hint { margin: 8px 0 0; font-style: italic; }
+    .question {
+      background: color-mix(in srgb, currentColor 6%, transparent);
+      border-radius: 8px; padding: 10px 12px; margin-top: 10px;
+    }
+    .q-text { margin: 0 0 8px; font-weight: 600; }
+    .q-answers { display: flex; flex-wrap: wrap; gap: 8px; }
+    .q-option, .q-dismiss {
+      font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+      border: 1px solid currentColor; background: none; color: inherit;
+      border-radius: 999px; padding: 4px 14px;
+    }
+    .q-option:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
+    .q-dismiss { opacity: 0.75; font-weight: 400; }
+    .q-free { display: flex; gap: 8px; margin-top: 8px; }
+    .q-free input {
+      flex: 1; font: inherit; font-size: 12px; color: inherit;
+      background: none; border: 1px solid color-mix(in srgb, currentColor 40%, transparent);
+      border-radius: 8px; padding: 5px 10px; outline: none;
+    }
+    .q-free button {
+      font: inherit; font-size: 12px; cursor: pointer; border: none;
+      background: color-mix(in srgb, currentColor 15%, transparent); color: inherit;
+      border-radius: 8px; padding: 5px 12px;
+    }
+    .revise { display: flex; gap: 10px; }
+    .revise input {
+      flex: 1; font: inherit; font-size: 13px; color: var(--text);
+      background: var(--surface-inset); border: 1px solid var(--border);
+      border-radius: 10px; padding: 9px 12px; outline: none;
+    }
+    .revision-ok { margin: 10px 0 0; font-size: 13px; color: var(--brand-text, var(--text)); }
+    .revision-err { margin: 10px 0 0; font-size: 13px; color: var(--warn-text); }
     .parse-failure {
       font-size: 13px; background: var(--warn-bg); color: var(--warn-text);
       border-radius: 10px; padding: 12px 16px; margin-top: 14px;
@@ -205,13 +275,78 @@ export class WorkflowComposerPage {
     return parseGateReport(result).issues.map((issue) => issue.message);
   });
 
+  /** MVP 3 clarification loop: one or two focused questions at a time. */
+  protected readonly visibleQuestions = computed<Clarification[]>(() => {
+    const result = this.result();
+    return result ? clarificationsFor(result).slice(0, 2) : [];
+  });
+
+  protected readonly revisionText = signal('');
+  protected readonly revisionNote = signal<string | null>(null);
+  protected readonly revisionError = signal<string | null>(null);
+
   protected build() {
     this.error.set(null);
+    this.clearRevisionFeedback();
     this.result.set(parseInstruction(this.text().trim()));
   }
 
   protected refine() {
+    this.clearRevisionFeedback();
     this.result.set(null);
+  }
+
+  /** Answer a clarification — patch the rule, or re-parse for event choices. */
+  protected answer(question: Clarification, value: string) {
+    const result = this.result();
+    if (!result || !value.trim()) return;
+    this.clearRevisionFeedback();
+    if (question.needsReparse) {
+      this.result.set(parseInstruction(this.text().trim(), { forceEvent: value }));
+    } else {
+      this.result.set(applyClarification(result, question.id, value));
+    }
+  }
+
+  protected answerFree(event: Event, question: Clarification) {
+    event.preventDefault();
+    const input = (event.target as HTMLFormElement).querySelector('input');
+    if (input?.value.trim()) {
+      this.answer(question, input.value.trim());
+      input.value = '';
+    }
+  }
+
+  /** Explicitly leave an un-understood clause out — a noted user decision. */
+  protected dismiss(question: Clarification) {
+    const result = this.result();
+    if (!result) return;
+    this.clearRevisionFeedback();
+    this.result.set(applyClarification(result, question.id, { dismiss: true }));
+  }
+
+  /** Conversational revision — deterministic; unrecognized changes nothing. */
+  protected revise(event: Event) {
+    event.preventDefault();
+    const result = this.result();
+    const rule = result?.rule;
+    const instruction = this.revisionText().trim();
+    if (!result || !rule || !instruction) return;
+    this.clearRevisionFeedback();
+    const revision = applyRevision(rule, instruction);
+    if (revision.status === 'applied') {
+      // Sidecar survives — pending answers stay pending; coverage recomputes.
+      this.result.set({ ...result, rule: revision.rule });
+      this.revisionNote.set(revision.summary);
+      this.revisionText.set('');
+    } else {
+      this.revisionError.set(revision.reason);
+    }
+  }
+
+  private clearRevisionFeedback() {
+    this.revisionNote.set(null);
+    this.revisionError.set(null);
   }
 
   protected save() {

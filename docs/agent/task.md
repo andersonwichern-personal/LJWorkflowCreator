@@ -52,12 +52,15 @@ Status: backend done and committed (`bf4b01b`, `a2a53f1`); §2.3 UI outstanding.
 
 ---
 
-# Phase 14 — not started
+# Phase 14 — Event-Driven Webhooks & Pipeline Integration
 
-**No spec exists.** `docs/` contains specs for phases 8, 9, 10, 11, 12, 13 only.
-Gemini owns spec authorship; do not infer requirements. Blocked until
-`docs/2026-07-*_phase-14-*-specs_v1.md` lands.
+Spec: `docs/2026-07-16_phase-14-webhooks-specs_v1.md`
+Branch: `feature/webhooks-phase-14`
+Status: In progress
 
-# Phase 15 — not started
+- [/] Create `app/api/platform/webhooks/receive/route.ts` with signature verification and pipeline execution
+- [ ] Create `scripts/assert-webhooks.ts` with webhook integration tests
+- [ ] Wire webhook tests into `package.json` test script
 
-**No spec exists.** Same as above.
+# Phase 15 — Digests (Batch alerts) - not started
+

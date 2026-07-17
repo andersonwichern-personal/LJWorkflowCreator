@@ -230,10 +230,12 @@ below CLI v21's floor), standalone components, SCSS, no SSR.
 
 - Local: `npm start` in `angular-workflows/` → http://localhost:4200/workflows
   (mock backend, zero config).
-- Vercel: `vercel.json` (SPA rewrites, output dir) is committed and the CLI is
-  authenticated, but this session's permission mode blocks `vercel deploy` and
-  `git push` — **needs Anderson**: run `npx vercel deploy --prod --yes` inside
-  `angular-workflows/`, or add a permission rule so Claude can deploy.
+- Vercel: separate production project is live:
+  https://lj-workflow-creator-angular.vercel.app
+  (`lj-workflow-creator-angular`, deployment `dpl_2FM7HEi3eRHkJoVdi8kjieiU6MLo`).
+  The earlier attempt against the root `lj-workflow-creator` project failed
+  because Vercel built the Next.js app and type-checked `angular-workflows/**`.
+  Keep the Angular track deployed from `angular-workflows/` as its own project.
 
 Next tranche candidates (product call): live vocab overlay into pickers,
 ScopeRef authoring, analytics/audit-log port, Monaco, real guard wiring.

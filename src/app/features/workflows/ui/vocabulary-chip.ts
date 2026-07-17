@@ -3,7 +3,24 @@ import { Observable, forkJoin, of } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 import { ApiService } from '../../../shared/api.service';
 import { APP_CONFIG, isMockMode } from '../../../shared/app-config';
+import { CacheService } from '../../../shared/cache.service';
 import { PickerOption } from './token-picker';
+
+/** Stale-while-revalidate cache for the vocabulary probe (B2). */
+const VOCAB_CACHE_KEY = 'workflowVocabCache';
+const VOCAB_CACHE_TTL_MS = 5 * 60 * 1000;
+
+interface VocabSnapshot {
+  at: number;
+  users: PickerOption[];
+  retailers: PickerOption[];
+  fields: PickerOption[];
+  fieldsRaw: any[];
+  stages: PickerOption[];
+  templates: PickerOption[];
+  templateIds: string[];
+  productFields: PickerOption[];
+}
 
 interface Row {
   [key: string]: any;
@@ -115,6 +132,7 @@ function toLiveFields(raw: unknown, formTemplateId: string, formName: string): a
 export class VocabularyService {
   private readonly api = inject(ApiService);
   private readonly config = inject(APP_CONFIG);
+  private readonly cache = inject(CacheService);
 
   readonly source = signal<'static' | 'live' | 'partial'>('static');
   readonly detail = signal('Demo vocabulary — configure APP_CONFIG for live tenant data.');
@@ -126,9 +144,27 @@ export class VocabularyService {
   readonly liveFieldsRaw = signal<any[]>([]);
   readonly liveStages = signal<PickerOption[]>([]);
   readonly liveTemplates = signal<PickerOption[]>([]);
+  /**
+   * Real request-template ids from `workflows /templates` — the linter's
+   * `templates` registry. Distinct from `liveTemplates`, which the pickers
+   * populate with FORMS (see probe note below).
+   */
+  readonly liveTemplateIds = signal<string[]>([]);
+  /**
+   * Product fields from `products /fields` (task.md-confirmed source).
+   * Surfaced for visibility only — binding them as condition operands needs a
+   * rule-core field-ref kind first (schema change, packages/rule-core).
+   */
+  readonly liveProductFields = signal<PickerOption[]>([]);
 
   constructor() {
-    if (!isMockMode(this.config)) this.probe();
+    if (!isMockMode(this.config)) {
+      // Stale-while-revalidate: paint from a fresh-enough snapshot instantly,
+      // then probe in the background to refresh it.
+      const snap = this.cache.read<VocabSnapshot>(VOCAB_CACHE_KEY);
+      if (snap && Date.now() - snap.at < VOCAB_CACHE_TTL_MS) this.apply(snap);
+      this.probe();
+    }
   }
 
   private fetchSessionOrgId(): Observable<string | null> {
@@ -158,6 +194,7 @@ export class VocabularyService {
               templates: [] as Row[],
               forms: [] as Row[],
               fields: [] as any[],
+              productFields: [] as Row[],
             });
           }
           const usersObs = this.api
@@ -184,12 +221,20 @@ export class VocabularyService {
               map(extractArray),
               catchError(() => of([] as Row[]))
             );
+          // B2: product fields live in the Products service (task.md Q2 answer).
+          const productFieldsObs = this.api
+            .get<unknown>('products', '/fields')
+            .pipe(
+              map(extractArray),
+              catchError(() => of([] as Row[]))
+            );
 
           return forkJoin({
             users: usersObs,
             retailers: retailersObs,
             templates: templatesObs,
             forms: formsObs,
+            productFields: productFieldsObs,
           }).pipe(
             switchMap((res) => {
               const forms = toOptions(res.forms);
@@ -209,53 +254,79 @@ export class VocabularyService {
                   fields: fieldsLists.flat(),
                 }))
               );
+            }),
+            // B2: stages fallback — when the template LIST carries no stages,
+            // pull them from per-template detail (manual §7: `/templates/{id}`).
+            switchMap((res) => {
+              const fromList = toTemplates(res.templates);
+              if (fromList.some((t: any) => (t.stages ?? []).length > 0)) return of(res);
+              const toFetch = fromList.slice(0, 8);
+              if (toFetch.length === 0) return of(res);
+              const detailObsList = toFetch.map((t: any) =>
+                this.api.get<unknown>('workflows', `/templates/${encodeURIComponent(t.id)}`).pipe(
+                  map((body) => toTemplates([body as Row])),
+                  catchError(() => of([] as any[]))
+                )
+              );
+              return forkJoin(detailObsList).pipe(
+                map((detailLists) => ({ ...res, templates: [...res.templates, ...detailLists.flat()] }))
+              );
             })
           );
         })
       )
       .subscribe((res) => {
-        const usersOpt = toOptions(res.users);
-        const retailersOpt = toOptions(res.retailers);
         const templates = toTemplates(res.templates);
-        const formsOpt = toOptions(res.forms);
-
-        const fieldsOpt = res.fields.map((f: any) => ({
-          value: `ff:${f.formTemplateId}:${f.fieldId}`,
-          label: f.label,
-          hint: f.formName,
-          unconfirmed: false,
-        }));
-
-        // Flatten unique stages across templates
         const stages = templates.flatMap((t: any) => t.stages || []);
-        const uniqueStages: PickerOption[] = Array.from(
-          new Map(stages.map((s: any) => [s.value, s])).values()
-        );
-
-        this.liveUsers.set(usersOpt);
-        this.liveRetailers.set(retailersOpt);
-        this.liveFields.set(fieldsOpt);
-        this.liveFieldsRaw.set(res.fields);
-        this.liveStages.set(uniqueStages);
-        this.liveTemplates.set(formsOpt); // templates register maps forms in the list
-
-        const parts = [
-          usersOpt.length > 0 ? `${usersOpt.length} users` : 'users unavailable',
-          retailersOpt.length > 0 ? `${retailersOpt.length} retailers` : 'retailers unavailable',
-          fieldsOpt.length > 0 ? `${fieldsOpt.length} fields` : 'fields unavailable',
-          uniqueStages.length > 0 ? `${uniqueStages.length} stages` : 'stages unavailable',
-        ];
-
-        const failures = [
-          usersOpt.length === 0,
-          retailersOpt.length === 0,
-          fieldsOpt.length === 0,
-          uniqueStages.length === 0,
-        ].filter(Boolean).length;
-
-        this.source.set(failures === 0 ? 'live' : failures === 4 ? 'static' : 'partial');
-        this.detail.set(parts.join(' · '));
+        const snapshot: VocabSnapshot = {
+          at: Date.now(),
+          users: toOptions(res.users),
+          retailers: toOptions(res.retailers),
+          fields: res.fields.map((f: any) => ({
+            value: `ff:${f.formTemplateId}:${f.fieldId}`,
+            label: f.label,
+            hint: f.formName,
+            unconfirmed: false,
+          })),
+          fieldsRaw: res.fields,
+          // Flatten unique stages across templates
+          stages: Array.from(new Map(stages.map((s: any) => [s.value, s])).values()),
+          templates: toOptions(res.forms), // picker register maps forms in the list
+          templateIds: templates.map((t: any) => t.id),
+          productFields: toOptions(res.productFields),
+        };
+        this.apply(snapshot);
+        this.cache.write(VOCAB_CACHE_KEY, snapshot);
       });
+  }
+
+  private apply(snap: VocabSnapshot) {
+    this.liveUsers.set(snap.users);
+    this.liveRetailers.set(snap.retailers);
+    this.liveFields.set(snap.fields);
+    this.liveFieldsRaw.set(snap.fieldsRaw);
+    this.liveStages.set(snap.stages);
+    this.liveTemplates.set(snap.templates);
+    this.liveTemplateIds.set(snap.templateIds);
+    this.liveProductFields.set(snap.productFields);
+
+    const parts = [
+      snap.users.length > 0 ? `${snap.users.length} users` : 'users unavailable',
+      snap.retailers.length > 0 ? `${snap.retailers.length} retailers` : 'retailers unavailable',
+      snap.fields.length > 0 ? `${snap.fields.length} fields` : 'fields unavailable',
+      snap.stages.length > 0 ? `${snap.stages.length} stages` : 'stages unavailable',
+      ...(snap.productFields.length > 0 ? [`${snap.productFields.length} product fields`] : []),
+    ];
+
+    const failures = [
+      snap.users.length === 0,
+      snap.retailers.length === 0,
+      snap.fields.length === 0,
+      snap.stages.length === 0,
+    ].filter(Boolean).length;
+
+    this.source.set(failures === 0 ? 'live' : failures === 4 ? 'static' : 'partial');
+    this.detail.set(parts.join(' · '));
   }
 }
 

@@ -3,6 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { interval } from 'rxjs';
 import {
+  FIELDS,
   WorkflowRule,
   emptyRule,
   getEvent,
@@ -18,6 +19,7 @@ import {
 import { RuleIssue } from '../../../core/ruleValidation';
 import { LintContext, hasBlockingIssues, lintRule } from '../../../core/ruleLinter';
 import { shouldProposeWorkflowWrite } from '../../../core/fourEyes';
+import { VocabularyService } from '../ui/vocabulary-chip';
 import { CacheService, DRAFT_AUTOSAVE_MS, NEW_WORKFLOW_ID, WORKFLOW_DRAFTS_KEY } from '../../../shared/cache.service';
 import { LJ_PRIMITIVES } from '../../../shared/lj/lj';
 import { SaveOutcome, WorkflowsService } from '../data/workflows.service';
@@ -214,13 +216,41 @@ export class WorkflowBuilderPage {
    */
   private readonly lintPeers = signal<LintContext['peers']>(undefined);
 
+  private readonly vocab = inject(VocabularyService);
+
   /**
-   * Full lint pipeline (Phase B1): shared-core validation layered with the
-   * semantic linter. Registry-aware checks (BROKEN_REF, MISSING_DATA_EXPOSURE)
-   * stay dormant until the live vocabulary lands in Phase B2.
+   * Live registries for the linter's reference checks (Phase B2). Empty in
+   * mock mode — the linter skips checks whose registry is absent, so the
+   * demo never raises false BROKEN_REF/MISSING_DATA_EXPOSURE findings.
+   *
+   * `liveFieldKeys` carries `condFieldKey` outputs: platform field keys pass
+   * verbatim (they are intrinsic to requests, not template-driven) plus the
+   * `ff:` composites actually fetched — so only form-field refs against
+   * unknown templates warn. (The Next-track caller passed bare fieldIds,
+   * which could never match a composite — fixed here.)
+   */
+  private readonly lintRegistries = computed<Partial<LintContext>>(() => {
+    if (this.vocab.source() === 'static') return {};
+    const asRegistry = (options: { value: string; label: string }[]) =>
+      options.map((option) => ({ id: option.value, label: option.label }));
+    const composites = this.vocab
+      .liveFieldsRaw()
+      .map((f: { formTemplateId: string; fieldId: string }) => `ff:${f.formTemplateId}:${f.fieldId}`);
+    return {
+      stages: asRegistry(this.vocab.liveStages()),
+      users: asRegistry(this.vocab.liveUsers()),
+      retailers: asRegistry(this.vocab.liveRetailers()),
+      templates: this.vocab.liveTemplateIds(),
+      liveFieldKeys: composites.length ? [...Object.keys(FIELDS), ...composites] : [],
+    };
+  });
+
+  /**
+   * Full lint pipeline: shared-core validation layered with the semantic
+   * linter — peers for OVERLAP (B1), live registries for reference checks (B2).
    */
   protected readonly issues = computed<RuleIssue[]>(
-    () => lintRule(this.rule(), { peers: this.lintPeers() }).issues
+    () => lintRule(this.rule(), { peers: this.lintPeers(), ...this.lintRegistries() }).issues
   );
   protected readonly hasErrors = computed(() => hasBlockingIssues(this.issues()));
 

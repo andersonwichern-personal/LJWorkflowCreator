@@ -1,23 +1,8 @@
 /**
- * TYPE-ONLY SHIM of the Vercel track's lib/api.ts, carrying just the
- * `WorkflowRecord` shape that core/ruleEngine.ts imports. The rest of
- * lib/api.ts is a same-origin Next.js fetch client — explicitly on the
- * do-not-carry-over list (two-track doctrine) — so it is NOT ported.
- * Keep this type in lockstep with lib/api.ts's WorkflowRecord.
+ * TYPE-ONLY SHIM for the Angular track. The Vercel track's lib/api.ts is a
+ * same-origin Next.js fetch client — explicitly on the do-not-carry-over list
+ * (two-track doctrine) — so it is NOT ported. The `WorkflowRecord` shape now
+ * lives in the synced rule core (./types, generated from @sweet/rule-core),
+ * so this shim just re-exports it for existing `core/api` importers.
  */
-import { WorkflowRule } from './vocabulary';
-
-export interface WorkflowRecord {
-  id: string;
-  orgId: string;
-  name: string;
-  description: string | null;
-  enabled: boolean;
-  ruleJson: WorkflowRule;
-  /** Phase 8 §12 — optimistic-concurrency version; echo back as expectedVersion on save. */
-  version: number;
-  createdAt: string;
-  updatedAt: string;
-  pendingProposalId?: string;
-  proposalStatus?: string;
-}
+export type { WorkflowRecord } from "./types";

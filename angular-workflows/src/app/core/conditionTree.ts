@@ -1,8 +1,9 @@
 /**
- * PORTED VERBATIM from the Vercel track: lib/conditionTree.ts @ 9894904.
- * This file is the shared rule-core contract between the two tracks
- * (see docs/agent/task.md 'Two-track doctrine'). Semantic changes must
- * land on both tracks. Keep framework-free: no Angular imports here.
+ * GENERATED from packages/rule-core/src/conditionTree.ts — DO NOT EDIT BY HAND.
+ * Vendored copy of the @sweet/rule-core contract for the Angular track
+ * (two-track doctrine: docs/agent/task.md). To change it, edit the package
+ * and run `npm run sync:angular-core` at the repo root. `npm test` fails
+ * on drift via this script's --check mode.
  */
 /**
  * Pure, immutable manipulation of the recursive condition tree (schema v3).

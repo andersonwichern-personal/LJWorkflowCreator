@@ -1,7 +1,9 @@
 /**
- * PORTED VERBATIM from the Vercel track: lib/ruleEngine.ts @ 3530c4b.
- * Shared rule-core contract (docs/agent/task.md 'Two-track doctrine').
- * Semantic changes must land on both tracks. Framework-free.
+ * GENERATED from packages/rule-core/src/ruleEngine.ts — DO NOT EDIT BY HAND.
+ * Vendored copy of the @sweet/rule-core contract for the Angular track
+ * (two-track doctrine: docs/agent/task.md). To change it, edit the package
+ * and run `npm run sync:angular-core` at the repo root. `npm test` fails
+ * on drift via this script's --check mode.
  */
 /**
  * Client-side rule-matching engine (demo).
@@ -28,7 +30,7 @@ import {
   deriveDataStatus,
   deriveProcessingStatus,
 } from "./platformData";
-import { WorkflowRecord } from "./api";
+import { WorkflowRecord } from "./types";
 
 const UNKNOWN = Symbol("unknown");
 

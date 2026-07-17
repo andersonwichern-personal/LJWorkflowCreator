@@ -1,6 +1,5 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Output, signal } from '@angular/core';
 import { ParseResult, parseInstruction } from '../../../core/nlParser';
-import { WorkflowRule } from '../../../core/vocabulary';
 
 /**
  * Plain-English drafting via the shared deterministic parser (core/nlParser).
@@ -95,7 +94,13 @@ import { WorkflowRule } from '../../../core/vocabulary';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ChatDraft {
-  @Output() drafted = new EventEmitter<WorkflowRule>();
+  /**
+   * Emits the FULL parse result, not just the rule — the builder needs the
+   * sidecar (unresolved/uncovered/ambiguities) so parse gaps keep blocking
+   * after the draft lands (composer roadmap MVP 1: an incomplete parse must
+   * never present as a successful one).
+   */
+  @Output() drafted = new EventEmitter<ParseResult>();
 
   protected readonly text = signal('');
   protected readonly result = signal<ParseResult | null>(null);
@@ -113,6 +118,6 @@ export class ChatDraft {
     if (!instruction) return;
     const result = parseInstruction(instruction, forceEvent ? { forceEvent } : undefined);
     this.result.set(result);
-    if (result.rule) this.drafted.emit(result.rule);
+    if (result.rule) this.drafted.emit(result);
   }
 }

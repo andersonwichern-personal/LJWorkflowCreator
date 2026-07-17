@@ -170,7 +170,11 @@ function uncoveredFragments(text: string, spans: Spans): string[] {
     .map((g) => g.replace(/^[\s,.;]+|[\s,.;]+$/g, ""))
     .filter((g) => {
       const words = g.split(/[^a-z0-9$-]+/).filter((w) => w && !STOPWORDS.has(w));
-      return words.length >= 3;
+      // Two content words is already a material clause ("moon full", "risk
+      // high") — the old ≥3 floor silently dropped them (MVP 1: nothing
+      // material may vanish). One lone word stays noise UNLESS it carries a
+      // number/amount, which is always material.
+      return words.length >= 2 || words.some((w) => /\d|\$/.test(w));
     });
 }
 
@@ -868,14 +872,30 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
   // ("approved or rejected") is already consumed and must not flip AND-joined
   // conditions to OR (review finding).
   const condLogic = matchLogic(maskConsumed(text, spans));
-  const uncovered = uncoveredFragments(text, spans);
-  const elseMatch = /\b(?:otherwise|else)\b\s+(.+)$/.exec(text);
-  const elseOutputs = elseMatch
-    ? matchOutputs(elseMatch[1], eventKey, [], opts, unresolved, notes)
+  const elseMatch = /\b(?:otherwise|else)\b[\s,]*(.+)$/.exec(text);
+  const elseText = elseMatch ? stripTrailingPunct(elseMatch[1]) : "";
+  /**
+   * "Otherwise, do nothing" (and variants) is an INTENTIONAL no-op — an
+   * explicit statement of what happens to non-matching requests, not an
+   * instruction the parser failed to understand (composer roadmap Phase 1).
+   * Recognized: consumed + noted, no else lane, never `uncovered`.
+   */
+  const elseIsNoop =
+    !!elseMatch &&
+    /^(?:do\s+)?nothing\b|^(?:take\s+)?no\s+action\b|^leave\s+(?:it|them|the\s+requests?)?\s*(?:alone|unchanged|as[- ]is)\b|^skip\s+(?:it|them)?$/i.test(elseText);
+  const elseOutputs = elseMatch && !elseIsNoop
+    ? matchOutputs(elseText, eventKey, [], opts, unresolved, notes)
     : [];
-  if (elseMatch) {
+  // Consume the else clause only when it was actually understood — either as
+  // real else-actions or as the explicit no-op. Anything else ("otherwise fly
+  // to the moon") stays unconsumed so it surfaces in `uncovered` and blocks.
+  if (elseMatch && (elseIsNoop || elseOutputs.length > 0)) {
     consume(spans, elseMatch.index, elseMatch[0].length);
+    if (elseIsNoop) notes.push("Otherwise → intentionally no action.");
   }
+  // Coverage is computed AFTER the else clause is consumed — previously every
+  // else clause (even a fully parsed one) was miscounted as uncovered.
+  const uncovered = uncoveredFragments(text, spans);
 
   const triggers = [{ event: eventKey }];
   if (extraEvents?.length) {

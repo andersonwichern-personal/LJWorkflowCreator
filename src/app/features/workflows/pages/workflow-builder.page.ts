@@ -18,6 +18,8 @@ import {
 } from '../../../core/vocabulary';
 import { RuleIssue } from '../../../core/ruleValidation';
 import { LintContext, hasBlockingIssues, lintRule } from '../../../core/ruleLinter';
+import { ParseResult } from '../../../core/nlParser';
+import { parseGateIssues } from '../../../core/parseGate';
 import { shouldProposeWorkflowWrite } from '../../../core/fourEyes';
 import { VocabularyService } from '../ui/vocabulary-chip';
 import { CacheService, DRAFT_AUTOSAVE_MS, NEW_WORKFLOW_ID, WORKFLOW_DRAFTS_KEY } from '../../../shared/cache.service';
@@ -91,6 +93,14 @@ interface DraftEnvelope {
           <span>Unsaved draft from {{ draft.savedAt.slice(11, 16) }} found.</span>
           <button type="button" (click)="restoreDraft()">Restore</button>
           <button type="button" (click)="discardDraft()">Discard</button>
+        </div>
+      }
+      @if (parseGapCount(); as gaps) {
+        <div class="restore">
+          <span>
+            <b>Draft interpretation</b> — needs {{ gaps }} answer{{ gaps === 1 ? '' : 's' }} before
+            this workflow can run. The checklist below shows what's missing.
+          </span>
         </div>
       }
       @if (error(); as message) {
@@ -246,12 +256,32 @@ export class WorkflowBuilderPage {
   });
 
   /**
-   * Full lint pipeline: shared-core validation layered with the semantic
-   * linter — peers for OVERLAP (B1), live registries for reference checks (B2).
+   * Parse provenance (composer roadmap MVP 1): the full ParseResult behind
+   * the current rule when it came from the chat draft. Its sidecar gaps
+   * (unresolved/uncovered/ambiguous) become blocking issues below, so an
+   * incomplete parse can never read as "No lint issues". Cleared on manual
+   * edits — once the user reshapes the rule directly, the description is no
+   * longer its source of truth.
    */
-  protected readonly issues = computed<RuleIssue[]>(
-    () => lintRule(this.rule(), { peers: this.lintPeers(), ...this.lintRegistries() }).issues
-  );
+  private readonly parseMeta = signal<ParseResult | null>(null);
+  protected readonly parseGapCount = computed(() => {
+    const meta = this.parseMeta();
+    return meta ? parseGateIssues(meta).length : 0;
+  });
+
+  /**
+   * Full lint pipeline: parse-coverage gate (MVP 1) layered over shared-core
+   * validation and the semantic linter — peers for OVERLAP (B1), live
+   * registries for reference checks (B2). Parse gaps list first: they explain
+   * WHY the rule is incomplete before lint explains what's wrong with it.
+   */
+  protected readonly issues = computed<RuleIssue[]>(() => {
+    const meta = this.parseMeta();
+    return [
+      ...(meta ? parseGateIssues(meta) : []),
+      ...lintRule(this.rule(), { peers: this.lintPeers(), ...this.lintRegistries() }).issues,
+    ];
+  });
   protected readonly hasErrors = computed(() => hasBlockingIssues(this.issues()));
 
   /**
@@ -351,12 +381,19 @@ export class WorkflowBuilderPage {
   protected setRule(rule: WorkflowRule) {
     this.rule.set(rule);
     this.dirty = true;
+    // Manual edit — the description is no longer this rule's source of truth,
+    // so parse-coverage issues (which are statements about the description)
+    // no longer apply. Lint still guards the rule itself.
+    this.parseMeta.set(null);
   }
   protected setControls(controls: WorkflowRule['controls']) {
     this.setRule({ ...this.rule(), controls });
   }
-  protected applyDraftedRule(rule: WorkflowRule) {
-    this.setRule(rule);
+  protected applyDraftedRule(result: ParseResult) {
+    if (!result.rule) return;
+    this.rule.set(result.rule);
+    this.dirty = true;
+    this.parseMeta.set(result);
   }
   protected rename(name: string) {
     this.name.set(name);

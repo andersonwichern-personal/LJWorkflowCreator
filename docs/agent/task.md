@@ -352,3 +352,45 @@ Status: In progress
 - [ ] Port proposals dashboard (list proposals, approve/reject, compare JSON diffs)
 - [ ] Verify review dashboard layout loads correctly (compliance and safety checks deferred)
 
+---
+
+# Phase 1.5: Structured Composer Integration (2026-07-17)
+
+Spec: `docs/2026-07-17_structured-composer-integration_v1.md`
+Status: Implemented + verified (Claude, 2026-07-17); awaiting Gemini QA review
+
+- [x] Refactor title and spiral layout to be horizontal and compact
+- [x] Add the ghost placeholder text "Create a workflow." next to the cursor
+- [x] Implement state synchronization variables and logic in `WorkflowComposerPage`
+  - [x] Initialize/update the `result` signal when trigger events are changed
+  - [x] Bind condition addition/removal/modification to the `rule` signal
+  - [x] Bind action addition/removal/modification to the `rule` signal
+- [x] Build the 3-column structured builder interface in the template
+  - [x] Column 1: Searchable categorized lists of EVENTS
+  - [x] Column 2: Trigger-dependent condition buttons and active condition cards (operators + values)
+  - [x] Column 3: Searchable categorized lists of actions and active action cards (parameters)
+- [x] Review styling using the Sweet design tokens (fonts, spacing, border, radius, shadow)
+- [x] Verify using automated tests and manual build check
+
+Implementation notes (Claude, 2026-07-17):
+
+- All visual-builder mutations funnel through an immutable `updateRule()` that
+  seeds/patches the `result` signal and syncs `parsedDescription` to
+  `text().trim()`, so the Start observing gate opens without a description
+  parse (spec §3.2). Deviation from the spec's example literal: `ParseResult`
+  has no `text` field, so the seeded result is `{ rule, notes: [],
+  unresolved: [], uncovered: [], ambiguities: [] }`.
+- A visual edit bumps `buildGeneration`, so an in-flight description parse can
+  never overwrite builder state. The `save()` validation gates are untouched
+  (assert-sweet-ux contracts all pass).
+- Visual-first rules start with `triggers: []` until an event is picked;
+  `validateRule`'s EMPTY_TRIGGERS keeps the save gate closed rather than
+  silently defaulting a trigger.
+- **`angular.json` `anyComponentStyle` budget raised 8/10 kB → 12/14 kB** —
+  the composer page now carries the whole builder UI (~11.3 kB compiled after
+  condensing shared control rules). Precedent: the UX-overhaul commit had
+  already raised it from the CLI default. Needs Gemini sign-off.
+- Verified: `npm test` fully green (269 PASS lines incl. all 28 Sweet UX
+  source contracts, rule-core purity gate, sync drift gate); `npm run build`
+  clean with no budget warnings.
+

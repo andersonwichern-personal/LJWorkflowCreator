@@ -946,3 +946,19 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
     ambiguities: [],
   };
 }
+
+/**
+ * Parse a bare action fragment ("notify Sara", "escalate to Operations") —
+ * the revision engine's reuse of the tested action grammar (MVP 3). Returns
+ * the outputs plus any unresolved slots the fragment produced; callers decide
+ * whether unresolved fragments are acceptable.
+ */
+export function parseActionFragment(
+  text: string,
+  eventKey?: string,
+  opts?: ParseOptions
+): { outputs: RuleOutput[]; unresolved: UnresolvedSlot[] } {
+  const unresolved: UnresolvedSlot[] = [];
+  const outputs = matchOutputs(norm(text), eventKey ?? "SYSTEM ERROR", [], opts, unresolved, []);
+  return { outputs, unresolved };
+}

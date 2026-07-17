@@ -179,7 +179,9 @@ export class WorkflowsListPage {
   );
 
   protected create() {
-    void this.router.navigate(['/workflows', 'new', 'edit']);
+    // AI-first composer (roadmap MVP 2). The token builder remains at
+    // /workflows/new/edit for internal roles.
+    void this.router.navigate(['/workflows', 'new']);
   }
 
   protected goProposals() {

@@ -22,6 +22,14 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/proposals.page').then((m) => m.ProposalsPage),
       },
       {
+        // AI-first composer (roadmap MVP 2) — the client's default create
+        // path. The token builder stays at `new/edit` for internal roles
+        // (role gating proper is roadmap Phase 8).
+        path: 'new',
+        loadComponent: () =>
+          import('./pages/workflow-composer.page').then((m) => m.WorkflowComposerPage),
+      },
+      {
         path: ':id/edit',
         loadComponent: () =>
           import('./pages/workflow-builder.page').then((m) => m.WorkflowBuilderPage),

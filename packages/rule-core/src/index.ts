@@ -19,3 +19,4 @@ export * from "./ruleEngine";
 export * from "./ruleLinter";
 export * from "./nlParser";
 export * from "./parseGate";
+export * from "./interpretation";

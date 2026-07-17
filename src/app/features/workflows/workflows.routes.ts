@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { requireInternalWorkflowTools } from './data/workflow-access-policy';
 import { WorkflowsApiService, provideWorkflowsService } from './data/workflows.service';
 
 /**
@@ -31,8 +32,14 @@ export const routes: Routes = [
       },
       {
         path: ':id/edit',
+        canActivate: [requireInternalWorkflowTools],
         loadComponent: () =>
           import('./pages/workflow-builder.page').then((m) => m.WorkflowBuilderPage),
+      },
+      {
+        path: ':id',
+        loadComponent: () =>
+          import('./pages/workflow-detail.page').then((m) => m.WorkflowDetailPage),
       },
     ],
   },

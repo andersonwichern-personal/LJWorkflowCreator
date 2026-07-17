@@ -111,9 +111,27 @@ function explainOne(rule: WorkflowRule, request: PlatformRequest, trace: Simulat
     };
   }
 
-  // Conditions failed: missing data is its own outcome (roadmap Phase 5).
+  // Conditions failed. The evaluator may still dispatch the Otherwise lane;
+  // that is a real run and must never be summarized as a skip.
   const failing = trace.trace.conditions.filter((c) => !c.matched);
   const missing = failing.find((c) => c.actual === null);
+  const cause = failing[0];
+  const causeText = missing
+    ? `the ${missing.label.toLowerCase()} is missing`
+    : cause
+      ? `the ${cause.label.toLowerCase()} ${failPhrase(cause.operator, cause.field, fmt(cause.field, cause.actual), fmt(cause.field, cause.expected))}`
+      : "its primary requirements are not met";
+
+  if (trace.elseActions.length) {
+    return {
+      ...base,
+      outcome: "run",
+      explanation: `This workflow would use its alternate actions because ${causeText}.`,
+      actions: (rule.else ?? []).map(actionPhrase),
+    };
+  }
+
+  // Missing data without an Otherwise lane is its own outcome (roadmap Phase 5).
   if (missing) {
     return {
       ...base,
@@ -122,10 +140,6 @@ function explainOne(rule: WorkflowRule, request: PlatformRequest, trace: Simulat
       actions: [],
     };
   }
-  const cause = failing[0];
-  const causeText = cause
-    ? `the ${cause.label.toLowerCase()} ${failPhrase(cause.operator, cause.field, fmt(cause.field, cause.actual), fmt(cause.field, cause.expected))}`
-    : "its requirements are not met";
   return {
     ...base,
     outcome: "skip",

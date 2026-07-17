@@ -1,8 +1,22 @@
 import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
 import { PlatformRequest, REQUESTS } from '../../../core/platformData';
-import { SimulationTrace, ruleMatches, simulateRule } from '../../../core/ruleEvaluator';
+import { SimulationTrace, simulateRule } from '../../../core/ruleEvaluator';
 import { WorkflowRule } from '../../../core/vocabulary';
 import { PickerOption, TokenPicker } from './token-picker';
+
+type OutcomeKind = 'run' | 'skip' | 'unknown';
+
+interface OutcomeCopy {
+  kind: OutcomeKind;
+  label: 'Would run' | 'Would skip' | 'Could not evaluate';
+  reason: string;
+}
+
+interface BatchResult {
+  runs: PlatformRequest[];
+  skips: PlatformRequest[];
+  unknown: PlatformRequest[];
+}
 
 /**
  * Dry-run simulator + backtest over the seed dataset, driven entirely by the
@@ -20,105 +34,155 @@ import { PickerOption, TokenPicker } from './token-picker';
     <div class="head">
       <wf-token-picker
         [label]="selectedLabel()"
-        placeholder="pick a request…"
+        placeholder="Choose a request…"
         [options]="requestOptions"
         (selected)="select($event)"
       />
-      <button type="button" class="ghost" (click)="backtest()">Backtest all {{ total }}</button>
+      <button type="button" class="test-all" (click)="testAll()">Test all {{ total }} requests</button>
     </div>
 
-    @if (trace(); as t) {
-      <div class="verdict" [class.hit]="t.matched" [class.miss]="!t.matched">
-        {{ t.matched ? '✓ Rule fires for this request' : '✗ Rule does not fire' }}
-      </div>
-
-      <div class="section">Triggers (any may match)</div>
-      @for (trigger of t.trace.triggers; track $index) {
-        <div class="row" [class.ok]="trigger.matched" [class.no]="!trigger.matched">
-          <span class="dot"></span>
-          <span>{{ trigger.event }}</span>
-          <span class="end">{{ trigger.matched ? 'matched' : 'no match' }}</span>
+    @if (outcome(); as result) {
+      <section
+        class="outcome"
+        [class.run]="result.kind === 'run'"
+        [class.skip]="result.kind === 'skip'"
+        [class.unknown]="result.kind === 'unknown'"
+        aria-live="polite"
+      >
+        <span class="outcome-mark" aria-hidden="true"></span>
+        <div>
+          <p class="outcome-label">{{ result.label }}</p>
+          <p class="outcome-reason">{{ result.reason }}</p>
         </div>
-      }
+      </section>
 
-      @if (t.trace.conditions.length) {
-        <div class="section">Conditions</div>
-        @for (condition of t.trace.conditions; track $index) {
-          <div
-            class="row"
-            [class.ok]="condition.matched"
-            [class.no]="!condition.matched"
-            [style.paddingLeft.px]="12 + condition.depth * 22"
-          >
-            <span class="dot"></span>
-            <span>{{ condition.label }} <i>{{ condition.operator }}</i> {{ condition.expected }}</span>
-            <span class="end">{{ condition.actual === null ? 'unknown' : condition.actual }}</span>
+      @if (trace(); as t) {
+        <details class="trace-details">
+          <summary>Why this result</summary>
+          <div class="trace-body">
+            <p class="section">Starting event</p>
+            @for (trigger of t.trace.triggers; track $index) {
+              <div class="row" [class.ok]="trigger.matched" [class.no]="!trigger.matched">
+                <span class="dot" aria-hidden="true"></span>
+                <span>{{ trigger.event }}</span>
+                <span class="end">{{ trigger.matched ? 'Matches request' : 'Does not match' }}</span>
+              </div>
+            }
+
+            @if (t.trace.conditions.length) {
+              <p class="section">Required details</p>
+              @for (condition of t.trace.conditions; track $index) {
+                <div
+                  class="row"
+                  [class.ok]="condition.matched"
+                  [class.no]="!condition.matched"
+                  [class.missing]="condition.actual === null"
+                  [style.paddingLeft.px]="12 + condition.depth * 22"
+                >
+                  <span class="dot" aria-hidden="true"></span>
+                  <span>{{ condition.label }} <i>{{ condition.operator }}</i> {{ condition.expected }}</span>
+                  <span class="end">
+                    {{ condition.actual === null ? 'Missing' : condition.matched ? 'Matches' : 'Does not match' }}
+                  </span>
+                </div>
+              }
+            }
+
+            @if (t.actions.length) {
+              <p class="section">What Sweet would do</p>
+              @for (action of t.actions; track $index) {
+                <div class="row ok"><span class="dot" aria-hidden="true"></span><span>{{ action }}</span></div>
+              }
+            }
+            @if (t.elseActions.length) {
+              <p class="section">What Sweet would do instead</p>
+              @for (action of t.elseActions; track $index) {
+                <div class="row alternate"><span class="dot" aria-hidden="true"></span><span>{{ action }}</span></div>
+              }
+            }
+            @for (alert of t.alerts; track $index) {
+              <div class="alert">{{ alert }}</div>
+            }
           </div>
-        }
-      }
-
-      @if (t.actions.length) {
-        <div class="section">Would dispatch</div>
-        @for (action of t.actions; track $index) {
-          <div class="row ok"><span class="dot"></span><span>{{ action }}</span></div>
-        }
-      }
-      @if (t.elseActions.length) {
-        <div class="section">Otherwise lane (triggers matched, conditions failed)</div>
-        @for (action of t.elseActions; track $index) {
-          <div class="row warn-row"><span class="dot"></span><span>{{ action }}</span></div>
-        }
-      }
-      @for (alert of t.alerts; track $index) {
-        <div class="alert">⚠ {{ alert }}</div>
+        </details>
       }
     }
 
-    @if (backtestResult(); as b) {
-      <div class="backtest">
-        <b>{{ b.hits.length }}</b> of <b>{{ total }}</b> seed requests would fire.
-        @if (b.hits.length) {
-          <span class="hits">
-            @for (hit of b.hits; track hit.id) {
-              <button type="button" class="hit-chip" (click)="select(hit.id)">{{ hit.id }}</button>
+    @if (batchResult(); as batch) {
+      <section class="batch" aria-live="polite">
+        <p class="batch-title">Results across {{ total }} sample requests</p>
+        <div class="batch-stats">
+          <span><b>{{ batch.runs.length }}</b> would run</span>
+          <span><b>{{ batch.skips.length }}</b> would skip</span>
+          <span><b>{{ batch.unknown.length }}</b> could not evaluate</span>
+        </div>
+        @if (batch.runs.length || batch.unknown.length) {
+          <div class="samples">
+            @for (request of batch.runs; track request.id) {
+              <button type="button" class="sample run" (click)="select(request.id)">
+                {{ request.id }} · would run
+              </button>
             }
-          </span>
+            @for (request of batch.unknown; track request.id) {
+              <button type="button" class="sample unknown" (click)="select(request.id)">
+                {{ request.id }} · needs data
+              </button>
+            }
+          </div>
         }
-      </div>
+      </section>
     }
   `,
   styles: `
-    .head { display: flex; align-items: center; gap: 10px; }
-    .ghost {
-      font: inherit; font-size: 12px; font-weight: 600; color: var(--text-dim);
-      background: none; border: 1px dashed var(--border); border-radius: 999px;
-      padding: 4px 12px; cursor: pointer;
+    :host { display: block; }
+    .head { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+    .test-all {
+      min-height: 42px; padding: .55rem .9rem; border: 1px solid var(--border); border-radius: var(--radius-pill);
+      background: transparent; color: var(--text-dim); font-size: var(--text-xs); font-weight: 750; cursor: pointer;
     }
-    .ghost:hover { color: var(--text); border-color: var(--brand); }
-    .verdict { margin-top: 12px; font-size: 13px; font-weight: 700; border-radius: 10px; padding: 9px 12px; }
-    .verdict.hit { background: color-mix(in srgb, var(--brand) 15%, transparent); color: var(--brand-text); }
-    .verdict.miss { background: var(--surface-inset); color: var(--text-dim); }
+    .test-all:hover { color: var(--text); border-color: var(--border-strong); }
+    .outcome { display: flex; align-items: flex-start; gap: var(--space-4); margin-top: var(--space-6); padding: var(--space-5); background: var(--surface-inset); border-radius: var(--radius-lg); }
+    .outcome-mark { width: .75rem; height: .75rem; margin-top: .32rem; flex: 0 0 auto; border-radius: 50%; background: var(--text-soft); }
+    .outcome.run .outcome-mark { background: var(--success); }
+    .outcome.skip .outcome-mark { background: var(--text-dim); }
+    .outcome.unknown .outcome-mark { background: var(--warn); }
+    .outcome-label { margin: 0; color: var(--text); font-size: var(--text-lg); font-weight: 780; }
+    .outcome-reason { margin: var(--space-2) 0 0; color: var(--text-dim); line-height: 1.6; }
+    .trace-details { margin-top: var(--space-4); border-top: 1px solid var(--border); }
+    .trace-details summary { min-height: 44px; padding: var(--space-3) 0; color: var(--text-dim); font-size: var(--text-xs); font-weight: 750; cursor: pointer; }
+    .trace-body { padding: var(--space-2) 0 var(--space-4); }
     .section {
-      margin: 14px 0 6px; font-size: 10px; font-weight: 800;
-      letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim);
+      margin: var(--space-5) 0 var(--space-2); color: var(--text-soft);
+      font-size: .68rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
     }
     .row {
-      display: flex; align-items: baseline; gap: 8px; font-size: 13px;
-      padding: 5px 12px; border-radius: 8px;
+      display: flex; align-items: baseline; gap: var(--space-2); min-height: 34px;
+      padding: var(--space-2) var(--space-3); color: var(--text); font-size: var(--text-sm);
     }
     .row i { font-style: normal; color: var(--text-dim); }
-    .row .end { margin-left: auto; font-size: 12px; color: var(--text-dim); }
-    .dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; align-self: center; background: var(--border); }
-    .row.ok .dot { background: var(--brand); }
-    .row.no .dot { background: var(--danger); }
-    .warn-row .dot { background: var(--warn); }
-    .alert { margin-top: 8px; font-size: 12px; border-radius: 8px; padding: 8px 12px; background: var(--warn-bg); color: var(--warn-text); }
-    .backtest { margin-top: 14px; font-size: 13px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-    .hits { display: inline-flex; flex-wrap: wrap; gap: 6px; }
-    .hit-chip {
-      font: inherit; font-size: 11px; font-weight: 700; cursor: pointer;
-      color: var(--brand-text); background: color-mix(in srgb, var(--brand) 12%, transparent);
-      border: 0; border-radius: 999px; padding: 3px 10px;
+    .row .end { margin-left: auto; color: var(--text-dim); font-size: var(--text-xs); text-align: right; }
+    .dot { width: .45rem; height: .45rem; border-radius: 50%; flex: 0 0 auto; align-self: center; background: var(--border-strong); }
+    .row.ok .dot { background: var(--success); }
+    .row.no .dot { background: var(--text-soft); }
+    .row.missing .dot, .alternate .dot { background: var(--warn); }
+    .alert { margin-top: var(--space-3); padding: var(--space-3); border-left: 3px solid var(--warn); color: var(--warn-text); background: var(--warn-bg); font-size: var(--text-xs); }
+    .batch { margin-top: var(--space-6); padding-top: var(--space-5); border-top: 1px solid var(--border); }
+    .batch-title { margin: 0; font-weight: 750; }
+    .batch-stats { display: flex; gap: var(--space-5); flex-wrap: wrap; margin-top: var(--space-3); color: var(--text-dim); font-size: var(--text-sm); }
+    .batch-stats b { color: var(--text); font-size: var(--text-lg); }
+    .samples { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-4); }
+    .sample {
+      min-height: 36px; padding: .4rem .7rem; border: 0; border-radius: var(--radius-pill);
+      color: var(--text-dim); background: var(--surface-inset); font-size: var(--text-xs); font-weight: 700; cursor: pointer;
+    }
+    .sample.run { color: var(--success); background: var(--success-bg); }
+    .sample.unknown { color: var(--warn-text); background: var(--warn-bg); }
+    @media (max-width: 560px) {
+      .head { align-items: stretch; flex-direction: column; }
+      .test-all { width: 100%; }
+      .row { align-items: flex-start; flex-wrap: wrap; }
+      .row .end { width: 100%; margin-left: calc(.45rem + var(--space-2)); text-align: left; }
+      .batch-stats { flex-direction: column; gap: var(--space-2); }
     }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -126,7 +190,7 @@ import { PickerOption, TokenPicker } from './token-picker';
 export class SimulationPanel {
   @Input({ required: true }) set rule(value: WorkflowRule) {
     this.currentRule.set(value);
-    this.backtestResult.set(null);
+    this.batchResult.set(null);
   }
 
   protected readonly total = REQUESTS.length;
@@ -138,7 +202,7 @@ export class SimulationPanel {
 
   private readonly currentRule = signal<WorkflowRule | null>(null);
   private readonly selectedId = signal<string | null>(null);
-  protected readonly backtestResult = signal<{ hits: PlatformRequest[] } | null>(null);
+  protected readonly batchResult = signal<BatchResult | null>(null);
 
   protected readonly selectedLabel = computed(() => this.selectedId() ?? '');
 
@@ -149,14 +213,67 @@ export class SimulationPanel {
     const request = REQUESTS.find((r) => r.id === id);
     return request ? simulateRule(rule, request) : null;
   });
+  protected readonly outcome = computed<OutcomeCopy | null>(() => {
+    const trace = this.trace();
+    return trace ? describeOutcome(trace) : null;
+  });
 
   protected select(id: string) {
     this.selectedId.set(id);
   }
 
-  protected backtest() {
+  protected testAll() {
     const rule = this.currentRule();
     if (!rule) return;
-    this.backtestResult.set({ hits: REQUESTS.filter((request) => ruleMatches(rule, request)) });
+    const result: BatchResult = { runs: [], skips: [], unknown: [] };
+    for (const request of REQUESTS) {
+      const kind = describeOutcome(simulateRule(rule, request)).kind;
+      if (kind === 'run') result.runs.push(request);
+      else if (kind === 'skip') result.skips.push(request);
+      else result.unknown.push(request);
+    }
+    this.batchResult.set(result);
   }
+}
+
+function describeOutcome(trace: SimulationTrace): OutcomeCopy {
+  if (trace.matched) {
+    return {
+      kind: 'run',
+      label: 'Would run',
+      reason: 'The starting event and all required details match this workflow.',
+    };
+  }
+
+  const missing = trace.trace.conditions
+    .filter((condition) => condition.actual === null)
+    .map((condition) => condition.label);
+  if (trace.trace.matchedTrigger && missing.length) {
+    const fields = [...new Set(missing)];
+    return {
+      kind: 'unknown',
+      label: 'Could not evaluate',
+      reason: `${fields.join(', ')} ${fields.length === 1 ? 'is' : 'are'} missing from this request.`,
+    };
+  }
+
+  if (!trace.trace.matchedTrigger) {
+    return {
+      kind: 'skip',
+      label: 'Would skip',
+      reason: 'The starting event does not match this request.',
+    };
+  }
+
+  const mismatches = trace.trace.conditions
+    .filter((condition) => !condition.matched)
+    .map((condition) => condition.label);
+  const fields = [...new Set(mismatches)];
+  return {
+    kind: 'skip',
+    label: 'Would skip',
+    reason: fields.length
+      ? `${fields.join(', ')} ${fields.length === 1 ? 'does' : 'do'} not match this workflow.`
+      : 'This request does not match the workflow requirements.',
+  };
 }

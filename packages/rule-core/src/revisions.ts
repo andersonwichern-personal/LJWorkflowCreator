@@ -9,12 +9,14 @@
  * rephrase (same doctrine as the parse gate).
  */
 import { fuzzyMatches } from "./fuzzy";
-import { parseActionFragment } from "./nlParser";
+import { ParseOptions, parseActionFragment } from "./nlParser";
 import {
   WorkflowRule,
   RuleOutput,
+  ScopeValue,
   condFieldKind,
   condFieldLabel,
+  getAction,
   paramKeyFor,
   scopeLabel,
 } from "./vocabulary";
@@ -58,8 +60,51 @@ function parseAmount(digits: string, suffix: string | undefined): string {
 
 const eq = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
+/**
+ * Resolve a conversational replacement through the same vocabulary-aware
+ * action grammar used for initial parsing. Free-text action parameters (for
+ * example tags) remain free text; people, teams, stages, and authorities must
+ * resolve to a confirmed option before the existing rule can be changed.
+ */
+function resolveReplacement(
+  output: RuleOutput,
+  replacement: string,
+  eventKey: string | undefined,
+  opts: ParseOptions | undefined
+): ScopeValue | null {
+  const phrase =
+    output.action === "assign_user"
+      ? `assign to ${replacement}`
+      : output.action === "notify"
+        ? `notify ${replacement}`
+        : output.action === "change_stage"
+          ? `change stage to ${replacement}`
+          : output.action === "assign_authority"
+            ? `escalate to ${replacement}`
+            : null;
+
+  if (phrase) {
+    const fragment = parseActionFragment(phrase, eventKey, opts);
+    if (fragment.unresolved.length) return null;
+    const resolved = fragment.outputs.find((candidate) => candidate.action === output.action);
+    const value = resolved?.params[paramKeyFor(output.action)];
+    return value && scopeLabel(value) ? value : null;
+  }
+
+  const definition = getAction(output.action);
+  if (!definition || definition.paramKind === "none") return null;
+  if (definition.paramKind === "enum" && definition.paramOptions) {
+    return definition.paramOptions.find((option) => eq(option, replacement)) ?? null;
+  }
+  return replacement;
+}
+
 /** Apply one conversational revision to the rule. */
-export function applyRevision(rule: WorkflowRule, instruction: string): RevisionResult {
+export function applyRevision(
+  rule: WorkflowRule,
+  instruction: string,
+  opts?: ParseOptions
+): RevisionResult {
   const text = instruction.trim().replace(/[.!]+$/, "");
   if (!text) return { status: "unrecognized", reason: "Say what you'd like to change." };
 
@@ -95,7 +140,14 @@ export function applyRevision(rule: WorkflowRule, instruction: string): Revision
           const key = paramKeyFor(output.action);
           const current = scopeLabel(output.params[key]);
           if (current && (eq(current, target) || fuzzyMatches(target, [current]).length > 0)) {
-            output.params[key] = replacement;
+            const resolved = resolveReplacement(output, replacement, rule.triggers[0]?.event, opts);
+            if (!resolved) {
+              return {
+                status: "unrecognized",
+                reason: `I couldn't confirm “${replacement}” for this action — choose a known person, team, stage, or authority.`,
+              };
+            }
+            output.params[key] = resolved;
             replaced++;
           }
         }
@@ -160,6 +212,12 @@ export function applyRevision(rule: WorkflowRule, instruction: string): Revision
       );
     });
     if (actionIndex >= 0) {
+      if (next.actions.length === 1) {
+        return {
+          status: "unrecognized",
+          reason: "A workflow needs an outcome. Add the replacement action before removing its only action.",
+        };
+      }
       const removed = next.actions.splice(actionIndex, 1)[0];
       return {
         status: "applied",

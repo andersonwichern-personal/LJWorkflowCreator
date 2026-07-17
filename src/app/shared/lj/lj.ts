@@ -24,7 +24,10 @@ import { ChangeDetectionStrategy, Component, Directive, Input, booleanAttribute 
   `,
   styles: `
     :host { display: block; min-height: 100%; }
-    .lj-page-body { padding: 0 24px 32px; }
+    .lj-page-body {
+      width: min(100%, 1240px); margin: 0 auto;
+      padding: 0 clamp(1rem, 3vw, 3rem) clamp(3rem, 8vw, 7rem);
+    }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -35,7 +38,7 @@ export class LjPage {}
   template: `<ng-content />`,
   styles: `
     :host { display: block; }
-    :host(.header) { background: var(--surface); border-bottom: 1px solid var(--border); }
+    :host(.header) { background: transparent; }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '[style.padding]': 'pad' },
@@ -52,7 +55,7 @@ export class LjBox {
   selector: 'lj-box-row',
   template: `<ng-content />`,
   styles: `
-    :host { display: flex; align-items: center; gap: 12px; }
+    :host { display: flex; align-items: center; gap: var(--space-3); }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '[style.paddingBlockEnd]': 'padEnd' },
@@ -74,21 +77,25 @@ export class LjPageHeading {}
   // Attribute selector on a real <button> keeps native semantics + a11y.
   selector: 'button[lj-button]',
   template: `<ng-content />`,
+  host: {
+    '[disabled]': 'disabled',
+    '[attr.aria-disabled]': 'disabled ? "true" : null',
+  },
   styles: `
     :host {
-      display: inline-flex; align-items: center; gap: 6px;
-      font: inherit; font-weight: 600; font-size: 13px;
-      border-radius: 8px; padding: 8px 14px; cursor: pointer;
+      min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      font: inherit; font-weight: 750; font-size: var(--text-sm);
+      border-radius: var(--radius-pill); padding: 9px 16px; cursor: pointer;
       border: 1px solid var(--border); background: var(--surface); color: var(--text);
-      transition: background 120ms ease, border-color 120ms ease;
+      transition: background var(--motion-fast) ease, border-color var(--motion-fast) ease, transform var(--motion-medium) var(--ease-settle);
     }
-    :host(:hover:not(:disabled)) { background: var(--surface-hover); }
+    :host(:hover:not(:disabled)) { background: var(--surface-hover); transform: translateY(-1px); }
     :host(:disabled) { opacity: 0.45; cursor: not-allowed; }
     :host(.primary) {
-      background: var(--brand); border-color: var(--brand); color: #063a2e;
+      background: var(--brand); border-color: var(--brand); color: var(--sweet-ink);
     }
     :host(.primary:hover:not(:disabled)) { background: var(--brand-hover); }
-    :host(.danger) { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+    :host(.danger) { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 28%, var(--border)); }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

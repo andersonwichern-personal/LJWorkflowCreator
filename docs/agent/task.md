@@ -8,6 +8,27 @@ Protocol: `.claude/skills/goal/SKILL.md` (`/goal`).
 
 ---
 
+# Sweet Workflow UX Overhaul — Architect Review Handoff (2026-07-17)
+
+Handoff: `docs/2026-07-17_sweet-workflow-ux-overhaul-handoff_v1.md`
+Branch/worktree: `main` at `fc3f5b7`, changes intentionally uncommitted and unpushed.
+Status: implementation and local verification complete; awaiting Architect approval.
+
+- [x] Central Sweet design tokens, responsive shell, focus/reduced-motion foundations
+- [x] Exact 61-circle Sweet spiral with deterministic parser states and pointer/typing motion
+- [x] AI-first composer, clarification, review, test, and observation flow
+- [x] Editorial workflow list, client-facing detail, review queue, and confirmation dialogs
+- [x] Native disabled semantics, activation validation, four-eyes activation language
+- [x] Parser provenance retention, stale-result prevention, safe conversational revisions
+- [x] Alternate/Otherwise simulation fidelity and source-of-truth core synchronization
+- [x] Fail-closed, host-provided authorization/audit seam for Internal tools
+- [x] Production build, full test suite, browser responsive QA, and PNG evidence
+- [x] Architect reviews and approves the UX/implementation handoff
+- [ ] Authenticated admin host wires `WORKFLOW_ACCESS_POLICY` to real roles and durable audit logging
+- [x] Commit/push to `main` only after explicit Architect and Anderson approval
+
+---
+
 # Phase 13 — Four-Eyes (Maker-Checker) Rule Activation
 
 Spec: `docs/2026-07-16_phase-13-four-eyes-specs_v1.md`
@@ -330,5 +351,4 @@ Status: In progress
 ## Level 5: Proposals Dashboard (Review UI)
 - [ ] Port proposals dashboard (list proposals, approve/reject, compare JSON diffs)
 - [ ] Verify review dashboard layout loads correctly (compliance and safety checks deferred)
-
 

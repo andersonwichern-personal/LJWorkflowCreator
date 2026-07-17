@@ -1,8 +1,8 @@
 /**
  * GENERATED from packages/rule-core/src/ruleEvaluator.ts — DO NOT EDIT BY HAND.
- * Vendored copy of the @sweet/rule-core contract for the Angular track
- * (two-track doctrine: docs/agent/task.md). To change it, edit the package
- * and run `npm run sync:angular-core` at the repo root. `npm test` fails
+ * Vendored copy of the @sweet/rule-core contract for Angular.
+ * To change it, edit the package and run `npm run sync:angular-core` at
+ * the repo root. `npm test` fails
  * on drift via this script's --check mode.
  */
 /**
@@ -15,14 +15,9 @@
  * flattened with a `depth` for indentation), `missingData:"alert"` fail-closed
  * alerts, and `else` (Otherwise) actions when triggers match but conditions don't.
  *
- * Phase 9 — why `aggregate_exposure` arrives as CONTEXT and not as a lookup:
- * exposure lives in Postgres, but this module must stay pure and synchronous.
- * It is imported by components/SimulationPanel.tsx (a "use client" component),
- * so an `await calculateAggregateExposure(...)` in here would drag Prisma into
- * the browser bundle and break the build, and would force every caller —
- * ruleEngine.matchingRequests and its UI callers included — to become async.
- * So the server-side caller resolves exposure first (services/exposure.ts) and
- * passes it in. Same dynamic value, evaluator stays pure, tests stay sync.
+ * `aggregate_exposure` arrives through CONTEXT rather than a lookup so this
+ * module stays pure and synchronous. The host resolves the dynamic value first
+ * and passes it in; the evaluator and its callers remain deterministic.
  *
  * A context field the caller didn't resolve is UNKNOWN, never 0 — fail-closed,
  * exactly like an absent request field. Treating "not looked up" as $0 exposure
@@ -58,8 +53,7 @@ import { requestMatchesEvent, resolveField } from "./ruleEngine";
  * unknown and fails closed. See the module docblock for why this is injected.
  */
 export interface EvaluationContext {
-  /** Total outstanding across the borrower's connected group, in dollars —
-   *  from services/exposure.ts `calculateAggregateExposure`. */
+  /** Total outstanding across the borrower's connected group, in dollars. */
   aggregateExposure?: number;
 }
 

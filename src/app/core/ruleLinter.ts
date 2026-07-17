@@ -1,8 +1,8 @@
 /**
  * GENERATED from packages/rule-core/src/ruleLinter.ts — DO NOT EDIT BY HAND.
- * Vendored copy of the @sweet/rule-core contract for the Angular track
- * (two-track doctrine: docs/agent/task.md). To change it, edit the package
- * and run `npm run sync:angular-core` at the repo root. `npm test` fails
+ * Vendored copy of the @sweet/rule-core contract for Angular.
+ * To change it, edit the package and run `npm run sync:angular-core` at
+ * the repo root. `npm test` fails
  * on drift via this script's --check mode.
  */
 /**

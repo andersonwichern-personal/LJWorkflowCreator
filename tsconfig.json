@@ -5,9 +5,8 @@
   "compilerOptions": {
     "strict": true,
     "noImplicitOverride": true,
-    // Off (CLI default is on): the shared rule core (src/app/core/*) is ported
-    // VERBATIM from the Vercel track, whose tsconfig doesn't set this. The core
-    // must stay byte-identical across tracks, so the workspace flag yields.
+    // Off because the synced rule-core source follows its locked package
+    // tsconfig, which does not enable this option.
     "noPropertyAccessFromIndexSignature": false,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
@@ -16,13 +15,7 @@
     "experimentalDecorators": true,
     "importHelpers": true,
     "target": "ES2022",
-    "module": "preserve",
-    // The Vercel track's "@/lib/*" alias, mapped onto the ported core so files
-    // like core/fourEyes.ts stay byte-identical across tracks.
-    "baseUrl": ".",
-    "paths": {
-      "@/lib/*": ["src/app/core/*"]
-    }
+    "module": "preserve"
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,

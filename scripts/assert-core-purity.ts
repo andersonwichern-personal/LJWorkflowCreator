@@ -1,10 +1,9 @@
 /**
  * assert-core-purity — the wall that keeps @sweet/rule-core framework-neutral.
  *
- * The core is shared verbatim by the Next.js "Vercel" track and the Angular
- * admin console. If React/Next/JSX or persistence bindings leak into it, they
- * leak into Angular too. This test fails the build the moment that happens, so
- * the separation survives without anyone having to remember it in review.
+ * The core feeds the generated Angular vendored copy. If UI-framework or
+ * persistence bindings leak into it, they leak into Angular too. This test
+ * fails the build immediately so the boundary survives without manual review.
  *
  * Run: tsx scripts/assert-core-purity.ts   (also `npm run assert:core-purity`)
  */
@@ -51,7 +50,7 @@ for (const file of files) {
   }
   const src = readFileSync(file, "utf8");
   for (const { pattern, why } of BANNED_IMPORTS) {
-    if (pattern.test(src)) violations.push(`${rel}: imports ${why} — belongs to a track, not the core.`);
+    if (pattern.test(src)) violations.push(`${rel}: imports ${why} — belongs outside the core.`);
   }
   for (const { pattern, why } of BANNED_GLOBALS) {
     if (pattern.test(src)) violations.push(`${rel}: references ${why} — the core must not touch the DOM.`);
@@ -61,7 +60,7 @@ for (const file of files) {
 if (violations.length > 0) {
   console.error(`\n✗ @sweet/rule-core purity violated (${violations.length}):\n`);
   for (const v of violations) console.error(`  • ${v}`);
-  console.error("\nThe rule core is framework-neutral. Move framework code into a track.\n");
+  console.error("\nThe rule core is framework-neutral. Move host-specific code outside it.\n");
   process.exit(1);
 }
 

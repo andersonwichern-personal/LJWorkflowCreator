@@ -6,13 +6,12 @@ import { PickerOption, TokenPicker } from './token-picker';
 
 /**
  * Dry-run simulator + backtest over the seed dataset, driven entirely by the
- * shared traced evaluator (core/ruleEvaluator). Same semantics as the Vercel
- * track's SimulationPanel: every trigger and condition is traced (no
- * short-circuit hiding), alerts surface missingData:"alert" fields, and the
- * else-lane is shown when triggers matched but conditions failed.
+ * shared traced evaluator (core/ruleEvaluator). Every trigger and condition is
+ * traced (no short-circuit hiding), alerts surface missingData:"alert" fields,
+ * and the else-lane is shown when triggers matched but conditions failed.
  *
  * Context fields (aggregate_exposure) are NOT resolved here — the evaluator
- * fails closed on them, exactly like the prototype without its server call.
+ * fails closed on them until the host supplies the dynamic values.
  */
 @Component({
   selector: 'wf-simulation-panel',

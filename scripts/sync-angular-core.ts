@@ -1,10 +1,9 @@
 /**
  * sync-angular-core — one-way sync gate from @sweet/rule-core to the Angular
- * track's vendored copy at src/app/core/.
+ * application's vendored copy at src/app/core/.
  *
- * The two-track doctrine (docs/agent/task.md) says a semantic change to the
- * rule core must land on both tracks. This script makes that mechanical:
- * the package is the single source of truth; the vendored copy is generated.
+ * The package is the single source of truth; this script generates the
+ * vendored copy and the check mode prevents drift.
  *
  *   npm run sync:angular-core           # regenerate the vendored copy
  *   tsx scripts/sync-angular-core.ts --check   # CI gate: fail on drift
@@ -27,9 +26,9 @@ function banner(name: string): string {
   return [
     "/**",
     ` * GENERATED from packages/rule-core/src/${name} — DO NOT EDIT BY HAND.`,
-    " * Vendored copy of the @sweet/rule-core contract for the Angular track",
-    " * (two-track doctrine: docs/agent/task.md). To change it, edit the package",
-    " * and run `npm run sync:angular-core` at the repo root. `npm test` fails",
+    " * Vendored copy of the @sweet/rule-core contract for Angular.",
+    " * To change it, edit the package and run `npm run sync:angular-core` at",
+    " * the repo root. `npm test` fails",
     " * on drift via this script's --check mode.",
     " */",
     "",

@@ -1,8 +1,8 @@
 /**
  * GENERATED from packages/rule-core/src/conditionTree.ts — DO NOT EDIT BY HAND.
- * Vendored copy of the @sweet/rule-core contract for the Angular track
- * (two-track doctrine: docs/agent/task.md). To change it, edit the package
- * and run `npm run sync:angular-core` at the repo root. `npm test` fails
+ * Vendored copy of the @sweet/rule-core contract for Angular.
+ * To change it, edit the package and run `npm run sync:angular-core` at
+ * the repo root. `npm test` fails
  * on drift via this script's --check mode.
  */
 /**
@@ -14,7 +14,7 @@
  * must itself be a group), and so on.
  *
  * The RuleSentence builder stays "dumb" by delegating all state transitions to
- * these helpers; `scripts/assert-tree.ts` pins the immutability + path behavior.
+ * these helpers; `core-tests/assert-tree.ts` pins the immutability + path behavior.
  */
 
 import { ConditionGroup, ConditionNode, ConditionLeaf, isGroup } from "./vocabulary";

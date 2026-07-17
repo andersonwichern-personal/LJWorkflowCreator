@@ -2,7 +2,7 @@
   "name": "@sweet/rule-core",
   "version": "0.1.0",
   "private": true,
-  "description": "Framework-neutral rule spine (schema, vocabulary, parser, evaluator, validator, linter) shared by the Vercel and Angular tracks.",
+  "description": "Framework-neutral rule spine for the Angular Workflow Creator.",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",

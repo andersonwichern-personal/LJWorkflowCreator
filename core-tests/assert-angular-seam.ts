@@ -1,5 +1,5 @@
 /**
- * Angular-track data-seam suite: the four-eyes gate truth table (shared core)
+ * Angular data-seam suite: the four-eyes gate truth table (shared core)
  * and the mock backend's proposal interception — the behavior the builder and
  * proposals page sit on. Run: npx tsx core-tests/assert-angular-seam.ts
  */

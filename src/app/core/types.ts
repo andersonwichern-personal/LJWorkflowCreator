@@ -1,16 +1,15 @@
 /**
  * GENERATED from packages/rule-core/src/types.ts — DO NOT EDIT BY HAND.
- * Vendored copy of the @sweet/rule-core contract for the Angular track
- * (two-track doctrine: docs/agent/task.md). To change it, edit the package
- * and run `npm run sync:angular-core` at the repo root. `npm test` fails
+ * Vendored copy of the @sweet/rule-core contract for Angular.
+ * To change it, edit the package and run `npm run sync:angular-core` at
+ * the repo root. `npm test` fails
  * on drift via this script's --check mode.
  */
 import { WorkflowRule } from "./vocabulary";
 
 /**
- * Persisted workflow record — the framework-neutral shape shared by every host
- * (Next.js API client, Angular admin console). The transport/persistence layer
- * lives per-track; this is only the contract they agree on.
+ * Persisted workflow record — the framework-neutral shape consumed by Angular
+ * services and core evaluators. Transport and persistence stay outside the core.
  */
 export interface WorkflowRecord {
   id: string;

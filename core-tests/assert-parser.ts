@@ -1,7 +1,7 @@
-// PORTED from scripts/assert-parser.ts (Vercel track) — drift guard for the shared rule core.
+// Rule-core regression coverage retained as a drift guard.
 /**
  * Parser honesty suite (hardening plan §2.7) — deterministic eval harness.
- * Run: npx tsx scripts/assert-parser.ts
+ * Run: npx tsx core-tests/assert-parser.ts
  */
 import { parseInstruction } from "../src/app/core/nlParser";
 import { walkLeaves, WorkflowRule } from "../src/app/core/vocabulary";

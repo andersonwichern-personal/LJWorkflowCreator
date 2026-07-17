@@ -1,7 +1,7 @@
-// PORTED from scripts/assert-multi-action.ts (Vercel track) — drift guard for the shared rule core.
+// Rule-core regression coverage retained as a drift guard.
 /**
  * Parser upgrade suite — multi-action instructions, action delays, and capture
- * hygiene. Run: npx tsx scripts/assert-multi-action.ts
+ * hygiene. Run: npx tsx core-tests/assert-multi-action.ts
  *
  * Why this exists: the heuristic parser's action regexes used to end with
  * `(?:\s+(?:and|then|,|\.)|$)`, which CONSUMED the connector. Once "… assign to

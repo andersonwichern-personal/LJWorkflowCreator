@@ -1,9 +1,9 @@
-// PORTED from scripts/assert-scope.ts (Vercel track) — drift guard for the shared rule core.
+// Rule-core regression coverage retained as a drift guard.
 /**
  * ScopeRef suite (Phase 2) — helper totality, scopeMatches semantics (incl.
  * the C7 stage-collision kill), evaluator integration on seed data, rendering
  * (never "[object Object]"), normalization preservation, validator guards.
- * Run: npx tsx scripts/assert-scope.ts
+ * Run: npx tsx core-tests/assert-scope.ts
  */
 import {
   ScopeRef,

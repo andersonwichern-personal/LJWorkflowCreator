@@ -7,7 +7,7 @@
  * must itself be a group), and so on.
  *
  * The RuleSentence builder stays "dumb" by delegating all state transitions to
- * these helpers; `scripts/assert-tree.ts` pins the immutability + path behavior.
+ * these helpers; `core-tests/assert-tree.ts` pins the immutability + path behavior.
  */
 
 import { ConditionGroup, ConditionNode, ConditionLeaf, isGroup } from "./vocabulary";

@@ -1,9 +1,8 @@
 import { WorkflowRule } from "./vocabulary";
 
 /**
- * Persisted workflow record — the framework-neutral shape shared by every host
- * (Next.js API client, Angular admin console). The transport/persistence layer
- * lives per-track; this is only the contract they agree on.
+ * Persisted workflow record — the framework-neutral shape consumed by Angular
+ * services and core evaluators. Transport and persistence stay outside the core.
  */
 export interface WorkflowRecord {
   id: string;

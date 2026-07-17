@@ -1,4 +1,10 @@
-import { FIELDS, EVENTS, OPERATORS, ACTIONS, ASSIGNEES } from "../lib/vocabulary";
+import {
+  ACTIONS,
+  ASSIGNEES,
+  EVENTS,
+  FIELDS,
+  OPERATORS,
+} from "../packages/rule-core/src/vocabulary";
 
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {

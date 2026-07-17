@@ -1,7 +1,7 @@
-// PORTED from scripts/assert-tree.ts (Vercel track) — drift guard for the shared rule core.
+// Rule-core regression coverage retained as a drift guard.
 /**
  * Condition-tree operator suite (hardening plan §3.4) — pure, immutable,
- * path-addressed. Run: npx tsx scripts/assert-tree.ts
+ * path-addressed. Run: npx tsx core-tests/assert-tree.ts
  */
 import {
   addLeaf,

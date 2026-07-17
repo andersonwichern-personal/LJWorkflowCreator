@@ -1,7 +1,6 @@
 {
   // WALL: no 'dom' lib and no ambient types. JSX, document, window, and
-  // framework globals fail to compile here on purpose. Do not add 'dom' or
-  // 'react' to this file.
+  // framework globals fail to compile here on purpose.
   "compilerOptions": {
     "lib": ["ES2022"],
     "types": [],

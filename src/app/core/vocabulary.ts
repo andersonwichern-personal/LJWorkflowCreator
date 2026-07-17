@@ -1,8 +1,8 @@
 /**
  * GENERATED from packages/rule-core/src/vocabulary.ts — DO NOT EDIT BY HAND.
- * Vendored copy of the @sweet/rule-core contract for the Angular track
- * (two-track doctrine: docs/agent/task.md). To change it, edit the package
- * and run `npm run sync:angular-core` at the repo root. `npm test` fails
+ * Vendored copy of the @sweet/rule-core contract for Angular.
+ * To change it, edit the package and run `npm run sync:angular-core` at
+ * the repo root. `npm test` fails
  * on drift via this script's --check mode.
  */
 /**
@@ -836,8 +836,7 @@ export const EVENTS: EventDef[] = [
     ],
     // Unlike every event above, this one is a CLOCK tick, not a request state
     // change — so ruleEngine.ts `requestMatchesEvent` has nothing to derive it
-    // from and returns false, and no worker/cron exists to fire it either (see
-    // lib/scheduledActions.ts: the scheduler is deferred prototype-wide). The
+    // from and returns false, and no worker/cron exists to fire it either. The
     // vocabulary + rule shape ship now so covenant rules are authorable and
     // storable; they stay inert until a scheduler exists. Says so on the pill.
     blurb:
@@ -1266,8 +1265,8 @@ export interface RuleOutput {
    * -7200 for "7 days before"). Authorable via the timer control on the action
    * pill (Phase 9).
    *
-   * STILL NOT EXECUTED. There is no worker or cron in this serverless prototype
-   * (lib/scheduledActions.ts), so a delay is persisted and shown, and then the
+   * STILL NOT EXECUTED. There is no worker or cron in the current host, so a
+   * delay is persisted and shown, and then the
    * executor runs the action immediately. The UI must keep saying so — a banker
    * who sets "3 days" and is not told otherwise will assume it waits 3 days.
    */

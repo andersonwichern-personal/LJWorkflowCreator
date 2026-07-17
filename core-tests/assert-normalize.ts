@@ -1,7 +1,7 @@
-// PORTED from scripts/assert-normalize.ts (Vercel track) — drift guard for the shared rule core.
+// Rule-core regression coverage retained as a drift guard.
 /**
  * Normalization suite (hardening plan §3.1) — v1 / v2 / v3 / garbage all become
- * well-formed v3 rules, idempotently. Run: npx tsx scripts/assert-normalize.ts
+ * well-formed v3 rules, idempotently. Run: npx tsx core-tests/assert-normalize.ts
  */
 import {
   normalizeRule,

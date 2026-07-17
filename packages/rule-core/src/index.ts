@@ -1,12 +1,12 @@
 /**
- * @sweet/rule-core — the framework-neutral rule spine shared by both tracks
- * (Next.js "Vercel" track and the Angular admin console).
+ * @sweet/rule-core — the framework-neutral rule spine for the Angular
+ * Workflow Creator.
  *
- * PURE TypeScript ONLY. No react, next, prisma, supabase, or DOM imports may
- * ever land in this package — `scripts/assert-core-purity.ts` enforces it and
- * the package tsconfig omits the "dom" lib so violations fail to compile.
+ * PURE TypeScript ONLY. Framework, persistence, and DOM imports may not land
+ * here — `scripts/assert-core-purity.ts` enforces the boundary and the package
+ * tsconfig omits the "dom" lib so violations fail to compile.
  *
- * A semantic change here is a change to the contract BOTH tracks depend on.
+ * Semantic changes here flow into the generated Angular vendored copy.
  */
 export * from "./types";
 export * from "./vocabulary";

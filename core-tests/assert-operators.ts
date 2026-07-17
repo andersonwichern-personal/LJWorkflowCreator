@@ -1,7 +1,7 @@
-// PORTED from scripts/assert-operators.ts (Vercel track) — drift guard for the shared rule core.
+// Rule-core regression coverage retained as a drift guard.
 /**
  * Operator semantics + evaluator-parity suite (hardening plan §2.4/§2.6).
- * Run: npx tsx scripts/assert-operators.ts
+ * Run: npx tsx core-tests/assert-operators.ts
  */
 import { evaluateCondition, simulateRule } from "../src/app/core/ruleEvaluator";
 import { matchingRequests } from "../src/app/core/ruleEngine";

@@ -1,4 +1,4 @@
-// PORTED from scripts/assert-nlp-parser.ts (Vercel track) — drift guard for the shared rule core.
+// Rule-core regression coverage retained as a drift guard.
 /**
  * Phase 8 §1 — trigger correctness.
  *

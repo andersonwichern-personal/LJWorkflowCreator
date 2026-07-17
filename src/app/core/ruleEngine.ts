@@ -1,8 +1,8 @@
 /**
  * GENERATED from packages/rule-core/src/ruleEngine.ts — DO NOT EDIT BY HAND.
- * Vendored copy of the @sweet/rule-core contract for the Angular track
- * (two-track doctrine: docs/agent/task.md). To change it, edit the package
- * and run `npm run sync:angular-core` at the repo root. `npm test` fails
+ * Vendored copy of the @sweet/rule-core contract for Angular.
+ * To change it, edit the package and run `npm run sync:angular-core` at
+ * the repo root. `npm test` fails
  * on drift via this script's --check mode.
  */
 /**
@@ -59,7 +59,7 @@ function fieldValue(r: PlatformRequest, field: string): string | number | string
 }
 
 /**
- * Public resolver for the traced simulator (lib/ruleEvaluator.ts): resolve a
+ * Public resolver for the traced simulator (`./ruleEvaluator`): resolve a
  * condition-field key on a request, reporting whether the field is known to
  * the demo data at all (unknown ≠ empty — the trace shows the difference).
  */
@@ -89,7 +89,7 @@ export function requestMatchesEvent(r: PlatformRequest, eventKey: string): boole
 
 /**
  * Evaluate a full rule (multi-trigger OR + recursive condition groups) against a
- * request. Delegates to the single traced engine in lib/ruleEvaluator.ts so the
+ * request. Delegates to the single traced engine in `./ruleEvaluator` so the
  * list-match path and the simulator can never disagree (§2.6, §3.3).
  */
 export function evaluateRule(rule: WorkflowRule, r: PlatformRequest): boolean {

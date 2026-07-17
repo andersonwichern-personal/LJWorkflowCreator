@@ -7,15 +7,15 @@
         "patterns": [
           {
             "group": ["react", "react-dom", "react/*", "next", "next/*"],
-            "message": "@sweet/rule-core is framework-neutral. UI/framework code belongs to a track, not the core."
+            "message": "@sweet/rule-core is framework-neutral. UI/framework code belongs outside the core."
           },
           {
             "group": ["@prisma/*", "prisma", "@supabase/*", "pg"],
-            "message": "@sweet/rule-core must not touch persistence/transport. Keep DB and API bindings in the track."
+            "message": "@sweet/rule-core must not touch persistence/transport. Keep DB and API bindings in the host."
           },
           {
             "group": ["../*", "../../*", "@/*"],
-            "message": "@sweet/rule-core may only import from within itself. Reaching into the host tree (lib/, app/) reverses the dependency."
+            "message": "@sweet/rule-core may only import from within itself. Reaching into the host tree reverses the dependency."
           }
         ]
       }

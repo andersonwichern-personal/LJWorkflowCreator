@@ -1,6 +1,6 @@
 /**
- * The one rule validator (hardening plan §3.2). Runs on the client pre-save AND
- * inside the Prisma service — a single implementation so the two can never drift.
+ * The one rule validator (hardening plan §3.2). Runs in the UI before save and
+ * at the host persistence boundary so validation cannot drift.
  *
  * `validateRule(raw)` normalizes the input to v3, then reports structural
  * problems as typed issues:

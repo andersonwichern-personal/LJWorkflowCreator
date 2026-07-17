@@ -7,7 +7,7 @@
  * statuses, System Events types, etc.) so the surrounding sections feel real and
  * give the Workflow Creator a believable context to automate over.
  *
- * All values are drawn from the verified vocabulary in `lib/vocabulary.ts`.
+ * All values are drawn from the verified vocabulary exported by this package.
  * Dates are fixed strings (no runtime clock) so the demo is deterministic.
  */
 

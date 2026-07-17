@@ -1,8 +1,8 @@
-// PORTED from scripts/assert-validation.ts (Vercel track) — drift guard for the shared rule core.
+// Rule-core regression coverage retained as a drift guard.
 /**
  * Validator suite (hardening plan §3.2) — every error + warning code has a red
  * fixture, plus a clean rule that produces none. Run:
- *   npx tsx scripts/assert-validation.ts
+ *   npx tsx core-tests/assert-validation.ts
  */
 import { validateRule } from "../src/app/core/ruleValidation";
 

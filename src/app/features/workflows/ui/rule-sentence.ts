@@ -33,14 +33,9 @@ import { addGroup, addLeaf, removeNode, updateLeaf } from '../../../core/conditi
 import { PickerOption, TokenPicker } from './token-picker';
 
 /**
- * The WHEN / IF / THEN sentence — the Angular rebuild of the prototype's
- * RuleSentence, driven by the shared rule core. All edits are immutable: the
- * component never mutates `rule`, it emits a fresh object via `ruleChange`.
- *
- * First-cut scope (per the two-track doctrine): static vocabulary only — no
- * live form-field (ff:) refs and no ScopeRef *authoring* yet. Loaded rules
- * containing ScopeRef values still RENDER correctly via scopeLabel(); editing
- * such a value replaces it with the picked string.
+ * The WHEN / IF / THEN sentence, driven by the shared rule core. All edits are
+ * immutable: the component never mutates `rule`; it emits a fresh object via
+ * `ruleChange`.
  */
 @Component({
   selector: 'wf-rule-sentence',

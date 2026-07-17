@@ -4,14 +4,14 @@ import { WorkflowRule } from '../../../core/vocabulary';
 
 /**
  * Plain-English drafting via the shared deterministic parser (core/nlParser).
- * Honesty surfaces carry over from the prototype unchanged:
+ * The parser exposes its confidence gaps directly:
  *   - uncovered fragments are LOUD ("the drafted rule does NOT include this"),
  *   - ambiguities render as buttons that re-parse with `forceEvent`,
  *   - unresolved slots are listed with their fuzzy suggestions.
  *
- * The Gemini engine stays a Vercel-track capability for now: this component
- * calls the local parser only. The admin embed will front the same contract
- * with a backend parse endpoint — the seam is `draft()`.
+ * Remote model parsing is not wired into this standalone Angular harness, so
+ * this component calls the local parser. A backend parser can implement the
+ * same contract through the `draft()` seam.
  */
 @Component({
   selector: 'wf-chat-draft',

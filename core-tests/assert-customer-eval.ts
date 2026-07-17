@@ -1,4 +1,4 @@
-// PORTED from scripts/assert-customer-eval.ts (Vercel track) — drift guard for the shared rule core.
+// Rule-core regression coverage retained as a drift guard.
 export {};
 
 // Exercises the REAL evaluator path for customer_name conditions against the real

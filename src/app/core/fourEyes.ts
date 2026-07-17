@@ -1,14 +1,9 @@
 /**
- * PORTED VERBATIM from the Vercel track: lib/fourEyes.ts @ 3530c4b.
- * Shared rule-core contract (docs/agent/task.md 'Two-track doctrine').
- * Semantic changes must land on both tracks. Framework-free.
- */
-/**
  * Four-eyes (maker-checker) gate — Phase 13.
  *
- * Deliberately free of any database import: the rule that decides whether a
+ * Deliberately free of persistence imports: the rule that decides whether a
  * change may land directly is a compliance control, so it has to be checkable
- * in isolation (and reusable by the builder UI, which has no Prisma access).
+ * in isolation and reusable by the builder UI, which does not own writes.
  * The service layer owns the writes; this module owns the decision.
  */
 

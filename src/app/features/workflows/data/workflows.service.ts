@@ -13,7 +13,7 @@ export interface WorkflowWrite {
   description?: string | null;
   enabled?: boolean;
   ruleJson: WorkflowRule;
-  /** Optimistic-concurrency guard (Vercel track Phase 8 §12); backend enforces. */
+  /** Optimistic-concurrency guard; the backend enforces it. */
   expectedVersion?: number;
 }
 
@@ -31,7 +31,7 @@ export interface WorkflowProposal {
 
 /**
  * The result of a save: either the write landed, or the four-eyes gate turned
- * it into a proposal (the Vercel route's 202 contract, service-shaped).
+ * it into a service-shaped proposal result.
  */
 export type SaveOutcome =
   | { kind: 'saved'; record: WorkflowRecord }
@@ -183,8 +183,7 @@ const LATENCY_MS = 180; // keep async paths honest in dev
 /**
  * In-memory backend for standalone/demo use. State resets on reload.
  *
- * The four-eyes gate is enforced HERE, mirroring the Vercel track's service
- * interception: an update or enable-toggle on a protected workflow becomes a
+ * The four-eyes gate is enforced HERE: an update or enable-toggle on a protected workflow becomes a
  * pending proposal instead of a direct write (the shared core decides —
  * shouldProposeWorkflowWrite). Cosmetic-only writes pass straight through.
  */

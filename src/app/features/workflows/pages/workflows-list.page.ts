@@ -1,6 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
+import { STATE_LABELS, workflowState } from '../../../core/orgPolicy';
 import { LJ_PRIMITIVES } from '../../../shared/lj/lj';
 import { VocabularyChip } from '../ui/vocabulary-chip';
 import { WorkflowRecord, WorkflowsService } from '../data/workflows.service';
@@ -47,7 +48,7 @@ import { WorkflowRecord, WorkflowsService } from '../data/workflows.service';
           <thead>
             <tr>
               <th>Name</th>
-              <th>Mode</th>
+              <th>State</th>
               <th>Enabled</th>
               <th>Updated</th>
               <th></th>
@@ -63,8 +64,14 @@ import { WorkflowRecord, WorkflowsService } from '../data/workflows.service';
                   }
                 </td>
                 <td>
-                  <span class="mode" [class.armed]="row.ruleJson.controls.mode === 'armed'">
-                    {{ row.ruleJson.controls.mode }}
+                  <!-- Client-language lifecycle (MVP 5): Observing / Active /
+                       Paused — internal shadow/armed never surfaces here. -->
+                  <span
+                    class="mode"
+                    [class.armed]="stateOf(row) === 'active'"
+                    [title]="stateLabel(row).description"
+                  >
+                    {{ stateLabel(row).label }}
                   </span>
                   @if (row.proposalStatus === 'pending') {
                     <span class="mode proposal" title="A change is awaiting review">proposal pending</span>
@@ -83,6 +90,9 @@ import { WorkflowRecord, WorkflowsService } from '../data/workflows.service';
                 </td>
                 <td class="dim">{{ row.updatedAt | date: 'MMM d, h:mm a' }}</td>
                 <td class="actions">
+                  @if (stateOf(row) === 'observing') {
+                    <button type="button" class="activate" (click)="activate(row)">Activate</button>
+                  }
                   <a [routerLink]="[row.id, 'edit']">Edit</a>
                   <button type="button" class="danger" (click)="remove(row)">Delete</button>
                 </td>
@@ -110,6 +120,11 @@ import { WorkflowRecord, WorkflowsService } from '../data/workflows.service';
     }
     td { padding: 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
     .name { font-weight: 600; color: var(--text); text-decoration: none; }
+    .activate {
+      font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+      color: var(--brand-text, var(--text)); background: color-mix(in srgb, var(--brand, currentColor) 12%, transparent);
+      border: none; border-radius: 999px; padding: 4px 12px;
+    }
     .name:hover { color: var(--brand-text); }
     .desc { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
     .dim { color: var(--text-dim); }
@@ -186,6 +201,34 @@ export class WorkflowsListPage {
 
   protected goProposals() {
     void this.router.navigate(['/workflows', 'proposals']);
+  }
+
+  protected stateOf(row: WorkflowRecord) {
+    return workflowState(row);
+  }
+  protected stateLabel(row: WorkflowRecord) {
+    return STATE_LABELS[workflowState(row)];
+  }
+
+  /**
+   * Observation → Active (roadmap Phase 7). Goes through the normal update
+   * path, so the four-eyes gate can intercept — an elevated-risk activation
+   * lands as a proposal ("Approval required" protection), not a direct flip.
+   */
+  protected activate(row: WorkflowRecord) {
+    if (!confirm(`Activate "${row.name}"? Its actions will run for real.`)) return;
+    const ruleJson = {
+      ...row.ruleJson,
+      controls: { ...row.ruleJson.controls, mode: 'armed' as const },
+    };
+    this.service
+      .update(row.id, { name: row.name, ruleJson, expectedVersion: row.version })
+      .subscribe({
+        next: (outcome) =>
+          this.rows.update((rows) =>
+            rows.map((r) => (r.id === outcome.record.id ? outcome.record : r))
+          ),
+      });
   }
 
   protected toggle(row: WorkflowRecord) {

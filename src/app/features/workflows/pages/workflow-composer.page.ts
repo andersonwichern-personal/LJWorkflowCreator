@@ -6,6 +6,7 @@ import { interpretRule } from '../../../core/interpretation';
 import { Clarification, applyClarification, clarificationsFor } from '../../../core/clarifications';
 import { applyRevision } from '../../../core/revisions';
 import { ExplainedSimulation, SimOutcome, explainSimulation } from '../../../core/simulationExplainer';
+import { applyOrgPolicy, protectionsFor } from '../../../core/orgPolicy';
 import { LJ_PRIMITIVES } from '../../../shared/lj/lj';
 import { WorkflowsService } from '../data/workflows.service';
 
@@ -187,6 +188,17 @@ import { WorkflowsService } from '../data/workflows.service';
           <div class="error-bar">{{ message }}</div>
         }
 
+        <details class="protections">
+          <summary>Protections applied</summary>
+          <ul>
+            @for (protection of protections(); track protection.title) {
+              <li>
+                <b>{{ protection.title }}.</b> {{ protection.description }}
+              </li>
+            }
+          </ul>
+        </details>
+
         <div class="actions-row">
           <button lj-button (click)="refine()">← Refine description</button>
           <span class="spacer"></span>
@@ -196,7 +208,7 @@ import { WorkflowsService } from '../data/workflows.service';
             [disabled]="gaps().length > 0 || saving()"
             (click)="save()"
           >
-            {{ saving() ? 'Saving…' : 'Save workflow' }}
+            {{ saving() ? 'Saving…' : 'Start in observation mode' }}
           </button>
         </div>
       }
@@ -301,6 +313,16 @@ import { WorkflowsService } from '../data/workflows.service';
     }
     .sim-check.ok { color: var(--text); }
     .sim-check.miss { background: var(--warn-bg); color: var(--warn-text); }
+    .protections {
+      margin-top: 18px; border: 1px solid var(--border); border-radius: 10px;
+      background: var(--surface); font-size: 13px;
+    }
+    .protections summary {
+      cursor: pointer; padding: 10px 14px; font-weight: 700; color: var(--text-dim);
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    }
+    .protections ul { margin: 0; padding: 0 16px 12px 30px; color: var(--text); }
+    .protections li { margin-top: 6px; }
     .parse-failure {
       font-size: 13px; background: var(--warn-bg); color: var(--warn-text);
       border-radius: 10px; padding: 12px 16px; margin-top: 14px;
@@ -389,6 +411,12 @@ export class WorkflowComposerPage {
     return key === 'all' ? sim.results : sim.results.filter((r) => r.outcome === key);
   });
 
+  /** Read-only protections summary (MVP 5) — policy-derived, never editable. */
+  protected readonly protections = computed(() => {
+    const rule = this.result()?.rule;
+    return rule ? protectionsFor(rule) : [];
+  });
+
   protected build() {
     this.error.set(null);
     this.clearRevisionFeedback();
@@ -460,7 +488,9 @@ export class WorkflowComposerPage {
     this.error.set(null);
     const description = this.text().trim();
     const name = description.length > 60 ? `${description.slice(0, 57)}…` : description;
-    this.service.create({ name, description, ruleJson: rule }).subscribe({
+    // Organization policy stamps all safety controls (MVP 5) — the client
+    // never configures them; new workflows always start observing.
+    this.service.create({ name, description, ruleJson: applyOrgPolicy(rule) }).subscribe({
       next: () => void this.router.navigate(['/workflows']),
       error: (error: Error) => {
         this.saving.set(false);

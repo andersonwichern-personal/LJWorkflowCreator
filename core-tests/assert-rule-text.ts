@@ -195,23 +195,18 @@ roundTrip(
   t('rate cap survives the suffix sentence', parsed.rule?.controls.maxFiresPerHour === 10);
 }
 
-/* ---- Parser-uncovered actions stay readable and honestly uncovered ------- */
-{
-  const rule = base({
+/* ---- Generic-grammar actions (Phase 1.8 parser engine) round-trip -------- */
+roundTrip(
+  'generic vocabulary actions round-trip',
+  base({
     actions: [
       { action: 'route_to_queue', params: { value: 'Approved' } },
       { action: 'pull_credit', params: {} },
       { action: 'remove_tag', params: { value: 'stale' } },
     ],
-  });
-  const text = composeRuleText(rule);
-  t('uncovered actions render readable phrases', /move it into the Approved queue/.test(text) && /pull credit/.test(text) && /remove tag stale/.test(text));
-  const parsed = parseInstruction(text);
-  t(
-    'uncovered actions surface as uncovered fragments on re-parse (never silently vanish)',
-    parsed.uncovered.length > 0
-  );
-}
+  }),
+  { exactConditions: false } // "queue"+"approved" rough-match a queue condition
+);
 
 /* ---- Phrase helpers ------------------------------------------------------- */
 t(

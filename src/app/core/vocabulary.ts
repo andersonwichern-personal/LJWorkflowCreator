@@ -581,6 +581,12 @@ export interface EventDef {
   condFields: string[];
   blurb: string;
   /**
+   * Alternate trigger phrasings for the parser's generic vocabulary matcher.
+   * Content hook: per-client synonyms live HERE, in vocabulary data — the
+   * parser process never changes when they do.
+   */
+  aliases?: string[];
+  /**
    * Whether ID-bound live form-field refs (ff:<form>:<field>) are offerable on
    * this event — true only for the events that carry application data
    * (§3.1). Form fields survive a multi-trigger set iff EVERY trigger allows them.
@@ -905,6 +911,13 @@ export interface ActionDef {
   paramOptions?: string[];
   blurb: string;
   execution: ActionExecution;
+  /**
+   * Alternate action phrasings for the parser's generic vocabulary matcher.
+   * May carry a `{param}` placeholder when the parameter sits mid-phrase
+   * ("move it into the {param} queue"). Content hook — the parser derives its
+   * grammar from the label + these; per-client phrasings never touch code.
+   */
+  aliases?: string[];
 }
 
 export const ACTIONS: ActionDef[] = [
@@ -964,6 +977,9 @@ export const ACTIONS: ActionDef[] = [
     paramOptions: ["Unassigned", "Assigned", "Auto Approved", "Approved", "Rejected"],
     blurb: "Move the request into an underwriting queue.",
     execution: { sink: "workflows", status: "backend-required" },
+    // The bare label collides with the legacy "route … to <assignee>" grammar,
+    // so the canonical serialized phrasing carries the param mid-phrase.
+    aliases: ["move it into the {param} queue", "move to the {param} queue"],
   },
   {
     key: "set_underwriting_result",

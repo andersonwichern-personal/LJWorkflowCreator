@@ -23,6 +23,8 @@
  */
 
 import {
+  ACTIONS,
+  ActionDef,
   EVENTS,
   FIELDS,
   getAction,
@@ -210,6 +212,13 @@ function matchEvent(
     return { event: key, ambiguity: null };
   }
 
+  // Subject detection is scoped to the TRIGGER CLAUSE (the text before the
+  // first comma/"and"/"then"): a subject word inside a condition or action
+  // clause ("…, request document w9") must never create trigger ambiguity —
+  // the same cross-clause contamination class as the dual-trigger hijack.
+  const clauseBreak = /,|\band\b|\bthen\b/.exec(text);
+  const triggerClause = clauseBreak ? text.slice(0, clauseBreak.index) : text;
+
   const dualTriggerMatch = /\b(approved|rejected|denied|declined|accepted)\b\s+or\s+\b(approved|rejected|denied|declined|accepted)\b/.exec(text);
   if (dualTriggerMatch) {
     const [full, firstRaw, secondRaw] = dualTriggerMatch;
@@ -220,9 +229,9 @@ function matchEvent(
     const clauseSep = /,|\band\b/.exec(text);
     const inTriggerClause = !clauseSep || dualTriggerMatch.index < clauseSep.index;
     const subjects = [
-      /\bdocument\b/.test(text) ? "DOCUMENT" : null,
-      /\boffer\b/.test(text) ? "OFFER" : null,
-      /\bloan\b/.test(text) || /\brequest\b/.test(text) || /\bapplication\b/.test(text) ? "LOAN" : null,
+      /\bdocument\b/.test(triggerClause) ? "DOCUMENT" : null,
+      /\boffer\b/.test(triggerClause) ? "OFFER" : null,
+      /\bloan\b/.test(triggerClause) || /\brequest\b/.test(triggerClause) || /\bapplication\b/.test(triggerClause) ? "LOAN" : null,
     ].filter((s): s is "DOCUMENT" | "OFFER" | "LOAN" => s !== null);
     // N3: exactly one subject may be auto-picked. Several subjects ("a loan or
     // document is approved…") fall through to the single-event branches below,
@@ -292,8 +301,8 @@ function matchEvent(
 
   // Keep offer rejected to fallback to default ambiguity checks
 
-  const hasDocument = /\bdocument\b/.test(text);
-  const hasOffer = /\boffer\b/.test(text);
+  const hasDocument = /\bdocument\b/.test(triggerClause);
+  const hasOffer = /\boffer\b/.test(triggerClause);
 
   const err = /\b(error|failed|failure|booking error)\b/.exec(text);
   if (err) {
@@ -303,7 +312,7 @@ function matchEvent(
 
   const approved = /\b(approved|approval)\b/.exec(text);
   if (approved) {
-    const hasRequestish = /\b(request|template|origination|covenant|loan application)\b/.test(text);
+    const hasRequestish = /\b(request|template|origination|covenant|loan application)\b/.test(triggerClause);
     if (hasDocument) {
       return {
         event: null,
@@ -313,7 +322,7 @@ function matchEvent(
         },
       };
     }
-    if (!/\bloan\b/.test(text) && !/\bdocument\b/.test(text) && !hasRequestish) {
+    if (!/\bloan\b/.test(triggerClause) && !/\bdocument\b/.test(triggerClause) && !hasRequestish) {
       return {
         event: null,
         ambiguity: {
@@ -362,6 +371,98 @@ function matchEvent(
     return { event: core[1] === "fiserv" ? "FISERV LOAN" : "FMAC LOAN", ambiguity: null };
   }
 
+  // Every content-specific heuristic above has passed. The generic
+  // vocabulary scorer is the last resort — it derives trigger recognition
+  // from EVENTS itself, so new client events become parseable without
+  // touching this file (process over content).
+  return matchEventGeneric(text, spans);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Generic vocabulary-driven trigger fallback (process over content)          */
+/* -------------------------------------------------------------------------- */
+
+/** Levenshtein distance ≤ max, with row-minimum early exit. Small words only. */
+function editDistanceAtMost(a: string, b: string, max: number): boolean {
+  if (a === b) return true;
+  if (Math.abs(a.length - b.length) > max) return false;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      const v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+      cur.push(v);
+      if (v < rowMin) rowMin = v;
+    }
+    if (rowMin > max) return false;
+    prev = cur;
+  }
+  return prev[b.length] <= max;
+}
+
+/** Word equality tolerating one edit (typos, inflections) on words ≥5 chars. */
+function fuzzyWordEq(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (a.length < 5 || b.length < 5) return false;
+  return editDistanceAtMost(a, b, 1);
+}
+
+/**
+ * Score every EventDef (key + aliases) against the words of the instruction.
+ * Deterministic and conservative (N3): a unique perfect token match is taken;
+ * perfect ties or all-but-one near-misses become a question, never a guess;
+ * anything weaker stays unrecognized. One-word phrases are ignored — too
+ * hijackable by ordinary prose.
+ */
+function matchEventGeneric(
+  text: string,
+  spans: Spans
+): { event: string | null; ambiguity: ParseAmbiguity | null } {
+  const words: { w: string; idx: number }[] = [];
+  for (const m of text.matchAll(/[a-z0-9][a-z0-9-]*/g)) {
+    words.push({ w: m[0], idx: m.index ?? 0 });
+  }
+  interface Candidate {
+    key: string;
+    count: number;
+    total: number;
+    hits: { idx: number; len: number }[];
+  }
+  const candidates: Candidate[] = [];
+  for (const event of EVENTS) {
+    let best: Candidate | null = null;
+    for (const phrase of [event.key, ...(event.aliases ?? [])]) {
+      const tokens = norm(phrase).split(" ").filter(Boolean);
+      if (tokens.length < 2) continue;
+      const hits: { idx: number; len: number }[] = [];
+      let count = 0;
+      for (const token of tokens) {
+        const hit = words.find((word) => fuzzyWordEq(word.w, token));
+        if (hit) {
+          count++;
+          hits.push({ idx: hit.idx, len: hit.w.length });
+        }
+      }
+      const candidate: Candidate = { key: event.key, count, total: tokens.length, hits };
+      if (!best || candidate.count / candidate.total > best.count / best.total) best = candidate;
+    }
+    if (best && best.count >= 2) candidates.push(best);
+  }
+  const perfect = candidates.filter((c) => c.count === c.total);
+  if (perfect.length === 1) {
+    for (const hit of perfect[0].hits) consume(spans, hit.idx, hit.len);
+    return { event: perfect[0].key, ambiguity: null };
+  }
+  const near = perfect.length > 1 ? perfect : candidates.filter((c) => c.count === c.total - 1);
+  if (near.length) {
+    const options = near
+      .sort((a, b) => b.count / b.total - a.count / a.total || b.total - a.total)
+      .slice(0, 3)
+      .map((c) => c.key);
+    return { event: null, ambiguity: { question: "Which trigger event did you mean?", options } };
+  }
   return { event: null, ambiguity: null };
 }
 
@@ -603,6 +704,7 @@ function matchOutputs(
   for (const m of text.matchAll(negRe)) {
     const verb = m[2] === "route" || m[2] === "escalate" ? "assign" : m[2];
     excluded.add(verb);
+    excluded.add(m[2]); // raw verb too — the generic pass matches labels by first word
     consume(spans, m.index ?? 0, m[0].length);
     notes.push(`Ignored negated instruction: "${m[1].trim()}".`);
   }
@@ -784,7 +886,151 @@ function matchOutputs(
     }
   }
 
+  // Generic vocabulary pass over whatever the legacy matchers did not consume:
+  // grammar is derived from each ActionDef's label/aliases, so every other
+  // action in the vocabulary — including future client actions — parses with
+  // zero changes to this file (process over content).
+  matchOutputsGeneric(maskConsumed(text, spans), eventKey, spans, opts, unresolved, excluded, outputs);
+
   return outputs;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Generic vocabulary-driven action grammar (process over content)            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Actions with dedicated legacy grammar above. The generic pass skips them so
+ * every pinned behavior (capture shapes, output order, the special authority
+ * and remind forms) stays byte-for-byte identical.
+ */
+const LEGACY_ACTION_KEYS = new Set([
+  "assign_user",
+  "assign_authority",
+  "notify",
+  "change_stage",
+  "add_tag",
+  "close_request",
+]);
+
+const GENERIC_DELAY =
+  "(?:\\s+(?:after|in)\\s+(\\d{1,3})\\s*(day|days|hour|hours|minute|minutes|min|mins|week|weeks))?";
+const GENERIC_GATE = "(?:\\s+(?:if|when)\\s+(.+?))?";
+// A "." only terminates at end of clause (followed by whitespace or the end),
+// so dots inside URLs/filenames never truncate a parameter capture.
+const GENERIC_END =
+  "(?=\\s*(?:,|;|$|\\.\\s|\\.$|\\band\\b|\\bthen\\b|\\bunless\\b|\\botherwise\\b|\\bexcept\\b))";
+/** Free-text param charset — URL-ish characters allowed; must not start with whitespace. */
+const GENERIC_PARAM = "([a-z0-9./:_?#=&%-][a-z0-9 ./:_?#=&%-]{1,59}?)";
+
+interface GenericActionMatch {
+  index: number;
+  length: number;
+  action: ActionDef;
+  paramRaw: string | null;
+  delayQty?: string;
+  delayUnit?: string;
+  gate?: string;
+}
+
+/**
+ * Try one action's label + aliases (longest phrase first) against the text.
+ * A `{param}` placeholder positions the parameter mid-phrase; otherwise the
+ * parameter follows the phrase. Enum params try the option list before the
+ * free capture (a free capture becomes an unresolved slot — N1).
+ */
+function matchGenericAction(text: string, action: ActionDef): GenericActionMatch | null {
+  const phrases = [action.label, ...(action.aliases ?? [])]
+    .map((phrase) => norm(phrase))
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+  for (const phrase of phrases) {
+    const hasSlot = phrase.includes("{param}");
+    const [preRaw, postRaw = ""] = hasSlot ? phrase.split("{param}") : [phrase, ""];
+    const pre = escapeRe(preRaw.trim());
+    const post = postRaw.trim() ? `\\s+${escapeRe(postRaw.trim())}` : "";
+    const sources: string[] = [];
+    if (action.paramKind === "none") {
+      sources.push(`\\b${pre}${GENERIC_DELAY}${GENERIC_GATE}${GENERIC_END}`);
+    } else {
+      if (action.paramKind === "enum" && action.paramOptions?.length) {
+        const optionAlt = [...action.paramOptions]
+          .sort((a, b) => b.length - a.length)
+          .map((option) => escapeRe(norm(option)))
+          .join("|");
+        sources.push(`\\b${pre}\\s+(${optionAlt})\\b${post}${GENERIC_DELAY}${GENERIC_GATE}${GENERIC_END}`);
+      }
+      sources.push(`\\b${pre}\\s+${GENERIC_PARAM}${post}${GENERIC_DELAY}${GENERIC_GATE}${GENERIC_END}`);
+    }
+    for (const source of sources) {
+      const m = new RegExp(source).exec(text);
+      if (!m) continue;
+      const tail = action.paramKind === "none" ? 1 : 2;
+      return {
+        index: m.index,
+        length: m[0].length,
+        action,
+        paramRaw: action.paramKind === "none" ? null : (m[1] ?? null),
+        delayQty: m[tail],
+        delayUnit: m[tail + 1],
+        gate: m[tail + 2],
+      };
+    }
+  }
+  return null;
+}
+
+function matchOutputsGeneric(
+  maskedText: string,
+  eventKey: string,
+  spans: Spans,
+  opts: ParseOptions | undefined,
+  unresolved: UnresolvedSlot[],
+  excludedVerbs: Set<string>,
+  outputs: RuleOutput[]
+) {
+  const matches: GenericActionMatch[] = [];
+  for (const action of ACTIONS) {
+    if (LEGACY_ACTION_KEYS.has(action.key)) continue;
+    if (excludedVerbs.has(norm(action.label).split(" ")[0])) continue;
+    const match = matchGenericAction(maskedText, action);
+    if (match) matches.push(match);
+  }
+  // Reading order, so multi-action sentences keep their written sequence.
+  matches.sort((a, b) => a.index - b.index);
+  for (const match of matches) {
+    consume(spans, match.index, match.length);
+    const def = match.action;
+    const output: RuleOutput = { action: def.key, params: {} };
+    let slot: UnresolvedSlot | null = null;
+    if (def.paramKind !== "none" && match.paramRaw != null) {
+      const heard = stripTrailingPunct(match.paramRaw).replace(/\s+/g, " ");
+      const param = paramKeyFor(def.key);
+      const options = def.paramOptions ?? [];
+      const exact = options.find((option) => norm(option) === norm(heard));
+      if (exact) {
+        output.params[param] = def.paramKind === "text" ? toInstanceRef(def.key, exact, opts) : exact;
+      } else if (options.length) {
+        // Reject-don't-coerce: an unknown value never lands in the rule.
+        slot = { where: "action-param", actionIndex: 0, param, heard, suggestions: fuzzyMatches(heard, options) };
+      } else {
+        output.params[param] = heard;
+      }
+    }
+    if (match.delayQty && match.delayUnit) {
+      const delayMinutes = parseDelayText(`${match.delayQty} ${match.delayUnit}`);
+      if (delayMinutes != null) output.delayMinutes = delayMinutes;
+    }
+    if (match.gate) {
+      const gate = parseActionGate(match.gate, eventKey, opts, unresolved);
+      if (gate) output.when = gate;
+    }
+    outputs.push(output);
+    if (slot) {
+      slot.actionIndex = outputs.length - 1;
+      unresolved.push(slot);
+    }
+  }
 }
 
 function matchControls(text: string): Partial<WorkflowRule["controls"]> {
@@ -891,8 +1137,6 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
     };
   }
 
-  const conds = matchConditions(text, eventKey, spans, opts, unresolved);
-  conds.push(...matchCategoryConditions(text, spans, conds));
   // The main action lane must never read the otherwise/else clause: an action
   // type that appears only there ("… otherwise notify Omar") would leak into
   // the primary lane. Mask the else region (space-padded so span indices stay
@@ -901,7 +1145,14 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
   const mainText = elseMatch
     ? text.slice(0, elseMatch.index) + " ".repeat(text.length - elseMatch.index)
     : text;
+  // Outputs BEFORE conditions: generic action phrases legitimately embed
+  // field labels and option words ("set underwriting result to Auto
+  // Approved"), and the action must be able to claim them first. The
+  // condition scan reads the raw text and never consults spans, so its own
+  // results are order-independent.
   const outputs = matchOutputs(mainText, eventKey, spans, opts, unresolved, notes);
+  const conds = matchConditions(text, eventKey, spans, opts, unresolved);
+  conds.push(...matchCategoryConditions(text, spans, conds));
   const controlPatch = matchControls(text);
   // AND/OR is decided on the UNCONSUMED text only: the trigger's own "or"
   // ("approved or rejected") is already consumed and must not flip AND-joined

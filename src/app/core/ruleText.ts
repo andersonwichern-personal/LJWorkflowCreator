@@ -160,20 +160,14 @@ export function actionPhrase(output: RuleOutput): string {
     case "change_stage": phrase = `change stage to ${v}`; break;
     case "add_tag": phrase = `add tag ${v}`; break;
     case "close_request": phrase = "close the request"; break;
-    case "remove_tag": phrase = `remove tag ${v}`; break;
     case "route_to_queue": phrase = `move it into the ${v} queue`; break;
-    case "set_underwriting_result": phrase = `record the underwriting result as ${v}`; break;
-    case "request_signature": phrase = `request a signature from ${v}`; break;
-    case "pull_credit": phrase = "pull credit"; break;
-    case "run_extraction": phrase = "run document extraction"; break;
-    case "request_document": phrase = `request the ${v} document`; break;
-    case "assign_checklist": phrase = `attach the ${v} checklist`; break;
-    case "make_offer": phrase = `make an offer for ${v}`; break;
-    case "trigger_booking": phrase = `send the booking to ${v}`; break;
-    case "log_event": phrase = `log a system event (${v})`; break;
-    case "send_webhook": phrase = `send a webhook to ${v}`; break;
     default:
-      phrase = def ? `${def.label}${value ? ` ${value}` : ""}` : output.action.replace(/_/g, " ");
+      // Every other action serializes as its own vocabulary label + param —
+      // exactly the phrase the parser's generic vocabulary grammar reads
+      // back, so new client actions round-trip with zero changes here.
+      phrase = def
+        ? `${def.label}${def.paramKind === "none" ? "" : ` ${v}`}`
+        : output.action.replace(/_/g, " ");
   }
   if (output.delayMinutes && output.delayMinutes > 0) {
     phrase += ` after ${formatDelay(output.delayMinutes)}`;

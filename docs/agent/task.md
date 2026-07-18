@@ -531,3 +531,72 @@ Verification: `npm test` green (all 14 gates; Sweet UX now 32 assertions),
 1710×981 plus 1024×768 with zero page overflow or console warnings/errors.
 Anderson explicitly removed mobile-specific QA from the Phase 1.8 acceptance
 scope after the initial no-overflow check.
+
+## Phase 1.9 — enterprise UI polish (2026-07-18)
+
+- [x] Centralize the enterprise color, spacing, radius, type, and elevation tokens
+- [x] Tighten the global shell and shared page/button primitives
+- [x] Refine the workflows list into a compact bordered enterprise data surface
+- [x] Reframe the composer as a compact three-column workbench without changing behavior
+- [x] Replace builder emoji decoration with monochrome inline/CSS-native icons
+- [x] Rebuild composer review as one bounded six-step Workflow review report
+- [x] Keep clarifications inline, amber, and blocking without changing validation semantics
+- [x] Make the Sweet spiral spin briefly on workflow changes, settle fully, and remain hover-interactive
+- [x] Refine workflow detail into a compact metadata header and Interpretation/Test/Safeguards report shell
+- [x] Refine the reviews queue, proposal rows, and empty state without fabricating fields
+- [ ] Format affected files and extend browserless UI contracts
+- [ ] Verify the full test suite and production build
+- [ ] Browser-QA affected routes at 1710x981, 1024x768, and 390x844
+- [ ] Commit as release 1.9
+
+---
+
+# Parser Engine — Process over Content (2026-07-18, Claude)
+
+Anderson's directive: keep improving the parser "brain"; the process must be
+content-agnostic because events/fields/actions change per client. All work in
+`packages/rule-core` (+ sync); Codex's in-flight Phase 1.9 UI files untouched.
+
+- [x] **Generic action grammar** — the parser now derives action recognition
+      from each `ActionDef`'s `label` + new optional `aliases` (with `{param}`
+      mid-phrase templates, e.g. route_to_queue's "move it into the {param}
+      queue"). Every action in the vocabulary parses — enum params resolve or
+      slot unresolved (reject-don't-coerce), free-text params capture
+      URL-safe charsets, and `after/in N unit` delays + `if/when` gates work
+      on ALL actions, not just change_stage. Legacy matchers run first,
+      untouched, so every pinned behavior is byte-identical; the generic pass
+      reads only the unconsumed remainder. `parseActionFragment` (revisions)
+      inherits the grammar for free.
+- [x] **Generic trigger scorer** — when every content heuristic misses, events
+      are scored against `EventDef.key` + new optional `aliases` with
+      word-level fuzzy matching (edit distance ≤1 on words ≥5 chars): a unique
+      perfect match is taken ("when a loan is aproved…", "when the request
+      stage changes…"), ties and near-misses ASK (N3), prose never hijacks.
+      New client events become parseable with zero parser edits.
+- [x] **Clause-scoped subject detection** — trigger-ambiguity subjects
+      (document/offer/loan/request) are now read from the trigger clause only,
+      so "…, request document w9" can't raise the loan-vs-document question
+      (same contamination class as the dual-trigger hijack fix).
+- [x] **Outputs before conditions** in `parseInstruction` — generic action
+      phrases legitimately embed field labels/option words ("set underwriting
+      result to Auto Approved"); actions claim them first. The condition scan
+      reads raw text and never consults spans, so its results are
+      order-independent (suite-verified).
+- [x] **Else-lane masking** retained; serializer (`ruleText.ts`) now emits
+      every action as its vocabulary label + param, so builder→text→Enter
+      round-trips the full action set.
+- [x] `core-tests/assert-parser-engine.ts` — **132 assertions**, wired into
+      `npm test`. Includes full-vocabulary sweeps that iterate EVERY event,
+      EVERY action, and EVERY condition field from the vocabulary itself —
+      when client content changes, the sweeps cover it without a test edit.
+      Plus pins: typo/inflection resolution, near-miss questions, no-hijack,
+      alias templates, generic delays/gates/slots, negation over generic
+      actions, legacy/generic masking, and the uncovered-fragment contract.
+- [x] Verify: `npm test` 509 PASS / exit 0 (17 gates incl. purity + sync);
+      `npm run build` clean. Codex's dirty Phase 1.9 files excluded from the
+      commit.
+
+Known limits (deliberate, deterministic): the scorer needs ≥2 matched tokens
+(one-word phrases are hijackable); rough option-scan supersets remain on
+re-parse; the legacy "route … to <assignee>" grammar still wins over the bare
+"route to queue" label (hence the alias).

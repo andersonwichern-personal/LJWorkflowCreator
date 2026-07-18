@@ -227,10 +227,44 @@ interface CanvasEdge {
   to: number;
 }
 
-/** Cubic bezier between two node centers (45px = node radius offset, spec §8). */
-function bezierPath(ax: number, ay: number, bx: number, by: number): string {
-  const dx = Math.abs(bx - ax) * 0.4;
-  return `M ${ax + 45} ${ay} C ${ax + 45 + dx} ${ay}, ${bx - 45 - dx} ${by}, ${bx - 45} ${by}`;
+interface CanvasPoint {
+  x: number;
+  y: number;
+}
+
+const CANVAS_NODE_HALF_WIDTH = 76;
+const CANVAS_NODE_HALF_HEIGHT = 34;
+const CANVAS_TRASH_HEIGHT = 82;
+
+/**
+ * Intersection of the line between two node centers and the edge of the
+ * enterprise node card. Keeping the anchor on the actual card boundary makes
+ * connections stay legible when a node is moved above, below, or behind its
+ * neighbor instead of assuming every flow is left-to-right.
+ */
+function canvasNodeAnchor(from: CanvasPoint, toward: CanvasPoint): CanvasPoint {
+  const dx = toward.x - from.x;
+  const dy = toward.y - from.y;
+  if (dx === 0 && dy === 0) return from;
+  const scale = Math.min(
+    CANVAS_NODE_HALF_WIDTH / Math.max(Math.abs(dx), 0.001),
+    CANVAS_NODE_HALF_HEIGHT / Math.max(Math.abs(dy), 0.001)
+  );
+  return { x: from.x + dx * scale, y: from.y + dy * scale };
+}
+
+/** Shape-aware cubic connector that also handles vertical and reverse flows. */
+function canvasConnectorPath(from: CanvasPoint, to: CanvasPoint): string {
+  const start = canvasNodeAnchor(from, to);
+  const end = canvasNodeAnchor(to, from);
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    const bend = Math.max(36, Math.abs(dx) * 0.42) * (dx >= 0 ? 1 : -1);
+    return `M ${start.x} ${start.y} C ${start.x + bend} ${start.y}, ${end.x - bend} ${end.y}, ${end.x} ${end.y}`;
+  }
+  const bend = Math.max(36, Math.abs(dy) * 0.42) * (dy >= 0 ? 1 : -1);
+  return `M ${start.x} ${start.y} C ${start.x} ${start.y + bend}, ${end.x} ${end.y - bend}, ${end.x} ${end.y}`;
 }
 
 /** Default trigger for a palette-placed event node — first entry of the first picker group. */
@@ -246,10 +280,20 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
           <span aria-hidden="true">←</span> Workflows
         </button>
 
-        <section class="hero" aria-labelledby="composer-title">
+        <section
+          class="hero"
+          aria-labelledby="composer-title"
+          (focusin)="workflowFocusIn()"
+          (focusout)="workflowFocusOut($event)"
+          (pointerdown)="workflowPointerDown()"
+        >
           <div class="hero-top">
             <div class="spiral-wrap">
-              <wf-sweet-spiral [state]="spiralState()" [typingPulse]="typingPulse()" />
+              <wf-sweet-spiral
+                [state]="spiralState()"
+                [typingPulse]="typingPulse()"
+                [active]="spiralActive()"
+              />
             </div>
 
             <div class="invitation">
@@ -500,106 +544,151 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
 
           <section class="canvas-diagram" aria-label="Workflow diagram canvas">
             <div class="canvas-header">
-              <h2 class="canvas-title">Workflow diagram</h2>
-              <div class="canvas-toolbar">
+              <div class="canvas-heading-group">
+                <h2 class="canvas-title">Workflow diagram</h2>
+                <p>{{ canvasNodes().length }} nodes · {{ canvasEdges().length }} connections</p>
+              </div>
+              <div class="canvas-toolbar" aria-label="Diagram tools">
                 <button
                   type="button"
                   class="canvas-btn"
                   [class.active]="connectMode()"
+                  [attr.aria-pressed]="connectMode()"
                   (click)="toggleConnectMode()"
-                >🔗 {{ connectMode() ? 'Connecting…' : 'Connect mode' }}</button>
-                <button type="button" class="canvas-btn ghost" (click)="clearCanvas()">Clear board</button>
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 10.5 10.5 5.5M4 7H2.75A1.75 1.75 0 0 0 1 8.75v3.5A1.75 1.75 0 0 0 2.75 14h3.5A1.75 1.75 0 0 0 8 12.25V11m0-6V3.75A1.75 1.75 0 0 1 9.75 2h3.5A1.75 1.75 0 0 1 15 3.75v3.5A1.75 1.75 0 0 1 13.25 9H12" /></svg>
+                  {{ connectMode() ? 'Choose destination' : 'Connect nodes' }}
+                </button>
+                <button type="button" class="canvas-btn ghost" (click)="arrangeCanvas()">
+                  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3h12M2 8h12M2 13h12M4 1v4m4 1v4m4 1v4" /></svg>
+                  Arrange
+                </button>
               </div>
             </div>
 
             <div class="canvas-body">
-              <aside class="canvas-palette" aria-label="Node palette">
-                <p class="palette-heading">Drag onto canvas</p>
-                <div
+              <aside class="canvas-palette" aria-label="Node library">
+                <p class="palette-heading">Node library</p>
+                <p class="palette-intro">Click to add and connect automatically, or drag to place.</p>
+                <button
+                  type="button"
                   class="palette-node"
                   draggable="true"
                   (dragstart)="paletteDragStart($event, 'event')"
                   (click)="paletteClick('event')"
                 >
-                  <div class="pnode-shape event-shape">▲</div>
-                  <span>Event<br />(circle)</span>
-                </div>
-                <div
+                  <span class="pnode-shape event-shape" aria-hidden="true"><span></span></span>
+                  <span class="palette-copy"><strong>Trigger</strong><small>Starts the workflow</small></span>
+                  <span class="palette-add" aria-hidden="true">+</span>
+                </button>
+                <button
+                  type="button"
                   class="palette-node"
                   draggable="true"
                   (dragstart)="paletteDragStart($event, 'condition')"
                   (click)="paletteClick('condition')"
                 >
-                  <div class="pnode-shape cond-shape"><span>◆</span></div>
-                  <span>Condition<br />(diamond)</span>
-                </div>
-                <div
+                  <span class="pnode-shape cond-shape" aria-hidden="true"><span></span></span>
+                  <span class="palette-copy"><strong>Condition</strong><small>Evaluates a rule</small></span>
+                  <span class="palette-add" aria-hidden="true">+</span>
+                </button>
+                <button
+                  type="button"
                   class="palette-node"
                   draggable="true"
                   (dragstart)="paletteDragStart($event, 'output')"
                   (click)="paletteClick('output')"
                 >
-                  <div class="pnode-shape output-shape">●</div>
-                  <span>Output<br />(circle)</span>
-                </div>
-                <p class="palette-hint">
-                  Drag a shape onto the board, or click to place at center. Drag the purple port dot to connect nodes.
-                </p>
+                  <span class="pnode-shape output-shape" aria-hidden="true"><span></span></span>
+                  <span class="palette-copy"><strong>Action</strong><small>Completes the work</small></span>
+                  <span class="palette-add" aria-hidden="true">+</span>
+                </button>
+                <p class="palette-hint">Drag a node’s right handle to make a custom connection.</p>
               </aside>
 
               <div
                 class="canvas-stage"
                 #canvasStage
+                [class.is-node-dragging]="draggingCanvasNodeId() !== null"
+                [class.is-trash-hot]="trashHot()"
                 (dragover)="$event.preventDefault()"
                 (drop)="canvasDrop($event)"
               >
                 <svg class="canvas-svg" aria-hidden="true">
                   <defs>
                     <marker id="wf-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-                      <path d="M0,0 L8,3 L0,6 Z" fill="#6941c6" />
+                      <path class="canvas-arrow" d="M0,0 L8,3 L0,6 Z" />
                     </marker>
                   </defs>
                   @for (edge of edgePaths(); track edge.key) {
-                    <path [attr.d]="edge.d" stroke="#6941c6" stroke-width="2" fill="none" marker-end="url(#wf-arrow)" />
+                    <path class="canvas-edge" [attr.d]="edge.d" marker-end="url(#wf-arrow)" />
                   }
                   @if (tempEdgePath(); as d) {
-                    <path [attr.d]="d" stroke="#6941c6" stroke-width="2" fill="none" stroke-dasharray="6 4" />
+                    <path class="canvas-edge canvas-edge-temp" [attr.d]="d" />
                   }
                 </svg>
                 @if (!canvasNodes().length) {
-                  <p class="canvas-empty">
-                    Drag an Event, Condition or Output here to start — or describe your workflow above and the diagram will build itself.
-                  </p>
+                  <div class="canvas-empty">
+                    <span class="canvas-empty-icon" aria-hidden="true"></span>
+                    <strong>Build the workflow visually</strong>
+                    <p>Add a trigger, condition, or action. Nodes connect automatically as the rule grows.</p>
+                  </div>
                 }
                 @for (node of canvasNodes(); track node.id) {
                   <div
                     class="canvas-node"
+                    role="button"
+                    tabindex="0"
                     [class.cn-event]="node.type === 'event'"
                     [class.cn-condition]="node.type === 'condition'"
                     [class.cn-output]="node.type === 'output'"
                     [class.cn-selected]="selectedCanvasNodeId() === node.id"
                     [class.cn-connect-from]="connectFrom() === node.id"
+                    [class.cn-dragging]="draggingCanvasNodeId() === node.id"
                     [style.left.px]="node.x"
                     [style.top.px]="node.y"
                     [attr.data-node-id]="node.id"
-                    (mousedown)="nodeMouseDown($event, node)"
+                    [attr.aria-label]="canvasNodeTypeLabel(node) + ': ' + canvasNodeLabel(node)"
+                    (pointerdown)="nodePointerDown($event, node)"
+                    (keydown.enter)="selectCanvasNode(node.id)"
+                    (keydown.space)="$event.preventDefault(); selectCanvasNode(node.id)"
                   >
-                    <div class="cn-shape">
-                      @if (node.type === 'condition') {
-                        <span>{{ canvasNodeLabel(node) }}</span>
-                      } @else {
-                        {{ canvasNodeLabel(node) }}
-                      }
-                    </div>
-                    <div class="cn-caption">{{ canvasNodeCaption(node) }}</div>
-                    <div class="cn-port" title="Drag to connect" (mousedown)="portMouseDown($event, node)"></div>
+                    <span class="cn-port cn-port-in" aria-hidden="true"></span>
+                    <span class="cn-accent" aria-hidden="true"></span>
+                    <span class="cn-content">
+                      <small>{{ canvasNodeTypeLabel(node) }}</small>
+                      <strong>{{ canvasNodeLabel(node) }}</strong>
+                      <span>{{ canvasNodeCaption(node) || 'Needs configuration' }}</span>
+                    </span>
+                    <span
+                      class="cn-port cn-port-out"
+                      title="Drag to connect"
+                      aria-hidden="true"
+                      (pointerdown)="portPointerDown($event, node)"
+                    ></span>
                   </div>
                 }
+
+                <div
+                  class="canvas-trash"
+                  [class.hot]="trashHot()"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5.5h13M8 2.75h4M5.5 5.5l.75 11h7.5l.75-11M8 8.5v5m4-5v5" /></svg>
+                  <span>
+                    <strong>{{ trashHot() ? 'Release to remove node' : 'Drag down to remove' }}</strong>
+                    <small>The workflow rule updates immediately</small>
+                  </span>
+                </div>
               </div>
 
               <aside class="canvas-inspector" aria-label="Node inspector">
                 @if (selectedCanvasNode(); as node) {
-                  <p class="inspector-title">{{ node.type }} node</p>
+                  <div class="inspector-head">
+                    <p class="inspector-title">Selected node</p>
+                    <span>{{ canvasNodeTypeLabel(node) }}</span>
+                  </div>
                   @if (node.type === 'event') {
                     <label class="insp-label" for="canvas-event">Event</label>
                     <select
@@ -611,7 +700,7 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
                         <optgroup [label]="group.label">
                           @for (entry of group.entries; track entry.key) {
                             <option [value]="entry.key" [selected]="canvasNodeEventKey(node) === entry.key">
-                              {{ entry.emoji }} {{ entry.label }}
+                              {{ entry.label }}
                             </option>
                           }
                         </optgroup>
@@ -662,7 +751,7 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
                         <optgroup [label]="group.label">
                           @for (entry of group.entries; track entry.key) {
                             <option [value]="entry.key" [selected]="canvasNodeActionKey(node) === entry.key">
-                              {{ entry.emoji }} {{ entry.label }}
+                              {{ entry.label }}
                             </option>
                           }
                         </optgroup>
@@ -695,10 +784,15 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
                       }
                     }
                   }
-                  <button class="insp-delete" type="button" (click)="deleteCanvasNode(node.id)">Delete node</button>
-                  <button class="insp-save" type="button" (click)="commitCanvasToRule()">Save workflow</button>
+                  <p class="inspector-sync">Changes sync to the workflow description automatically.</p>
+                  <button class="insp-delete" type="button" (click)="deleteCanvasNode(node.id)">Remove node</button>
+                  <button class="insp-save" type="button" (click)="commitCanvasToRule()">Apply changes</button>
                 } @else {
-                  <p class="insp-empty">Select a node to configure it.</p>
+                  <div class="insp-empty">
+                    <span aria-hidden="true"></span>
+                    <strong>Select a node</strong>
+                    <p>Its workflow settings will appear here.</p>
+                  </div>
                 }
               </aside>
             </div>
@@ -1113,6 +1207,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly focused = signal(false);
+  protected readonly workflowEditing = signal(false);
   protected readonly typingPulse = signal(0);
   protected readonly phase = signal<ComposerPhase>('idle');
   protected readonly parsedDescription = signal<string | null>(null);
@@ -1400,14 +1495,17 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
   protected readonly selectedCanvasNodeId = signal<number | null>(null);
   protected readonly connectMode = signal(false);
   protected readonly connectFrom = signal<number | null>(null);
-  protected readonly tempEdge = signal<{ x1: number; y1: number; x2: number; y2: number } | null>(
-    null
-  );
+  protected readonly tempEdge = signal<{ fromId: number; x: number; y: number } | null>(null);
+  protected readonly draggingCanvasNodeId = signal<number | null>(null);
+  protected readonly trashHot = signal(false);
   private canvasSeq = 0;
   private canvasSourced = false;
 
   protected readonly selectedCanvasNode = computed(
     () => this.canvasNodes().find((node) => node.id === this.selectedCanvasNodeId()) ?? null
+  );
+  protected readonly spiralActive = computed(
+    () => this.workflowEditing() || this.draggingCanvasNodeId() !== null || this.tempEdge() !== null
   );
 
   protected readonly edgePaths = computed(() => {
@@ -1416,14 +1514,18 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     for (const edge of this.canvasEdges()) {
       const a = byId.get(edge.from);
       const b = byId.get(edge.to);
-      if (a && b) paths.push({ key: `${edge.from}-${edge.to}`, d: bezierPath(a.x, a.y, b.x, b.y) });
+      if (a && b) {
+        paths.push({ key: `${edge.from}-${edge.to}`, d: canvasConnectorPath(a, b) });
+      }
     }
     return paths;
   });
 
   protected readonly tempEdgePath = computed(() => {
     const edge = this.tempEdge();
-    return edge ? bezierPath(edge.x1, edge.y1, edge.x2, edge.y2) : null;
+    if (!edge) return null;
+    const from = this.canvasNodes().find((node) => node.id === edge.fromId);
+    return from ? canvasConnectorPath(from, edge) : null;
   });
 
   private readonly canvasSync = effect(() => {
@@ -1445,24 +1547,61 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
   });
 
   private rebuildCanvasFromRule(rule: WorkflowRule) {
-    const vy = (i: number, count: number) =>
-      Math.max(90, Math.min(430, 250 + (i - (count - 1) / 2) * 130));
     const nodes: CanvasNode[] = [];
     rule.triggers.forEach((_, i) =>
-      nodes.push({ id: ++this.canvasSeq, type: 'event', x: 160, y: vy(i, rule.triggers.length), ref: i })
+      nodes.push({ id: ++this.canvasSeq, type: 'event', x: 0, y: 0, ref: i })
     );
     const leafRefs = rule.conditions.children
       .map((child, i) => (isGroup(child) ? -1 : i))
       .filter((i) => i >= 0);
     leafRefs.forEach((childIndex, i) =>
-      nodes.push({ id: ++this.canvasSeq, type: 'condition', x: 460, y: vy(i, leafRefs.length), ref: childIndex })
+      nodes.push({ id: ++this.canvasSeq, type: 'condition', x: 0, y: 0, ref: childIndex })
     );
     rule.actions.forEach((_, i) =>
-      nodes.push({ id: ++this.canvasSeq, type: 'output', x: 760, y: vy(i, rule.actions.length), ref: i })
+      nodes.push({ id: ++this.canvasSeq, type: 'output', x: 0, y: 0, ref: i })
     );
-    const events = nodes.filter((node) => node.type === 'event');
-    const conds = nodes.filter((node) => node.type === 'condition');
-    const outputs = nodes.filter((node) => node.type === 'output');
+    const laidOut = this.layoutCanvasNodes(nodes);
+    this.canvasNodes.set(laidOut);
+    this.canvasEdges.set(this.canonicalCanvasEdges(laidOut));
+    if (!laidOut.some((node) => node.id === this.selectedCanvasNodeId())) {
+      this.selectedCanvasNodeId.set(null);
+    }
+    this.connectFrom.set(null);
+  }
+
+  /** Compact three-lane layout sized from the actual canvas, including mobile. */
+  private layoutCanvasNodes(nodes: CanvasNode[]): CanvasNode[] {
+    const stage = this.canvasStage?.nativeElement;
+    const width = Math.max(320, stage?.clientWidth ?? 760);
+    const height = Math.max(380, stage?.clientHeight ?? 520);
+    const inset = Math.min(150, Math.max(82, width * 0.18));
+    const laneX: Record<CanvasNode['type'], number> = {
+      event: inset,
+      condition: width / 2,
+      output: width - inset,
+    };
+    const positioned = new Map<number, CanvasPoint>();
+    for (const type of ['event', 'condition', 'output'] as const) {
+      const lane = nodes.filter((node) => node.type === type).sort((a, b) => a.ref - b.ref);
+      const top = 58;
+      const bottom = Math.max(top, height - CANVAS_TRASH_HEIGHT - 24);
+      const span = Math.min(Math.max(0, lane.length - 1) * 92, bottom - top);
+      const start = (top + bottom - span) / 2;
+      lane.forEach((node, index) => {
+        positioned.set(node.id, {
+          x: laneX[type],
+          y: lane.length > 1 ? start + index * (span / (lane.length - 1)) : (top + bottom) / 2,
+        });
+      });
+    }
+    return nodes.map((node) => ({ ...node, ...positioned.get(node.id)! }));
+  }
+
+  /** The canonical rule topology. It heals the chain after add/remove. */
+  private canonicalCanvasEdges(nodes: CanvasNode[]): CanvasEdge[] {
+    const events = nodes.filter((node) => node.type === 'event').sort((a, b) => a.ref - b.ref);
+    const conds = nodes.filter((node) => node.type === 'condition').sort((a, b) => a.ref - b.ref);
+    const outputs = nodes.filter((node) => node.type === 'output').sort((a, b) => a.ref - b.ref);
     const edges: CanvasEdge[] = [];
     if (conds.length) {
       for (const event of events) edges.push({ from: event.id, to: conds[0].id });
@@ -1471,12 +1610,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     } else {
       for (const event of events) for (const output of outputs) edges.push({ from: event.id, to: output.id });
     }
-    this.canvasNodes.set(nodes);
-    this.canvasEdges.set(edges);
-    if (!nodes.some((node) => node.id === this.selectedCanvasNodeId())) {
-      this.selectedCanvasNodeId.set(null);
-    }
-    this.connectFrom.set(null);
+    return edges;
   }
 
   /* ---- Canvas: palette + stage interactions ---- */
@@ -1486,8 +1620,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
   }
 
   protected paletteClick(type: CanvasNode['type']) {
-    const center = this.canvasStageCenter();
-    this.addCanvasNode(type, center.x, center.y);
+    this.addCanvasNode(type, 0, 0, true);
   }
 
   protected canvasDrop(e: DragEvent) {
@@ -1495,16 +1628,24 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     const type = e.dataTransfer?.getData('nodeType') as CanvasNode['type'] | '';
     if (type !== 'event' && type !== 'condition' && type !== 'output') return;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    this.addCanvasNode(type, e.clientX - rect.left, e.clientY - rect.top);
+    this.addCanvasNode(type, e.clientX - rect.left, e.clientY - rect.top, false);
   }
 
-  private canvasStageCenter(): { x: number; y: number } {
-    const el = this.canvasStage?.nativeElement;
-    return el ? { x: el.clientWidth / 2, y: el.clientHeight / 2 } : { x: 460, y: 250 };
+  protected arrangeCanvas() {
+    const nodes = this.layoutCanvasNodes(this.canvasNodes());
+    this.canvasNodes.set(nodes);
+    this.canvasEdges.set(this.canonicalCanvasEdges(nodes));
+    this.connectFrom.set(null);
+    this.tempEdge.set(null);
+    this.typingPulse.update((pulse) => pulse + 1);
   }
 
-  protected nodeMouseDown(e: MouseEvent, node: CanvasNode) {
-    if ((e.target as HTMLElement).classList.contains('cn-port')) return;
+  protected selectCanvasNode(id: number) {
+    this.selectedCanvasNodeId.set(id);
+  }
+
+  protected nodePointerDown(e: PointerEvent, node: CanvasNode) {
+    if ((e.target as HTMLElement).classList.contains('cn-port') || e.button !== 0) return;
     if (this.connectMode()) {
       this.handleConnectClick(node.id);
       return;
@@ -1516,45 +1657,91 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     const rect = stage.getBoundingClientRect();
     const offsetX = e.clientX - rect.left - node.x;
     const offsetY = e.clientY - rect.top - node.y;
-    const move = (ev: MouseEvent) => {
-      const x = Math.max(20, Math.min(rect.width - 20, ev.clientX - rect.left - offsetX));
-      const y = Math.max(20, Math.min(rect.height - 20, ev.clientY - rect.top - offsetY));
+    this.draggingCanvasNodeId.set(node.id);
+    this.trashHot.set(false);
+    this.typingPulse.update((pulse) => pulse + 1);
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== e.pointerId) return;
+      const localX = ev.clientX - rect.left;
+      const localY = ev.clientY - rect.top;
+      const insideX = localX >= 0 && localX <= rect.width;
+      this.trashHot.set(insideX && localY >= rect.height - CANVAS_TRASH_HEIGHT && localY <= rect.height);
+      const x = Math.max(
+        CANVAS_NODE_HALF_WIDTH + 8,
+        Math.min(rect.width - CANVAS_NODE_HALF_WIDTH - 8, localX - offsetX)
+      );
+      const y = Math.max(
+        CANVAS_NODE_HALF_HEIGHT + 8,
+        Math.min(rect.height - CANVAS_NODE_HALF_HEIGHT - 8, localY - offsetY)
+      );
       this.canvasNodes.update((nodes) => nodes.map((n) => (n.id === node.id ? { ...n, x, y } : n)));
     };
-    const up = () => {
-      document.removeEventListener('mousemove', move);
-      document.removeEventListener('mouseup', up);
+    let finished = false;
+    let finish: (ev: PointerEvent) => void;
+    let mouseFinish: () => void;
+    const completeDrag = () => {
+      if (finished) return;
+      finished = true;
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', finish);
+      document.removeEventListener('pointercancel', finish);
+      document.removeEventListener('mouseup', mouseFinish);
+      const remove = this.trashHot();
+      this.draggingCanvasNodeId.set(null);
+      this.trashHot.set(false);
+      if (remove) this.deleteCanvasNode(node.id);
     };
-    document.addEventListener('mousemove', move);
-    document.addEventListener('mouseup', up);
+    finish = (ev: PointerEvent) => {
+      if (ev.pointerId !== e.pointerId) return;
+      completeDrag();
+    };
+    mouseFinish = () => completeDrag();
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', finish);
+    document.addEventListener('pointercancel', finish);
+    document.addEventListener('mouseup', mouseFinish);
   }
 
-  protected portMouseDown(e: MouseEvent, fromNode: CanvasNode) {
+  protected portPointerDown(e: PointerEvent, fromNode: CanvasNode) {
     e.stopPropagation();
     e.preventDefault();
+    if (e.button !== 0) return;
     const stage = this.canvasStage?.nativeElement;
     if (!stage) return;
     const rect = stage.getBoundingClientRect();
-    const move = (ev: MouseEvent) => {
-      this.tempEdge.set({
-        x1: fromNode.x,
-        y1: fromNode.y,
-        x2: ev.clientX - rect.left,
-        y2: ev.clientY - rect.top,
-      });
+    this.tempEdge.set({ fromId: fromNode.id, x: fromNode.x, y: fromNode.y });
+    this.typingPulse.update((pulse) => pulse + 1);
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== e.pointerId) return;
+      this.tempEdge.set({ fromId: fromNode.id, x: ev.clientX - rect.left, y: ev.clientY - rect.top });
     };
-    const up = (ev: MouseEvent) => {
-      document.removeEventListener('mousemove', move);
-      document.removeEventListener('mouseup', up);
+    let finished = false;
+    let finish: (ev: PointerEvent) => void;
+    let mouseFinish: (ev: MouseEvent) => void;
+    const completeConnection = (target: EventTarget | null) => {
+      if (finished) return;
+      finished = true;
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', finish);
+      document.removeEventListener('pointercancel', finish);
+      document.removeEventListener('mouseup', mouseFinish);
       this.tempEdge.set(null);
-      const target = (ev.target as HTMLElement | null)?.closest?.('[data-node-id]');
-      const targetId = target ? Number(target.getAttribute('data-node-id')) : NaN;
+      const element = target instanceof HTMLElement ? target : null;
+      const destination = element?.closest?.('[data-node-id]');
+      const targetId = destination ? Number(destination.getAttribute('data-node-id')) : NaN;
       if (Number.isFinite(targetId) && targetId !== fromNode.id) {
         this.addCanvasEdge(fromNode.id, targetId);
       }
     };
-    document.addEventListener('mousemove', move);
-    document.addEventListener('mouseup', up);
+    finish = (ev: PointerEvent) => {
+      if (ev.pointerId !== e.pointerId) return;
+      completeConnection(ev.target);
+    };
+    mouseFinish = (ev: MouseEvent) => completeConnection(ev.target);
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', finish);
+    document.addEventListener('pointercancel', finish);
+    document.addEventListener('mouseup', mouseFinish);
   }
 
   protected toggleConnectMode() {
@@ -1572,23 +1759,23 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     }
   }
 
-  protected clearCanvas() {
-    this.canvasNodes.set([]);
-    this.canvasEdges.set([]);
-    this.selectedCanvasNodeId.set(null);
-    this.connectFrom.set(null);
-    this.tempEdge.set(null);
-  }
-
   private addCanvasEdge(from: number, to: number) {
+    const fromNode = this.canvasNodes().find((node) => node.id === from);
+    const toNode = this.canvasNodes().find((node) => node.id === to);
+    if (!fromNode || !toNode || !this.canConnectCanvasNodes(fromNode, toNode)) return;
     this.canvasEdges.update((edges) =>
       edges.some((edge) => edge.from === from && edge.to === to) ? edges : [...edges, { from, to }]
     );
   }
 
+  private canConnectCanvasNodes(from: CanvasNode, to: CanvasNode): boolean {
+    const rank: Record<CanvasNode['type'], number> = { event: 0, condition: 1, output: 2 };
+    return rank[from.type] < rank[to.type] || (from.type === 'condition' && to.type === 'condition');
+  }
+
   /* ---- Canvas: add / delete nodes (each maps to a rule piece) ---- */
 
-  private addCanvasNode(type: CanvasNode['type'], x: number, y: number) {
+  private addCanvasNode(type: CanvasNode['type'], x: number, y: number, autoArrange: boolean) {
     const base = this.baseRule();
     let ref: number;
     let rule: WorkflowRule;
@@ -1615,7 +1802,20 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
       rule = { ...base, actions: [...base.actions, { action: def.key, params: defaultParamFor(def) }] };
     }
     const id = ++this.canvasSeq;
-    this.canvasNodes.update((nodes) => [...nodes, { id, type, x, y, ref }]);
+    const stage = this.canvasStage?.nativeElement;
+    const width = Math.max(320, stage?.clientWidth ?? 760);
+    const height = Math.max(380, stage?.clientHeight ?? 520);
+    const placed: CanvasNode = {
+      id,
+      type,
+      ref,
+      x: Math.max(CANVAS_NODE_HALF_WIDTH + 8, Math.min(width - CANVAS_NODE_HALF_WIDTH - 8, x)),
+      y: Math.max(CANVAS_NODE_HALF_HEIGHT + 8, Math.min(height - CANVAS_TRASH_HEIGHT - 16, y)),
+    };
+    const appended = [...this.canvasNodes(), placed];
+    const nodes = autoArrange ? this.layoutCanvasNodes(appended) : appended;
+    this.canvasNodes.set(nodes);
+    this.canvasEdges.set(this.canonicalCanvasEdges(nodes));
     this.selectedCanvasNodeId.set(id);
     this.canvasSourced = true;
     this.updateRule(rule);
@@ -1639,12 +1839,11 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     } else if (node.type === 'output' && base.actions[node.ref]) {
       rule = { ...base, actions: base.actions.filter((_, i) => i !== node.ref) };
     }
-    this.canvasNodes.update((nodes) =>
-      nodes
-        .filter((n) => n.id !== id)
-        .map((n) => (n.type === node.type && n.ref > node.ref ? { ...n, ref: n.ref - 1 } : n))
-    );
-    this.canvasEdges.update((edges) => edges.filter((edge) => edge.from !== id && edge.to !== id));
+    const remaining = this.canvasNodes()
+      .filter((n) => n.id !== id)
+      .map((n) => (n.type === node.type && n.ref > node.ref ? { ...n, ref: n.ref - 1 } : n));
+    this.canvasNodes.set(remaining);
+    this.canvasEdges.set(this.canonicalCanvasEdges(remaining));
     if (this.selectedCanvasNodeId() === id) this.selectedCanvasNodeId.set(null);
     if (rule) {
       this.canvasSourced = true;
@@ -1681,6 +1880,12 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     }
     const output = base.actions[node.ref];
     return output ? getAction(output.action)?.label ?? output.action : 'Output';
+  }
+
+  protected canvasNodeTypeLabel(node: CanvasNode): string {
+    if (node.type === 'event') return 'Trigger';
+    if (node.type === 'condition') return 'Condition';
+    return 'Action';
   }
 
   protected canvasNodeCaption(node: CanvasNode): string {
@@ -1807,6 +2012,22 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     if (!node || !this.baseRule().actions[node.ref]) return;
     this.canvasSourced = true;
     this.setActionParam(node.ref, value);
+  }
+
+  /* Text composer, structured builder, and diagram share one motion channel. */
+  protected workflowFocusIn() {
+    this.workflowEditing.set(true);
+    this.typingPulse.update((pulse) => pulse + 1);
+  }
+
+  protected workflowFocusOut(event: FocusEvent) {
+    const surface = event.currentTarget as HTMLElement | null;
+    if (surface?.contains(event.relatedTarget as Node | null)) return;
+    this.workflowEditing.set(false);
+  }
+
+  protected workflowPointerDown() {
+    this.typingPulse.update((pulse) => pulse + 1);
   }
 
   protected onInput(event: Event) {

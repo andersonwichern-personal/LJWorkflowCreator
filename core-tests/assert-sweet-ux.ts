@@ -140,6 +140,38 @@ t(
     /matchMedia\(['"]\(hover:\s*hover\)\s*and\s*\(pointer:\s*fine\)['"]\)/.test(spiralSource) &&
     /if\s*\(!this\.finePointer\s*\|\|\s*this\.reducedMotion\)\s*return/.test(spiralSource)
 );
+t(
+  'spiral rotates on hover and while any workflow editing surface is active',
+  /\[data-hovered=['"]true['"]\]\s+svg/.test(spiralSource) &&
+    /\[data-active=['"]true['"]\]\s+svg/.test(spiralSource) &&
+    /\[active\]\s*=\s*['"]spiralActive\(\)['"]/.test(composerSource) &&
+    /\(focusin\)\s*=\s*['"]workflowFocusIn\(\)['"]/.test(composerSource) &&
+    /\(pointerdown\)\s*=\s*['"]workflowPointerDown\(\)['"]/.test(composerSource)
+);
+t(
+  'diagram supports pointer and touch node movement with a rule-backed trash target',
+  /class=['"]canvas-trash['"]/.test(composerSource) &&
+    /\(pointerdown\)\s*=\s*['"]nodePointerDown\(\$event, node\)['"]/.test(composerSource) &&
+    /document\.addEventListener\(['"]pointermove['"]/.test(composerSource) &&
+    /if\s*\(remove\)\s*this\.deleteCanvasNode\(node\.id\)/.test(composerSource) &&
+    /this\.updateRule\(rule\)/.test(composerSource)
+);
+t(
+  'diagram quick-add arranges several nodes and repairs canonical connections',
+  /addCanvasNode\(type, 0, 0, true\)/.test(composerSource) &&
+    /private layoutCanvasNodes\(/.test(composerSource) &&
+    /private canonicalCanvasEdges\(/.test(composerSource) &&
+    /this\.canvasEdges\.set\(this\.canonicalCanvasEdges\(remaining\)\)/.test(composerSource) &&
+    /\(click\)\s*=\s*['"]arrangeCanvas\(\)['"]/.test(composerSource) &&
+    !/\(click\)\s*=\s*['"]clearCanvas\(\)['"]/.test(composerSource)
+);
+t(
+  'shape-aware connector paths stay reactive while connected nodes move',
+  /function canvasNodeAnchor\(/.test(composerSource) &&
+    /function canvasConnectorPath\(/.test(composerSource) &&
+    /d:\s*canvasConnectorPath\(a, b\)/.test(composerSource) &&
+    /this\.canvasNodes\.update\(\(nodes\)\s*=>\s*nodes\.map/.test(composerSource)
+);
 
 const textarea = composerSource.match(/<textarea\b[\s\S]*?<\/textarea>/)?.[0] ?? '';
 const textareaId = textarea.match(/\bid\s*=\s*['"]([^'"]+)['"]/)?.[1];

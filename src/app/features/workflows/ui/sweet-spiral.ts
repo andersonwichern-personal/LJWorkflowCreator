@@ -18,6 +18,8 @@ import { SWEET_SPIRAL_STATUS, SweetSpiralState } from './sweet-spiral.state';
       class="spiral-stage"
       [attr.data-state]="state"
       [attr.data-status]="status"
+      [attr.data-active]="active"
+      [attr.data-hovered]="hovered"
       aria-hidden="true"
       (pointerenter)="pointerEnter()"
       (pointermove)="pointerMove($event)"
@@ -144,6 +146,10 @@ import { SWEET_SPIRAL_STATUS, SweetSpiralState } from './sweet-spiral.state';
     [data-state='submitted'] .pulse-ring { animation: receive 520ms var(--ease-settle) both; }
     [data-state='parsing'] .particle-field { animation: organize 2.4s var(--ease-standard) infinite; }
     [data-state='parsing'] svg { animation: purpose 4s linear infinite; }
+    [data-active='true'] svg,
+    [data-hovered='true'] svg { animation: purpose 3.2s linear infinite; }
+    [data-active='true'] .halo,
+    [data-hovered='true'] .halo { opacity: .42; }
     [data-state='clarification'] .particle-field { animation: consider 2.8s ease-in-out infinite; }
     [data-state='partial'] .particle-field { animation: unresolved 4.2s ease-in-out infinite; opacity: .82; }
     [data-state='understood'] .focal-point { animation: understood 760ms var(--ease-settle) both; }
@@ -182,6 +188,9 @@ export class SweetSpiral implements OnChanges, OnDestroy {
 
   @Input() state: SweetSpiralState = 'idle';
   @Input() typingPulse = 0;
+  @Input() active = false;
+
+  protected hovered = false;
 
   private targetX = 0;
   private targetY = 0;
@@ -203,6 +212,7 @@ export class SweetSpiral implements OnChanges, OnDestroy {
   }
 
   protected pointerEnter() {
+    this.hovered = true;
     if (this.finePointer && !this.reducedMotion) {
       // Cache the only layout read for the pointer session. Pointermove then
       // updates composited CSS properties without forcing repeated layout.
@@ -220,6 +230,7 @@ export class SweetSpiral implements OnChanges, OnDestroy {
   }
 
   protected pointerLeave() {
+    this.hovered = false;
     this.bounds = null;
     this.targetX = 0;
     this.targetY = 0;

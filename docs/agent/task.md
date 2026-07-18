@@ -514,3 +514,20 @@ Implementation notes / deviations from spec (Claude, 2026-07-18):
 - Verified: `npm test` 364 PASS / exit 0 (all 14 gates incl. purity + sync);
   `npm run build` clean.
 
+## Phase 1.8 — connected editing + Sweet motion sync (2026-07-18)
+
+- [x] Restyle the diagram as a compact enterprise operations workbench
+- [x] Add smart multi-node placement, automatic connections, and topology repair
+- [x] Keep shape-aware connectors attached while connected nodes move
+- [x] Add pointer/touch node movement with a bottom drag-to-trash dock
+- [x] Replace the misleading visual-only clear action with deterministic Arrange
+- [x] Rotate the Sweet spiral on hover and during text, builder, and diagram editing
+- [x] Extend browserless interaction/accessibility contracts
+- [x] Verify the full test suite, production build, desktop, and narrow-desktop layouts
+- [x] Commit as a new Phase 1.8 change on top of `e55bf85`
+
+Verification: `npm test` green (all 14 gates; Sweet UX now 32 assertions),
+`npm run build` clean with no budget warnings, and browser QA clean at
+1710×981 plus 1024×768 with zero page overflow or console warnings/errors.
+Anderson explicitly removed mobile-specific QA from the Phase 1.8 acceptance
+scope after the initial no-overflow check.

@@ -456,3 +456,61 @@ re-parse can flip the trigger when a longer key appears in a value (FISERV/
 FMAC combos); parser-uncovered actions re-parse as honest `uncovered` gaps;
 distinctive-option rough scan may add superset AND conditions on re-parse.
 
+---
+
+# Phase 1.7: Workflow Canvas Diagram (2026-07-18)
+
+Spec: `docs/2026-07-18_workflow-canvas-diagram_v1.md`
+
+- [x] Add `CanvasNode` / `CanvasEdge` interfaces and signals to `WorkflowComposerPage`
+- [x] Implement `effect()` to rebuild canvas from rule signal (parser/3-col → canvas sync)
+- [x] Implement `commitCanvasToRule()` (canvas → rule signal sync via `updateRule()`)
+- [x] Build palette sidebar (drag + click to place)
+- [x] Build canvas stage with dotted grid background and SVG edge overlay
+- [x] Build node rendering (event circle, condition diamond, output circle)
+- [x] Implement node drag-to-move
+- [x] Implement port drag-to-connect (dashed temp line → edge on drop)
+- [x] Implement click-connect mode
+- [x] Build inspector panel (event/condition/output forms using existing picker groups)
+- [x] Add `rebuildCanvasFromRule()` auto-layout (event→cond→output left-to-right)
+- [x] Style canvas using Sweet design tokens — no hardcoded colors except node shapes
+- [x] Raise SCSS budget in `angular.json` if needed — NOT needed (see notes)
+- [x] All tests pass (`npm test`)
+- [x] Build succeeds (`npm run build`)
+- [x] Commit as: `feat(composer): Phase 1.7 – visual workflow canvas diagram`
+
+Implementation notes / deviations from spec (Claude, 2026-07-18):
+
+- `CanvasNode` gained a `ref` field (index into triggers /
+  conditions.children / actions) — the spec's node model had no binding to
+  the rule, which `commitCanvasToRule`/inspector edits require. Every canvas
+  mutation is a surgical immutable patch on the referenced rule piece through
+  `updateRule()`; deletes re-index sibling refs.
+- Edges render REACTIVELY (`edgePaths` computed → SVG `@for`), not via the
+  spec's imperative `drawEdges()` ElementRef writes — spec §1 itself demands
+  "reactive, not imperative", and this removes all render-timing hazards.
+  Port drag shows a dashed temp path from a `tempEdge` signal.
+- The sync effect watches `builderRule()` (committed rule OR the Phase 1.6
+  live rough match), so the diagram draws itself while the user types —
+  and reads the dependency before the `canvasSourced` guard so an early
+  return can never untrack it.
+- The spec's `var(--accent)` / `var(--text-muted)` tokens did not exist:
+  added `--accent: #6941c6` to `styles.scss`; mapped text-muted → existing
+  `--text-dim`, error tokens → existing `--danger`/`--danger-bg`.
+- SCSS budget: canvas CSS took component styles to 16.3 kB compiled — past
+  even the sanctioned 15 kB ceiling — so the canvas rules live in
+  `styles.scss` as a namespaced page-scoped partial (canvas-/cn-/pnode-/
+  palette-/insp- prefixes) instead. Component styles stay under the 12/14 kB
+  budget from Phase 1.6; `angular.json` untouched; build has zero warnings.
+- Palette-placed nodes get explicit defaults (first picker event /
+  first allowed condition field, else `stage` / `assign_user`) so every node
+  is immediately real in the rule and inspectable; the empty-value and
+  EMPTY_TRIGGERS gates from 1.5/1.6 keep partial canvases from saving.
+- Canvas interactions are mouse-based (mousedown/mousemove); below 900 px the
+  canvas stacks palette-top/inspector-bottom. Nested condition groups stay in
+  the rule untouched; the canvas renders root-level leaf conditions.
+- User-drawn edges are visual annotation (the rule model has no arbitrary
+  graph semantics); auto-layout regenerates edges on external rule changes.
+- Verified: `npm test` 364 PASS / exit 0 (all 14 gates incl. purity + sync);
+  `npm run build` clean.
+

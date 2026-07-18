@@ -8,6 +8,7 @@ import {
   ViewChild,
   afterNextRender,
   computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
@@ -38,6 +39,7 @@ import {
   WorkflowRule,
   allowedFieldsForTriggers,
   condFieldDef,
+  condFieldKey,
   condFieldKind,
   condFieldLabel,
   defaultParamFor,
@@ -47,6 +49,7 @@ import {
   getEvent,
   isGroup,
   isValuelessOperator,
+  opLabel,
   paramKeyFor,
   scopeLabel,
   walkLeaves,
@@ -207,6 +210,31 @@ interface ActionCard {
   options: string[];
   value: string;
 }
+
+/* ---- Workflow canvas diagram (Phase 1.7) --------------------------------- */
+
+interface CanvasNode {
+  id: number;
+  type: 'event' | 'condition' | 'output';
+  x: number;
+  y: number;
+  /** Index into the matching rule collection: triggers / conditions.children / actions. */
+  ref: number;
+}
+
+interface CanvasEdge {
+  from: number;
+  to: number;
+}
+
+/** Cubic bezier between two node centers (45px = node radius offset, spec §8). */
+function bezierPath(ax: number, ay: number, bx: number, by: number): string {
+  const dx = Math.abs(bx - ax) * 0.4;
+  return `M ${ax + 45} ${ay} C ${ax + 45 + dx} ${ay}, ${bx - 45 - dx} ${by}, ${bx - 45} ${by}`;
+}
+
+/** Default trigger for a palette-placed event node — first entry of the first picker group. */
+const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0].key;
 
 @Component({
   selector: 'wf-workflow-composer-page',
@@ -468,6 +496,212 @@ interface ActionCard {
                 </div>
               }
             </section>
+          </section>
+
+          <section class="canvas-diagram" aria-label="Workflow diagram canvas">
+            <div class="canvas-header">
+              <h2 class="canvas-title">Workflow diagram</h2>
+              <div class="canvas-toolbar">
+                <button
+                  type="button"
+                  class="canvas-btn"
+                  [class.active]="connectMode()"
+                  (click)="toggleConnectMode()"
+                >🔗 {{ connectMode() ? 'Connecting…' : 'Connect mode' }}</button>
+                <button type="button" class="canvas-btn ghost" (click)="clearCanvas()">Clear board</button>
+              </div>
+            </div>
+
+            <div class="canvas-body">
+              <aside class="canvas-palette" aria-label="Node palette">
+                <p class="palette-heading">Drag onto canvas</p>
+                <div
+                  class="palette-node"
+                  draggable="true"
+                  (dragstart)="paletteDragStart($event, 'event')"
+                  (click)="paletteClick('event')"
+                >
+                  <div class="pnode-shape event-shape">▲</div>
+                  <span>Event<br />(circle)</span>
+                </div>
+                <div
+                  class="palette-node"
+                  draggable="true"
+                  (dragstart)="paletteDragStart($event, 'condition')"
+                  (click)="paletteClick('condition')"
+                >
+                  <div class="pnode-shape cond-shape"><span>◆</span></div>
+                  <span>Condition<br />(diamond)</span>
+                </div>
+                <div
+                  class="palette-node"
+                  draggable="true"
+                  (dragstart)="paletteDragStart($event, 'output')"
+                  (click)="paletteClick('output')"
+                >
+                  <div class="pnode-shape output-shape">●</div>
+                  <span>Output<br />(circle)</span>
+                </div>
+                <p class="palette-hint">
+                  Drag a shape onto the board, or click to place at center. Drag the purple port dot to connect nodes.
+                </p>
+              </aside>
+
+              <div
+                class="canvas-stage"
+                #canvasStage
+                (dragover)="$event.preventDefault()"
+                (drop)="canvasDrop($event)"
+              >
+                <svg class="canvas-svg" aria-hidden="true">
+                  <defs>
+                    <marker id="wf-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+                      <path d="M0,0 L8,3 L0,6 Z" fill="#6941c6" />
+                    </marker>
+                  </defs>
+                  @for (edge of edgePaths(); track edge.key) {
+                    <path [attr.d]="edge.d" stroke="#6941c6" stroke-width="2" fill="none" marker-end="url(#wf-arrow)" />
+                  }
+                  @if (tempEdgePath(); as d) {
+                    <path [attr.d]="d" stroke="#6941c6" stroke-width="2" fill="none" stroke-dasharray="6 4" />
+                  }
+                </svg>
+                @if (!canvasNodes().length) {
+                  <p class="canvas-empty">
+                    Drag an Event, Condition or Output here to start — or describe your workflow above and the diagram will build itself.
+                  </p>
+                }
+                @for (node of canvasNodes(); track node.id) {
+                  <div
+                    class="canvas-node"
+                    [class.cn-event]="node.type === 'event'"
+                    [class.cn-condition]="node.type === 'condition'"
+                    [class.cn-output]="node.type === 'output'"
+                    [class.cn-selected]="selectedCanvasNodeId() === node.id"
+                    [class.cn-connect-from]="connectFrom() === node.id"
+                    [style.left.px]="node.x"
+                    [style.top.px]="node.y"
+                    [attr.data-node-id]="node.id"
+                    (mousedown)="nodeMouseDown($event, node)"
+                  >
+                    <div class="cn-shape">
+                      @if (node.type === 'condition') {
+                        <span>{{ canvasNodeLabel(node) }}</span>
+                      } @else {
+                        {{ canvasNodeLabel(node) }}
+                      }
+                    </div>
+                    <div class="cn-caption">{{ canvasNodeCaption(node) }}</div>
+                    <div class="cn-port" title="Drag to connect" (mousedown)="portMouseDown($event, node)"></div>
+                  </div>
+                }
+              </div>
+
+              <aside class="canvas-inspector" aria-label="Node inspector">
+                @if (selectedCanvasNode(); as node) {
+                  <p class="inspector-title">{{ node.type }} node</p>
+                  @if (node.type === 'event') {
+                    <label class="insp-label" for="canvas-event">Event</label>
+                    <select
+                      id="canvas-event"
+                      class="insp-select"
+                      (change)="setCanvasNodeEvent(node.id, $any($event.target).value)"
+                    >
+                      @for (group of eventGroups(); track group.label) {
+                        <optgroup [label]="group.label">
+                          @for (entry of group.entries; track entry.key) {
+                            <option [value]="entry.key" [selected]="canvasNodeEventKey(node) === entry.key">
+                              {{ entry.emoji }} {{ entry.label }}
+                            </option>
+                          }
+                        </optgroup>
+                      }
+                    </select>
+                  }
+                  @if (node.type === 'condition') {
+                    <label class="insp-label" for="canvas-field">Condition field</label>
+                    <select
+                      id="canvas-field"
+                      class="insp-select"
+                      (change)="setCanvasNodeField(node.id, $any($event.target).value)"
+                    >
+                      @for (field of conditionFields(); track field.key) {
+                        <option [value]="field.key" [selected]="canvasNodeFieldKey(node) === field.key">
+                          {{ field.label }}
+                        </option>
+                      }
+                    </select>
+                    <label class="insp-label" for="canvas-operator">Operator</label>
+                    <select
+                      id="canvas-operator"
+                      class="insp-select"
+                      (change)="setCanvasNodeOperator(node.id, $any($event.target).value)"
+                    >
+                      @for (op of canvasNodeOperators(node); track op.value) {
+                        <option [value]="op.value" [selected]="canvasNodeOperator(node) === op.value">
+                          {{ op.label }}
+                        </option>
+                      }
+                    </select>
+                    <label class="insp-label" for="canvas-value">Value</label>
+                    <input
+                      id="canvas-value"
+                      class="insp-input"
+                      [value]="canvasNodeValue(node)"
+                      (input)="setCanvasNodeValue(node.id, $any($event.target).value)"
+                    />
+                  }
+                  @if (node.type === 'output') {
+                    <label class="insp-label" for="canvas-action">Action</label>
+                    <select
+                      id="canvas-action"
+                      class="insp-select"
+                      (change)="setCanvasNodeAction(node.id, $any($event.target).value)"
+                    >
+                      @for (group of actionGroups(); track group.label) {
+                        <optgroup [label]="group.label">
+                          @for (entry of group.entries; track entry.key) {
+                            <option [value]="entry.key" [selected]="canvasNodeActionKey(node) === entry.key">
+                              {{ entry.emoji }} {{ entry.label }}
+                            </option>
+                          }
+                        </optgroup>
+                      }
+                    </select>
+                    @if (canvasNodeActionCard(node); as card) {
+                      @if (card.mode !== 'none') {
+                        <label class="insp-label" for="canvas-param">{{ card.paramLabel }}</label>
+                        @if (card.mode === 'select') {
+                          <select
+                            id="canvas-param"
+                            class="insp-select"
+                            (change)="setCanvasNodeParam(node.id, $any($event.target).value)"
+                          >
+                            @if (!card.value) {
+                              <option value="" selected disabled>Choose…</option>
+                            }
+                            @for (opt of card.options; track opt) {
+                              <option [value]="opt" [selected]="card.value === opt">{{ opt }}</option>
+                            }
+                          </select>
+                        } @else {
+                          <input
+                            id="canvas-param"
+                            class="insp-input"
+                            [value]="card.value"
+                            (input)="setCanvasNodeParam(node.id, $any($event.target).value)"
+                          />
+                        }
+                      }
+                    }
+                  }
+                  <button class="insp-delete" type="button" (click)="deleteCanvasNode(node.id)">Delete node</button>
+                  <button class="insp-save" type="button" (click)="commitCanvasToRule()">Save workflow</button>
+                } @else {
+                  <p class="insp-empty">Select a node to configure it.</p>
+                }
+              </aside>
+            </div>
           </section>
         </section>
 
@@ -1146,6 +1380,433 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
       el.style.height = 'auto';
       el.style.height = `${Math.min(el.scrollHeight, 224)}px`;
     });
+  }
+
+  /* ---- Workflow canvas diagram (Phase 1.7) ----
+   * Spatial view of the same rule signal. Rule → canvas: an effect rebuilds a
+   * left-to-right auto-layout whenever the rule changes from the parser, the
+   * live rough match, or the 3-column builder. Canvas → rule: every canvas
+   * mutation is a surgical immutable patch on the rule piece a node points at
+   * (node.ref = index into triggers / conditions.children / actions),
+   * funneled through updateRule(); the canvasSourced guard keeps the effect
+   * from discarding manual node positions in response. Edges render
+   * reactively from signals — no imperative SVG writes. Nested condition
+   * groups stay in the rule untouched; the canvas shows root-level leaves. */
+
+  @ViewChild('canvasStage') private canvasStage?: ElementRef<HTMLDivElement>;
+
+  protected readonly canvasNodes = signal<CanvasNode[]>([]);
+  protected readonly canvasEdges = signal<CanvasEdge[]>([]);
+  protected readonly selectedCanvasNodeId = signal<number | null>(null);
+  protected readonly connectMode = signal(false);
+  protected readonly connectFrom = signal<number | null>(null);
+  protected readonly tempEdge = signal<{ x1: number; y1: number; x2: number; y2: number } | null>(
+    null
+  );
+  private canvasSeq = 0;
+  private canvasSourced = false;
+
+  protected readonly selectedCanvasNode = computed(
+    () => this.canvasNodes().find((node) => node.id === this.selectedCanvasNodeId()) ?? null
+  );
+
+  protected readonly edgePaths = computed(() => {
+    const byId = new Map(this.canvasNodes().map((node) => [node.id, node]));
+    const paths: { key: string; d: string }[] = [];
+    for (const edge of this.canvasEdges()) {
+      const a = byId.get(edge.from);
+      const b = byId.get(edge.to);
+      if (a && b) paths.push({ key: `${edge.from}-${edge.to}`, d: bezierPath(a.x, a.y, b.x, b.y) });
+    }
+    return paths;
+  });
+
+  protected readonly tempEdgePath = computed(() => {
+    const edge = this.tempEdge();
+    return edge ? bezierPath(edge.x1, edge.y1, edge.x2, edge.y2) : null;
+  });
+
+  private readonly canvasSync = effect(() => {
+    // Read the dependency BEFORE the guard: an early return that never reads
+    // builderRule() would untrack it and the effect would never fire again.
+    const rule = this.builderRule();
+    if (this.canvasSourced) {
+      this.canvasSourced = false;
+      return;
+    }
+    if (!rule) {
+      this.canvasNodes.set([]);
+      this.canvasEdges.set([]);
+      this.selectedCanvasNodeId.set(null);
+      this.connectFrom.set(null);
+      return;
+    }
+    this.rebuildCanvasFromRule(rule);
+  });
+
+  private rebuildCanvasFromRule(rule: WorkflowRule) {
+    const vy = (i: number, count: number) =>
+      Math.max(90, Math.min(430, 250 + (i - (count - 1) / 2) * 130));
+    const nodes: CanvasNode[] = [];
+    rule.triggers.forEach((_, i) =>
+      nodes.push({ id: ++this.canvasSeq, type: 'event', x: 160, y: vy(i, rule.triggers.length), ref: i })
+    );
+    const leafRefs = rule.conditions.children
+      .map((child, i) => (isGroup(child) ? -1 : i))
+      .filter((i) => i >= 0);
+    leafRefs.forEach((childIndex, i) =>
+      nodes.push({ id: ++this.canvasSeq, type: 'condition', x: 460, y: vy(i, leafRefs.length), ref: childIndex })
+    );
+    rule.actions.forEach((_, i) =>
+      nodes.push({ id: ++this.canvasSeq, type: 'output', x: 760, y: vy(i, rule.actions.length), ref: i })
+    );
+    const events = nodes.filter((node) => node.type === 'event');
+    const conds = nodes.filter((node) => node.type === 'condition');
+    const outputs = nodes.filter((node) => node.type === 'output');
+    const edges: CanvasEdge[] = [];
+    if (conds.length) {
+      for (const event of events) edges.push({ from: event.id, to: conds[0].id });
+      for (let i = 0; i < conds.length - 1; i++) edges.push({ from: conds[i].id, to: conds[i + 1].id });
+      for (const output of outputs) edges.push({ from: conds[conds.length - 1].id, to: output.id });
+    } else {
+      for (const event of events) for (const output of outputs) edges.push({ from: event.id, to: output.id });
+    }
+    this.canvasNodes.set(nodes);
+    this.canvasEdges.set(edges);
+    if (!nodes.some((node) => node.id === this.selectedCanvasNodeId())) {
+      this.selectedCanvasNodeId.set(null);
+    }
+    this.connectFrom.set(null);
+  }
+
+  /* ---- Canvas: palette + stage interactions ---- */
+
+  protected paletteDragStart(e: DragEvent, type: CanvasNode['type']) {
+    e.dataTransfer?.setData('nodeType', type);
+  }
+
+  protected paletteClick(type: CanvasNode['type']) {
+    const center = this.canvasStageCenter();
+    this.addCanvasNode(type, center.x, center.y);
+  }
+
+  protected canvasDrop(e: DragEvent) {
+    e.preventDefault();
+    const type = e.dataTransfer?.getData('nodeType') as CanvasNode['type'] | '';
+    if (type !== 'event' && type !== 'condition' && type !== 'output') return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    this.addCanvasNode(type, e.clientX - rect.left, e.clientY - rect.top);
+  }
+
+  private canvasStageCenter(): { x: number; y: number } {
+    const el = this.canvasStage?.nativeElement;
+    return el ? { x: el.clientWidth / 2, y: el.clientHeight / 2 } : { x: 460, y: 250 };
+  }
+
+  protected nodeMouseDown(e: MouseEvent, node: CanvasNode) {
+    if ((e.target as HTMLElement).classList.contains('cn-port')) return;
+    if (this.connectMode()) {
+      this.handleConnectClick(node.id);
+      return;
+    }
+    e.preventDefault();
+    this.selectedCanvasNodeId.set(node.id);
+    const stage = this.canvasStage?.nativeElement;
+    if (!stage) return;
+    const rect = stage.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left - node.x;
+    const offsetY = e.clientY - rect.top - node.y;
+    const move = (ev: MouseEvent) => {
+      const x = Math.max(20, Math.min(rect.width - 20, ev.clientX - rect.left - offsetX));
+      const y = Math.max(20, Math.min(rect.height - 20, ev.clientY - rect.top - offsetY));
+      this.canvasNodes.update((nodes) => nodes.map((n) => (n.id === node.id ? { ...n, x, y } : n)));
+    };
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  }
+
+  protected portMouseDown(e: MouseEvent, fromNode: CanvasNode) {
+    e.stopPropagation();
+    e.preventDefault();
+    const stage = this.canvasStage?.nativeElement;
+    if (!stage) return;
+    const rect = stage.getBoundingClientRect();
+    const move = (ev: MouseEvent) => {
+      this.tempEdge.set({
+        x1: fromNode.x,
+        y1: fromNode.y,
+        x2: ev.clientX - rect.left,
+        y2: ev.clientY - rect.top,
+      });
+    };
+    const up = (ev: MouseEvent) => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      this.tempEdge.set(null);
+      const target = (ev.target as HTMLElement | null)?.closest?.('[data-node-id]');
+      const targetId = target ? Number(target.getAttribute('data-node-id')) : NaN;
+      if (Number.isFinite(targetId) && targetId !== fromNode.id) {
+        this.addCanvasEdge(fromNode.id, targetId);
+      }
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  }
+
+  protected toggleConnectMode() {
+    this.connectMode.update((on) => !on);
+    this.connectFrom.set(null);
+  }
+
+  protected handleConnectClick(id: number) {
+    const from = this.connectFrom();
+    if (from === null) {
+      this.connectFrom.set(id);
+    } else {
+      if (from !== id) this.addCanvasEdge(from, id);
+      this.connectFrom.set(null);
+    }
+  }
+
+  protected clearCanvas() {
+    this.canvasNodes.set([]);
+    this.canvasEdges.set([]);
+    this.selectedCanvasNodeId.set(null);
+    this.connectFrom.set(null);
+    this.tempEdge.set(null);
+  }
+
+  private addCanvasEdge(from: number, to: number) {
+    this.canvasEdges.update((edges) =>
+      edges.some((edge) => edge.from === from && edge.to === to) ? edges : [...edges, { from, to }]
+    );
+  }
+
+  /* ---- Canvas: add / delete nodes (each maps to a rule piece) ---- */
+
+  private addCanvasNode(type: CanvasNode['type'], x: number, y: number) {
+    const base = this.baseRule();
+    let ref: number;
+    let rule: WorkflowRule;
+    if (type === 'event') {
+      ref = base.triggers.length;
+      rule = { ...base, triggers: [...base.triggers, { event: DEFAULT_CANVAS_EVENT }] };
+    } else if (type === 'condition') {
+      const fieldKey = this.conditionFields()[0]?.key ?? 'stage';
+      const field = FIELDS[fieldKey] ?? FIELDS['stage'];
+      const leaf: ConditionLeaf = {
+        field: field.key,
+        operator: OPERATORS[field.kind][0].value,
+        value: defaultValueFor(field),
+      };
+      ref = base.conditions.children.length;
+      rule = {
+        ...base,
+        conditions: { ...base.conditions, children: [...base.conditions.children, leaf] },
+      };
+    } else {
+      const def = getAction('assign_user');
+      if (!def) return;
+      ref = base.actions.length;
+      rule = { ...base, actions: [...base.actions, { action: def.key, params: defaultParamFor(def) }] };
+    }
+    const id = ++this.canvasSeq;
+    this.canvasNodes.update((nodes) => [...nodes, { id, type, x, y, ref }]);
+    this.selectedCanvasNodeId.set(id);
+    this.canvasSourced = true;
+    this.updateRule(rule);
+  }
+
+  protected deleteCanvasNode(id: number) {
+    const node = this.canvasNodes().find((n) => n.id === id);
+    if (!node) return;
+    const base = this.baseRule();
+    let rule: WorkflowRule | null = null;
+    if (node.type === 'event' && base.triggers[node.ref]) {
+      rule = { ...base, triggers: base.triggers.filter((_, i) => i !== node.ref) };
+    } else if (node.type === 'condition' && base.conditions.children[node.ref]) {
+      rule = {
+        ...base,
+        conditions: {
+          ...base.conditions,
+          children: base.conditions.children.filter((_, i) => i !== node.ref),
+        },
+      };
+    } else if (node.type === 'output' && base.actions[node.ref]) {
+      rule = { ...base, actions: base.actions.filter((_, i) => i !== node.ref) };
+    }
+    this.canvasNodes.update((nodes) =>
+      nodes
+        .filter((n) => n.id !== id)
+        .map((n) => (n.type === node.type && n.ref > node.ref ? { ...n, ref: n.ref - 1 } : n))
+    );
+    this.canvasEdges.update((edges) => edges.filter((edge) => edge.from !== id && edge.to !== id));
+    if (this.selectedCanvasNodeId() === id) this.selectedCanvasNodeId.set(null);
+    if (rule) {
+      this.canvasSourced = true;
+      this.updateRule(rule);
+    }
+  }
+
+  /** "Save workflow": re-commit the working rule (composes the description,
+   *  re-runs the gap gate + review flow; commits a provisional rough match). */
+  protected commitCanvasToRule() {
+    const rule = this.builderRule();
+    if (!rule) return;
+    this.canvasSourced = true;
+    this.updateRule(rule);
+  }
+
+  /* ---- Canvas: node ↔ rule lookups for labels + inspector ---- */
+
+  private findCanvasNode(id: number, type: CanvasNode['type']): CanvasNode | null {
+    return this.canvasNodes().find((n) => n.id === id && n.type === type) ?? null;
+  }
+
+  private canvasLeaf(node: CanvasNode): ConditionLeaf | null {
+    const child = this.baseRule().conditions.children[node.ref];
+    return child && !isGroup(child) ? child : null;
+  }
+
+  protected canvasNodeLabel(node: CanvasNode): string {
+    const base = this.baseRule();
+    if (node.type === 'event') return base.triggers[node.ref]?.event ?? 'Event';
+    if (node.type === 'condition') {
+      const leaf = this.canvasLeaf(node);
+      return leaf ? sentence(condFieldLabel(leaf.field)) : 'Condition';
+    }
+    const output = base.actions[node.ref];
+    return output ? getAction(output.action)?.label ?? output.action : 'Output';
+  }
+
+  protected canvasNodeCaption(node: CanvasNode): string {
+    const base = this.baseRule();
+    if (node.type === 'event') {
+      const key = base.triggers[node.ref]?.event;
+      return key
+        ? EVENT_PICKER_GROUPS.find((group) => group.entries.some((entry) => entry.key === key))?.label ?? ''
+        : '';
+    }
+    if (node.type === 'condition') {
+      const leaf = this.canvasLeaf(node);
+      if (!leaf) return '';
+      const op = opLabel(condFieldKind(leaf.field), leaf.operator);
+      return isValuelessOperator(leaf.operator) ? op : `${op} ${scopeLabel(leaf.value) || '…'}`;
+    }
+    const output = base.actions[node.ref];
+    if (!output) return '';
+    const def = getAction(output.action);
+    return def && def.paramKind !== 'none' ? scopeLabel(output.params[paramKeyFor(def.key)]) : '';
+  }
+
+  protected canvasNodeEventKey(node: CanvasNode): string {
+    return this.baseRule().triggers[node.ref]?.event ?? '';
+  }
+
+  protected canvasNodeFieldKey(node: CanvasNode): string {
+    const leaf = this.canvasLeaf(node);
+    return leaf ? condFieldKey(leaf.field) : '';
+  }
+
+  protected canvasNodeOperators(node: CanvasNode): { value: string; label: string }[] {
+    const leaf = this.canvasLeaf(node);
+    return leaf ? OPERATORS[condFieldKind(leaf.field)] : [];
+  }
+
+  protected canvasNodeOperator(node: CanvasNode): string {
+    return this.canvasLeaf(node)?.operator ?? '';
+  }
+
+  protected canvasNodeValue(node: CanvasNode): string {
+    const leaf = this.canvasLeaf(node);
+    return leaf ? scopeLabel(leaf.value) : '';
+  }
+
+  protected canvasNodeActionKey(node: CanvasNode): string {
+    return this.baseRule().actions[node.ref]?.action ?? '';
+  }
+
+  protected canvasNodeActionCard(node: CanvasNode): ActionCard | null {
+    return this.actionCards().find((card) => card.index === node.ref) ?? null;
+  }
+
+  /* ---- Canvas: inspector → rule (all via updateRule, guard set first) ---- */
+
+  protected setCanvasNodeEvent(id: number, eventKey: string) {
+    const node = this.findCanvasNode(id, 'event');
+    if (!node || !getEvent(eventKey)) return;
+    const base = this.baseRule();
+    if (!base.triggers[node.ref] || base.triggers[node.ref].event === eventKey) return;
+    this.canvasSourced = true;
+    this.updateRule({
+      ...base,
+      triggers: base.triggers.map((trigger, i) =>
+        i === node.ref ? { ...trigger, event: eventKey } : trigger
+      ),
+    });
+  }
+
+  protected setCanvasNodeField(id: number, fieldKey: string) {
+    const node = this.findCanvasNode(id, 'condition');
+    const field = FIELDS[fieldKey];
+    if (!node || !field) return;
+    const leaf = this.canvasLeaf(node);
+    if (!leaf || condFieldKey(leaf.field) === fieldKey) return;
+    const replacement: ConditionLeaf = {
+      field: field.key,
+      operator: OPERATORS[field.kind][0].value,
+      value: defaultValueFor(field),
+    };
+    const base = this.baseRule();
+    this.canvasSourced = true;
+    this.updateRule({
+      ...base,
+      conditions: {
+        ...base.conditions,
+        children: base.conditions.children.map((child, i) => (i === node.ref ? replacement : child)),
+      },
+    });
+  }
+
+  protected setCanvasNodeOperator(id: number, operator: string) {
+    const node = this.findCanvasNode(id, 'condition');
+    if (!node || !this.canvasLeaf(node)) return;
+    this.canvasSourced = true;
+    this.setConditionOperator(node.ref, operator);
+  }
+
+  protected setCanvasNodeValue(id: number, value: string) {
+    const node = this.findCanvasNode(id, 'condition');
+    if (!node || !this.canvasLeaf(node)) return;
+    this.canvasSourced = true;
+    this.setConditionValue(node.ref, value);
+  }
+
+  protected setCanvasNodeAction(id: number, actionKey: string) {
+    const node = this.findCanvasNode(id, 'output');
+    const def = getAction(actionKey);
+    if (!node || !def) return;
+    const base = this.baseRule();
+    const existing = base.actions[node.ref];
+    if (!existing || existing.action === actionKey) return;
+    this.canvasSourced = true;
+    this.updateRule({
+      ...base,
+      actions: base.actions.map((output, i) =>
+        i === node.ref ? { action: def.key, params: defaultParamFor(def) } : output
+      ),
+    });
+  }
+
+  protected setCanvasNodeParam(id: number, value: string) {
+    const node = this.findCanvasNode(id, 'output');
+    if (!node || !this.baseRule().actions[node.ref]) return;
+    this.canvasSourced = true;
+    this.setActionParam(node.ref, value);
   }
 
   protected onInput(event: Event) {

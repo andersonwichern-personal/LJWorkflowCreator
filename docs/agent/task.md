@@ -393,4 +393,66 @@ Implementation notes (Claude, 2026-07-17):
 - Verified: `npm test` fully green (269 PASS lines incl. all 28 Sweet UX
   source contracts, rule-core purity gate, sync drift gate); `npm run build`
   clean with no budget warnings.
+- Multi-agent adversarial review ran post-push (4 lenses; verification fleet
+  partially killed by the account spend limit, so Claude adjudicated the
+  unverified findings by hand). Confirmed defects — keystroke wipes the
+  visual rule, stale parse sidecars blocking save / corrupting clarification
+  indices, empty values passing the save gate, ScopeRef label-downgrade on
+  touch, false selected-option display on empty values, invisible
+  validation-only gaps, trigger-scope loss on no-op clicks, aria/focus-ring
+  gaps, lowercase pill labels — are all fixed in Phase 1.6 below.
+
+---
+
+# Phase 1.6: Builder ⇄ Parser Bi-Directional Sync (2026-07-18)
+
+Anderson's directive: the builder and the AI parser engine stay in sync — a
+rough parser match auto-selects fields in the builder, and builder selections
+type the description out "in a visually pleasing way". Committed as 1.6.
+
+- [x] `packages/rule-core/src/ruleText.ts` — `composeRuleText(rule)`: canonical
+      plain-English serialization, the parser's inverse for the covered
+      vocabulary subset (quoted event-key triggers, natural dual-trigger
+      pairs, operator phrasings, action verbs chosen to avoid pattern
+      collisions, else lane, SLA delay, armed/rate-cap suffixes). Vendored via
+      `npm run sync:angular-core`; exported from the package barrel.
+- [x] Parser fix (rule-core `nlParser.ts`): **label-adjacent enum binding** —
+      a named field binds to the option that follows its label instead of an
+      option word leaking from another clause ("Loan approved" no longer
+      hijacks "request stage is not Closed"). Fallback preserves the old
+      rough-scan behavior; zero regressions across all parser suites.
+- [x] Parser fix (rule-core `nlParser.ts`): **else-clause masking** — the main
+      action lane no longer reads the otherwise/else region, so "… otherwise
+      notify Omar" cannot duplicate the notify into the primary lane.
+- [x] `core-tests/assert-rule-text.ts` — 95 assertions pinning the round-trip
+      contract (exact for parser-covered shapes; conditions-superset where the
+      parser's distinctive-option rough scan legitimately adds AND conditions;
+      readable + honestly-uncovered for non-parseable actions). Wired into
+      `npm test`.
+- [x] Composer: **parser → builder** — `liveResult` re-parses the description
+      on every keystroke; builder columns render the rough match (all matched
+      triggers highlight w/ `aria-pressed`, condition/action cards populate),
+      with a provisional hint bar; the first builder click adopts + commits
+      the provisional rule.
+- [x] Composer: **builder → text** — every visual mutation composes the
+      canonical description and types it into the cursor (2 chars/16 ms,
+      common-prefix restarts, spiral typing pulses, instant under
+      prefers-reduced-motion, cancelled by manual typing/Enter/destroy).
+      `parsedDescription` = composed text, so save() persists a
+      name/description that always matches the rule (kills the forged-gate
+      finding).
+- [x] Review-driven fixes: updateRule drops stale parse sidecars; author-time
+      empty-value gate in gaps() (+ visible gap-notes list for question-less
+      gaps); `keepRefIfSameLabel` guard stops ScopeRef → string downgrades;
+      "Choose…" placeholder on empty-value selects; trigger no-op click
+      preserves scope; per-card aria labels; global focus-visible ring
+      restored; sentence-cased pill/card labels.
+- [x] Verify: `npm test` fully green — 13 suites incl. 95 new rule-text
+      assertions + purity + sync gates; `npm run build` clean, no budget
+      warnings (styles within the 12/14 kB budget).
+
+Known limitations (documented in `ruleText.ts` header): longest-event-key
+re-parse can flip the trigger when a longer key appears in a value (FISERV/
+FMAC combos); parser-uncovered actions re-parse as honest `uncovered` gaps;
+distinctive-option rough scan may add superset AND conditions on re-parse.
 

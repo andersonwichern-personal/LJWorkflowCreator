@@ -442,6 +442,33 @@ function matchConditions(
     }
 
     if ((field.kind === "enum" || field.kind === "orderedEnum") && field.options) {
+      // Label-adjacent binding first: when the field is named outright
+      // ("request stage is not Closed"), the option that directly follows the
+      // label wins. Without this, the whole-text scan below could bind the
+      // field to an option word leaking from another clause (e.g. the trigger
+      // phrase "loan approved" hijacking a stage condition). Fallback keeps
+      // the old rough-scan behavior for key-only or label-less mentions.
+      if (labelIdx >= 0) {
+        const optAlt = [...field.options]
+          .sort((a, b) => b.length - a.length)
+          .map((o) => escapeRe(norm(o)))
+          .join("|");
+        const adjacent = new RegExp(
+          `${escapeRe(labelN)}\\s+(?:(is\\s+not|isn't|is|not)\\s+)?(${optAlt})\\b`
+        ).exec(text);
+        if (adjacent) {
+          const opt = field.options.find((o) => norm(o) === adjacent[2]);
+          if (opt) {
+            consume(spans, adjacent.index, adjacent[0].length);
+            conds.push({
+              field: field.key,
+              operator: adjacent[1] && /not/.test(adjacent[1]) ? "is_not" : "is",
+              value: opt,
+            });
+            continue;
+          }
+        }
+      }
       for (const opt of field.options) {
         const optN = norm(opt);
         // Short options (grades "A"–"E") need word boundaries + the field named;
@@ -859,13 +886,20 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
 
   const conds = matchConditions(text, eventKey, spans, opts, unresolved);
   conds.push(...matchCategoryConditions(text, spans, conds));
-  const outputs = matchOutputs(text, eventKey, spans, opts, unresolved, notes);
+  // The main action lane must never read the otherwise/else clause: an action
+  // type that appears only there ("… otherwise notify Omar") would leak into
+  // the primary lane. Mask the else region (space-padded so span indices stay
+  // valid) before matching main outputs; the else lane parses its own text.
+  const elseMatch = /\b(?:otherwise|else)\b[\s,]*(.+)$/.exec(text);
+  const mainText = elseMatch
+    ? text.slice(0, elseMatch.index) + " ".repeat(text.length - elseMatch.index)
+    : text;
+  const outputs = matchOutputs(mainText, eventKey, spans, opts, unresolved, notes);
   const controlPatch = matchControls(text);
   // AND/OR is decided on the UNCONSUMED text only: the trigger's own "or"
   // ("approved or rejected") is already consumed and must not flip AND-joined
   // conditions to OR (review finding).
   const condLogic = matchLogic(maskConsumed(text, spans));
-  const elseMatch = /\b(?:otherwise|else)\b[\s,]*(.+)$/.exec(text);
   const elseText = elseMatch ? stripTrailingPunct(elseMatch[1]) : "";
   /**
    * "Otherwise, do nothing" (and variants) is an INTENTIONAL no-op — an

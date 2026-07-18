@@ -6,7 +6,7 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "tsx core-tests/assert-parser.ts && tsx core-tests/assert-normalize.ts && tsx core-tests/assert-validation.ts && tsx core-tests/assert-tree.ts && tsx core-tests/assert-multi-action.ts && tsx core-tests/assert-nlp-parser.ts && tsx core-tests/assert-operators.ts && tsx core-tests/assert-customer-eval.ts && tsx core-tests/assert-scope.ts && tsx core-tests/assert-angular-seam.ts && tsx core-tests/assert-sweet-ux.ts && tsx core-tests/assert-revisions.ts && tsx scripts/assert-core-purity.ts && tsx scripts/sync-angular-core.ts --check",
+    "test": "tsx core-tests/assert-parser.ts && tsx core-tests/assert-normalize.ts && tsx core-tests/assert-validation.ts && tsx core-tests/assert-tree.ts && tsx core-tests/assert-multi-action.ts && tsx core-tests/assert-nlp-parser.ts && tsx core-tests/assert-operators.ts && tsx core-tests/assert-customer-eval.ts && tsx core-tests/assert-scope.ts && tsx core-tests/assert-angular-seam.ts && tsx core-tests/assert-sweet-ux.ts && tsx core-tests/assert-revisions.ts && tsx core-tests/assert-rule-text.ts && tsx scripts/assert-core-purity.ts && tsx scripts/sync-angular-core.ts --check",
     "sync:angular-core": "tsx scripts/sync-angular-core.ts",
     "assert:core-purity": "tsx scripts/assert-core-purity.ts",
     "assert:angular-core-sync": "tsx scripts/sync-angular-core.ts --check"

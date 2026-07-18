@@ -24,3 +24,4 @@ export * from "./clarifications";
 export * from "./revisions";
 export * from "./simulationExplainer";
 export * from "./orgPolicy";
+export * from "./ruleText";

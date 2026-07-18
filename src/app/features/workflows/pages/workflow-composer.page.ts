@@ -4,6 +4,7 @@ import {
   Component,
   ElementRef,
   Injector,
+  OnDestroy,
   ViewChild,
   afterNextRender,
   computed,
@@ -23,6 +24,7 @@ import {
   explainSimulation,
 } from '../../../core/simulationExplainer';
 import { validateRule } from '../../../core/ruleValidation';
+import { composeRuleText } from '../../../core/ruleText';
 import {
   ACTIONS,
   ActionDef,
@@ -32,6 +34,7 @@ import {
   EventDef,
   FIELDS,
   OPERATORS,
+  ScopeValue,
   WorkflowRule,
   allowedFieldsForTriggers,
   condFieldDef,
@@ -57,6 +60,11 @@ import {
 } from '../ui/sweet-spiral.state';
 
 type ComposerPhase = 'idle' | 'submitted' | 'parsing' | 'parser-error' | 'network-error';
+
+/** "loan amount" → "Loan amount" for pill/card display (spec sentence case). */
+function sentence(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 /* ---- Structured builder pickers (Phase 1.5) ------------------------------ */
 
@@ -260,6 +268,12 @@ interface ActionCard {
           <p class="sr-only" aria-live="polite" aria-atomic="true">{{ liveStatus() }}</p>
 
           <section class="visual-builder" aria-label="Structured workflow builder">
+            @if (provisional()) {
+              <p class="provisional-hint" role="status">
+                Rough match from your description — highlighted picks are provisional.
+                Click one to confirm it, or press Enter to review.
+              </p>
+            }
             <section class="builder-column" aria-labelledby="builder-triggers-title">
               <h2 class="column-header" id="builder-triggers-title">
                 <span class="step" aria-hidden="true">1</span> Trigger event
@@ -279,7 +293,8 @@ interface ActionCard {
                     <button
                       type="button"
                       class="option"
-                      [class.selected]="selectedEvent() === entry.key"
+                      [class.selected]="selectedEvents().has(entry.key)"
+                      [attr.aria-pressed]="selectedEvents().has(entry.key)"
                       (click)="selectTrigger(entry.key)"
                     >
                       <span class="option-emoji" aria-hidden="true">{{ entry.emoji }}</span>
@@ -299,7 +314,7 @@ interface ActionCard {
               <h2 class="column-header" id="builder-conditions-title">
                 <span class="step" aria-hidden="true">2</span> Conditions
               </h2>
-              @if (!selectedEvent()) {
+              @if (!selectedEvents().size) {
                 <p class="zero">Pick a trigger event first.</p>
               } @else {
                 <div class="pill-row">
@@ -335,7 +350,7 @@ interface ActionCard {
                         @if (card.leaf; as leaf) {
                           <div class="card-controls">
                             <select
-                              aria-label="Operator"
+                              [attr.aria-label]="'Operator for ' + card.label"
                               (change)="setConditionOperator(card.index, $any($event.target).value)"
                             >
                               @for (op of leaf.operators; track op.value) {
@@ -347,9 +362,12 @@ interface ActionCard {
                             @if (!leaf.valueless) {
                               @if (leaf.options; as options) {
                                 <select
-                                  aria-label="Value"
+                                  [attr.aria-label]="'Value for ' + card.label"
                                   (change)="setConditionValue(card.index, $any($event.target).value)"
                                 >
+                                  @if (!leaf.value) {
+                                    <option value="" selected disabled>Choose…</option>
+                                  }
                                   @for (option of options; track option) {
                                     <option [value]="option" [selected]="option === leaf.value">
                                       {{ option }}
@@ -359,7 +377,7 @@ interface ActionCard {
                               } @else {
                                 <input
                                   type="text"
-                                  aria-label="Value"
+                                  [attr.aria-label]="'Value for ' + card.label"
                                   [placeholder]="leaf.placeholder"
                                   [value]="leaf.value"
                                   (input)="setConditionValue(card.index, $any($event.target).value)"
@@ -421,9 +439,12 @@ interface ActionCard {
                       @if (card.mode === 'select') {
                         <div class="card-controls">
                           <select
-                            [attr.aria-label]="card.paramLabel"
+                            [attr.aria-label]="card.paramLabel + ' for ' + card.label"
                             (change)="setActionParam(card.index, $any($event.target).value)"
                           >
+                            @if (!card.value) {
+                              <option value="" selected disabled>Choose…</option>
+                            }
                             @for (option of card.options; track option) {
                               <option [value]="option" [selected]="option === card.value">
                                 {{ option }}
@@ -435,7 +456,7 @@ interface ActionCard {
                         <div class="card-controls">
                           <input
                             type="text"
-                            [attr.aria-label]="card.paramLabel"
+                            [attr.aria-label]="card.paramLabel + ' for ' + card.label"
                             [placeholder]="card.paramLabel"
                             [value]="card.value"
                             (input)="setActionParam(card.index, $any($event.target).value)"
@@ -517,7 +538,14 @@ interface ActionCard {
                       }
                     </article>
                   }
-                  @if (gaps().length > visibleQuestions().length) {
+                  @if (gapNotes().length) {
+                    <ul class="gap-notes">
+                      @for (note of gapNotes(); track note) {
+                        <li>{{ note }}</li>
+                      }
+                    </ul>
+                  }
+                  @if (visibleQuestions().length && gaps().length > visibleQuestions().length) {
                     <p class="more">{{ gaps().length - visibleQuestions().length }} more after these.</p>
                   }
                 </div>
@@ -685,10 +713,15 @@ interface ActionCard {
       border-radius: 50%; background: var(--brand); color: var(--sweet-ink);
       font-size: var(--text-xs); font-weight: 800;
     }
+    .provisional-hint {
+      grid-column: 1 / -1; margin: 0; padding: var(--space-2) var(--space-3);
+      border: 1px dashed var(--border-strong); border-radius: var(--radius-md);
+      color: var(--text-dim); font-size: var(--text-xs); font-weight: 650;
+    }
     .column-search, .card-controls select, .card-controls input, .logic {
       min-height: 38px; padding: .35rem .6rem; border: 1px solid var(--border-strong);
       border-radius: var(--radius-sm); background: var(--surface); color: var(--text);
-      font-size: var(--text-sm); outline: 0;
+      font-size: var(--text-sm);
     }
     .column-search:focus, .card-controls select:focus, .card-controls input:focus, .logic:focus {
       border-color: var(--brand);
@@ -778,6 +811,8 @@ interface ActionCard {
     }
     .answer-free input:focus, .revise input:focus { border-color: var(--brand); }
     .more { color: var(--text-dim); font-size: var(--text-sm); }
+    .gap-notes { margin: var(--space-4) 0 0; padding-left: 1.1rem; color: var(--warn-text); font-size: var(--text-sm); }
+    .gap-notes li { margin: .3rem 0; }
     .feedback { margin: var(--space-3) 0 0; font-size: var(--text-sm); }
     .feedback.success { color: var(--success); }
     .feedback.warning { color: var(--warn-text); }
@@ -831,7 +866,7 @@ interface ActionCard {
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class WorkflowComposerPage implements AfterViewInit {
+export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly service = inject(WorkflowsService);
   private readonly injector = inject(Injector);
@@ -868,8 +903,30 @@ export class WorkflowComposerPage implements AfterViewInit {
           .filter((issue) => issue.severity === 'error')
           .map((issue) => issue.message)
       : [];
-    return [...new Set([...parseIssues, ...validationIssues])];
+    // Author-time empty-value gate (Phase 1.6): validateRule tolerates empty
+    // values, but a builder-seeded '' condition or param must never reach
+    // save — Number('') is 0 and an empty assignee notifies nobody.
+    const authoringIssues: string[] = [];
+    if (result.rule) {
+      for (const leaf of walkLeaves(result.rule.conditions)) {
+        if (!isValuelessOperator(leaf.operator) && !scopeLabel(leaf.value).trim()) {
+          authoringIssues.push(`Pick a value for “${condFieldLabel(leaf.field)}”.`);
+        }
+      }
+      for (const output of [...result.rule.actions, ...(result.rule.else ?? [])]) {
+        const def = getAction(output.action);
+        if (def && def.paramKind !== 'none' && !scopeLabel(output.params[paramKeyFor(def.key)]).trim()) {
+          authoringIssues.push(`Pick a ${def.paramLabel || 'value'} for “${def.label}”.`);
+        }
+      }
+    }
+    return [...new Set([...parseIssues, ...validationIssues, ...authoringIssues])];
   });
+  /** Gap messages with no interactive question — rendered as a plain list so a
+   *  validation-only block never becomes an unexplained dead end. */
+  protected readonly gapNotes = computed(() =>
+    this.visibleQuestions().length ? [] : this.gaps()
+  );
   protected readonly visibleQuestions = computed<Clarification[]>(() => {
     const result = this.result();
     return result ? clarificationsFor(result).slice(0, 2) : [];
@@ -923,14 +980,31 @@ export class WorkflowComposerPage implements AfterViewInit {
     ];
   });
 
-  /* ---- Structured visual builder state (Phase 1.5) ---- */
+  /* ---- Structured visual builder state (Phase 1.5 / 1.6) ---- */
 
   protected readonly eventSearch = signal('');
   protected readonly actionSearch = signal('');
 
+  /**
+   * Live rough-match parse of the description while the user types (Phase
+   * 1.6). Display-only until committed: the builder renders it so triggers/
+   * conditions/actions light up as they are recognized, and the first builder
+   * click adopts it as the working rule.
+   */
+  protected readonly liveResult = signal<ParseResult | null>(null);
+
   protected readonly rule = computed(() => this.result()?.rule ?? null);
-  protected readonly selectedEvent = computed(() => this.rule()?.triggers[0]?.event ?? null);
-  protected readonly logic = computed<CondLogic>(() => this.rule()?.conditions.logic ?? 'AND');
+  /** What the builder columns render: the committed rule, else the live rough match. */
+  protected readonly builderRule = computed(
+    () => this.result()?.rule ?? this.liveResult()?.rule ?? null
+  );
+  protected readonly provisional = computed(
+    () => !this.result() && this.liveResult()?.rule != null
+  );
+  protected readonly selectedEvents = computed(
+    () => new Set((this.builderRule()?.triggers ?? []).map((trigger) => trigger.event))
+  );
+  protected readonly logic = computed<CondLogic>(() => this.builderRule()?.conditions.logic ?? 'AND');
 
   protected readonly eventGroups = computed<PickerGroup[]>(() => {
     const query = this.eventSearch().trim().toLowerCase();
@@ -951,13 +1025,16 @@ export class WorkflowComposerPage implements AfterViewInit {
   });
 
   protected readonly conditionFields = computed(() => {
-    const rule = this.rule();
+    const rule = this.builderRule();
     if (!rule || rule.triggers.length === 0) return [];
-    return allowedFieldsForTriggers(rule.triggers.map((trigger) => trigger.event));
+    return allowedFieldsForTriggers(rule.triggers.map((trigger) => trigger.event)).map((field) => ({
+      key: field.key,
+      label: sentence(field.label),
+    }));
   });
 
   protected readonly conditionCards = computed<ConditionCard[]>(() => {
-    const rule = this.rule();
+    const rule = this.builderRule();
     if (!rule) return [];
     return rule.conditions.children.map((node, index) => {
       if (isGroup(node)) {
@@ -974,7 +1051,7 @@ export class WorkflowComposerPage implements AfterViewInit {
       const options = def?.options ?? null;
       return {
         index,
-        label: condFieldLabel(node.field),
+        label: sentence(condFieldLabel(node.field)),
         leaf: {
           operator: node.operator,
           operators: OPERATORS[condFieldKind(node.field)],
@@ -989,7 +1066,7 @@ export class WorkflowComposerPage implements AfterViewInit {
   });
 
   protected readonly actionCards = computed<ActionCard[]>(() => {
-    const rule = this.rule();
+    const rule = this.builderRule();
     if (!rule) return [];
     return rule.actions.map((output, index) => {
       const def = getAction(output.action);
@@ -1014,8 +1091,66 @@ export class WorkflowComposerPage implements AfterViewInit {
     requestAnimationFrame(() => this.composerInput?.nativeElement.focus());
   }
 
+  ngOnDestroy() {
+    this.cancelTypeOut();
+  }
+
+  /* ---- Builder → text type-out (Phase 1.6) ----
+   * The canonical description is typed into the cursor character by character,
+   * pulsing the Sweet spiral like real typing. Restarts snap to the common
+   * prefix so successive edits only retype the changed tail. Honors
+   * prefers-reduced-motion (instant set), and any manual keystroke or Enter
+   * cancels the animation. */
+
+  private typeTimer: ReturnType<typeof setInterval> | null = null;
+
+  private cancelTypeOut() {
+    if (this.typeTimer != null) {
+      clearInterval(this.typeTimer);
+      this.typeTimer = null;
+    }
+  }
+
+  private typeOut(target: string) {
+    this.cancelTypeOut();
+    const reduced =
+      typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced) {
+      this.text.set(target);
+      this.syncComposerHeight();
+      return;
+    }
+    const current = this.text();
+    let prefix = 0;
+    while (prefix < current.length && prefix < target.length && current[prefix] === target[prefix]) {
+      prefix++;
+    }
+    this.text.set(target.slice(0, prefix));
+    this.syncComposerHeight();
+    this.typeTimer = setInterval(() => {
+      const now = this.text();
+      if (now.length >= target.length) {
+        this.cancelTypeOut();
+        return;
+      }
+      this.text.set(target.slice(0, Math.min(target.length, now.length + 2)));
+      this.typingPulse.update((pulse) => pulse + 1);
+      this.syncComposerHeight();
+    }, 16);
+  }
+
+  private syncComposerHeight() {
+    const el = this.composerInput?.nativeElement;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.style.height = 'auto';
+      el.style.height = `${Math.min(el.scrollHeight, 224)}px`;
+    });
+  }
+
   protected onInput(event: Event) {
     const textarea = event.target as HTMLTextAreaElement;
+    this.cancelTypeOut();
     this.buildGeneration++;
     this.text.set(textarea.value);
     this.result.set(null);
@@ -1026,6 +1161,23 @@ export class WorkflowComposerPage implements AfterViewInit {
     this.phase.set('idle');
     textarea.style.height = 'auto';
     textarea.style.height = `${Math.min(textarea.scrollHeight, 224)}px`;
+    // Phase 1.6: rough-match the description on every keystroke so the
+    // builder columns light up as the parser recognizes pieces. Display-only
+    // until committed by Enter or a builder click.
+    this.refreshLiveParse(textarea.value);
+  }
+
+  private refreshLiveParse(raw: string) {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      this.liveResult.set(null);
+      return;
+    }
+    try {
+      this.liveResult.set(parseInstruction(trimmed));
+    } catch {
+      this.liveResult.set(null);
+    }
   }
 
   protected onComposerKeydown(event: KeyboardEvent) {
@@ -1039,6 +1191,8 @@ export class WorkflowComposerPage implements AfterViewInit {
     event?.preventDefault();
     const description = this.text().trim();
     if (!description) return;
+    this.cancelTypeOut();
+    this.liveResult.set(null);
     const generation = ++this.buildGeneration;
     this.error.set(null);
     this.clearRevisionFeedback();
@@ -1077,34 +1231,44 @@ export class WorkflowComposerPage implements AfterViewInit {
     }
   }
 
-  /* ---- Structured visual builder mutations (Phase 1.5) ----
+  /* ---- Structured visual builder mutations (Phase 1.5 / 1.6) ----
    * Every mutation is immutable and funnels through updateRule, so the
    * interpretation, gap gate, simulation, and save flow all react exactly as
    * they do to a parsed description. */
 
   private updateRule(rule: WorkflowRule) {
-    // A visual edit supersedes any in-flight parse of the description.
+    // A visual edit supersedes any in-flight parse AND the last parse's
+    // sidecar: stale unresolved/uncovered/ambiguity entries describe text
+    // that is replaced by the canonical composition below, and their
+    // index-addressed clarifications would patch the wrong node.
     this.buildGeneration++;
-    const current = this.result();
-    if (current) {
-      this.result.set({ ...current, rule });
-    } else {
-      this.result.set({ rule, notes: [], unresolved: [], uncovered: [], ambiguities: [] });
-    }
-    this.parsedDescription.set(this.text().trim());
+    this.liveResult.set(null);
+    this.result.set({ rule, notes: [], unresolved: [], uncovered: [], ambiguities: [] });
+    // Phase 1.6 bi-directional sync: compose the canonical description for the
+    // committed rule and type it into the cursor. The composed text is what
+    // save() persists as name/description, so the record always describes the
+    // rule it carries.
+    const composed = composeRuleText(rule);
+    this.parsedDescription.set(composed);
+    this.typeOut(composed);
     this.phase.set('idle');
     this.error.set(null);
     this.clearRevisionFeedback();
   }
 
-  /** Current rule, or a triggerless shell the validator keeps gated until one is picked. */
+  /** Working rule: committed, else the live rough match a click adopts, else
+   *  a triggerless shell the validator keeps gated until an event is picked. */
   private baseRule(): WorkflowRule {
-    return this.rule() ?? { ...emptyRule(), triggers: [] };
+    return this.builderRule() ?? { ...emptyRule(), triggers: [] };
   }
 
   protected selectTrigger(eventKey: string) {
     const base = this.baseRule();
-    this.updateRule({ ...base, triggers: [{ event: eventKey }] });
+    const already = base.triggers.length === 1 && base.triggers[0].event === eventKey;
+    // Re-clicking the sole selected trigger is a no-op on a committed rule
+    // (never strips a parsed trigger scope) and a confirm on a provisional one.
+    if (already && this.result()) return;
+    this.updateRule(already ? base : { ...base, triggers: [{ event: eventKey }] });
   }
 
   protected addCondition(fieldKey: string) {
@@ -1153,10 +1317,18 @@ export class WorkflowComposerPage implements AfterViewInit {
       conditions: {
         ...base.conditions,
         children: base.conditions.children.map((node, i) =>
-          i === index && !isGroup(node) ? { ...node, value } : node
+          i === index && !isGroup(node)
+            ? { ...node, value: this.keepRefIfSameLabel(node.value, value) }
+            : node
         ),
       },
     });
+  }
+
+  /** Keep an ID-bound ScopeRef when the user re-picks its own display label —
+   *  touching a control must not silently downgrade an instance ref to text. */
+  private keepRefIfSameLabel(prev: ScopeValue | undefined, next: string): ScopeValue {
+    return prev != null && typeof prev !== 'string' && scopeLabel(prev) === next ? prev : next;
   }
 
   protected setLogic(logic: string) {
@@ -1188,7 +1360,10 @@ export class WorkflowComposerPage implements AfterViewInit {
         if (i !== index) return output;
         const def = getAction(output.action);
         const key = def ? paramKeyFor(def.key) : 'value';
-        return { ...output, params: { ...output.params, [key]: value } };
+        return {
+          ...output,
+          params: { ...output.params, [key]: this.keepRefIfSameLabel(output.params[key], value) },
+        };
       }),
     });
   }

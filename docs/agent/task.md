@@ -544,10 +544,10 @@ scope after the initial no-overflow check.
 - [x] Make the Sweet spiral spin briefly on workflow changes, settle fully, and remain hover-interactive
 - [x] Refine workflow detail into a compact metadata header and Interpretation/Test/Safeguards report shell
 - [x] Refine the reviews queue, proposal rows, and empty state without fabricating fields
-- [ ] Format affected files and extend browserless UI contracts
-- [ ] Verify the full test suite and production build
-- [ ] Browser-QA affected routes at 1710x981, 1024x768, and 390x844
-- [ ] Commit as release 1.9
+- [x] Format-check affected files and extend browserless UI contracts (39 assertions; no formatter or lint command is configured)
+- [x] Verify the full test suite and production build
+- [ ] Browser-QA affected routes at 1710x981, 1024x768, and 390x844 — blocked because the in-app browser runtime reported no available browser; affected routes served HTTP 200 and responsive source contracts/build passed
+- [x] Commit as release 1.9
 
 ---
 
@@ -597,6 +597,49 @@ content-agnostic because events/fields/actions change per client. All work in
       commit.
 
 Known limits (deliberate, deterministic): the scorer needs ≥2 matched tokens
-(one-word phrases are hijackable); rough option-scan supersets remain on
-re-parse; the legacy "route … to <assignee>" grammar still wins over the bare
-"route to queue" label (hence the alias).
+(one-word phrases are hijackable); the legacy "route … to <assignee>" grammar
+still wins over the bare "route to queue" label (hence the alias).
+
+---
+
+# 1.9.2 — Cross-surface sync fixpoint (2026-07-18, Claude)
+
+Anderson's directive: the AI-text cursor, the 3-column builder, and the
+workflow-diagram canvas must ALWAYS stay in sync through the parser-engine
+upgrade. All three read one shared rule signal and re-serialize via
+`composeRuleText`; the invariant that keeps them from drifting is that
+re-parsing that canonical text must not change the rule — parse∘compose must
+reach a **stable fixpoint**. A probe across the whole vocabulary found 14
+oscillations: e.g. "booking status is Error" re-parsed to also invent
+data_status/processing_status (shared option "Error"), then invent
+stage:Processing (the word "processing" inside the label "processing status"),
+growing every round → the surfaces diverged on each re-parse/Enter.
+
+- [x] **Two-pass condition matcher** (rule-core `nlParser.ts`
+      `matchConditions`): pass 1 binds every label-NAMED condition and consumes
+      its span; pass 2 runs the rough distinctive-option scan ONLY on the
+      unclaimed remainder (masked text). A bare option can no longer be claimed
+      by a sibling field whose real value sits in another clause, and an action
+      value ("change stage to Closed") can no longer fabricate a phantom
+      condition. Content-agnostic: works for any client's overlapping option
+      vocabulary.
+- [x] Re-baselined pill fixtures 1/3/4 in `assert-parser.ts` — the old
+      expectations encoded exactly those phantom conditions; the corrected emit
+      is what the user actually stated (documented inline).
+- [x] `core-tests/assert-sync-fixpoint.ts` — **370 assertions** pinning the
+      fixpoint across a full-vocabulary sweep (EVERY event, action, field) plus
+      builder/canvas combos, and direct guards that the phantom-condition
+      regressions stay dead. Wired into `npm test`. Process over content: the
+      sweep iterates the vocabulary itself, so client content changes are
+      covered with no test edit.
+- [x] Verified: whole-vocabulary probe now 0 oscillations with valid data;
+      `npm test` 881 PASS / exit 0 (18 gates incl. purity + sync);
+      `npm run build` clean. Scoped to `packages/rule-core` (+ vendored sync)
+      and parser tests; Codex's Phase 1.9 UI files untouched.
+
+Note: the component wiring that binds the three surfaces (`builderRule()` +
+canvas `effect`/index-refs, committed in 1.6/1.7) is unchanged — a parser
+change can only desync the text↔rule round-trip, which this fixpoint now
+guarantees. The remaining known no-op: an INCOMPLETE condition (empty value,
+already gated from save) serializes to "…" and drops on re-parse — an
+authoring draft state, not a saved-rule sync case.

@@ -16,13 +16,27 @@ function t(name: string, cond: boolean, detail?: string) {
 const leaves = (rule: WorkflowRule | null) => (rule ? walkLeaves(rule.conditions) : []);
 
 /* ---- Baseline: the 4 ChatBox pill examples ------------------------------- */
-/* Fixtures now assert the v3 emit (Phase 1): triggers[], root condition group
- * with `children`, and default (shadow) controls. Pill 2 still reflects the
- * Phase-0 fix where "loan amount is at least 250k" parses to gte (was dropped). */
+/* Fixtures assert the v3 emit (Phase 1): triggers[], root condition group with
+ * `children`, and default (shadow) controls. Pill 2 reflects the Phase-0 fix
+ * where "loan amount is at least 250k" parses to gte (was dropped).
+ *
+ * Pills 1, 3, 4 were re-baselined (2026-07-18, sync engine) when the condition
+ * matcher moved to two passes (named conditions first, rough distinctive-option
+ * scan only on the unclaimed remainder). That removed PHANTOM conditions the
+ * old single-pass rough scan fabricated:
+ *   - Pill 1/3: "booking status is Error" no longer also invents
+ *     data_status/processing_status (they share the option "Error" but the user
+ *     named only bookstatus); pill 3 no longer invents a redundant core=FISERV
+ *     (already the trigger event).
+ *   - Pill 4: "change stage to Closed" is purely an ACTION — it no longer also
+ *     fabricates a stage=Closed CONDITION.
+ * These phantoms were the exact cause of parse∘compose oscillation that drifted
+ * the text/builder/canvas surfaces apart; the corrected emit is what the user
+ * actually stated and round-trips to a stable fixpoint (assert-sync-fixpoint). */
 const PILLS: Array<[string, string]> = [
   [
     "If there is a system error and booking status is Error, assign to Wael",
-    '{"schemaVersion":3,"triggers":[{"event":"SYSTEM ERROR"}],"conditions":{"logic":"AND","children":[{"field":"bookstatus","operator":"is","value":"Error"},{"field":"data_status","operator":"is","value":"Error"},{"field":"processing_status","operator":"is","value":"Error"}]},"actions":[{"action":"assign_user","params":{"assignee":"Wael"}}],"controls":{"mode":"shadow","oncePerRequest":true,"maxFiresPerHour":25,"missingData":"no_match","priority":100}}',
+    '{"schemaVersion":3,"triggers":[{"event":"SYSTEM ERROR"}],"conditions":{"logic":"AND","children":[{"field":"bookstatus","operator":"is","value":"Error"}]},"actions":[{"action":"assign_user","params":{"assignee":"Wael"}}],"controls":{"mode":"shadow","oncePerRequest":true,"maxFiresPerHour":25,"missingData":"no_match","priority":100}}',
   ],
   [
     "When a loan is approved and loan amount is at least 250k, assign to Underwriting Team",
@@ -30,11 +44,11 @@ const PILLS: Array<[string, string]> = [
   ],
   [
     "When a Fiserv loan booking status is Error, notify Booking Team and add tag booking-failed",
-    '{"schemaVersion":3,"triggers":[{"event":"FISERV LOAN"}],"conditions":{"logic":"AND","children":[{"field":"bookstatus","operator":"is","value":"Error"},{"field":"data_status","operator":"is","value":"Error"},{"field":"processing_status","operator":"is","value":"Error"},{"field":"core","operator":"is","value":"FISERV LOAN"}]},"actions":[{"action":"notify","params":{"value":"Booking Team"}},{"action":"add_tag","params":{"value":"booking-failed"}}],"controls":{"mode":"shadow","oncePerRequest":true,"maxFiresPerHour":25,"missingData":"no_match","priority":100}}',
+    '{"schemaVersion":3,"triggers":[{"event":"FISERV LOAN"}],"conditions":{"logic":"AND","children":[{"field":"bookstatus","operator":"is","value":"Error"}]},"actions":[{"action":"notify","params":{"value":"Booking Team"}},{"action":"add_tag","params":{"value":"booking-failed"}}],"controls":{"mode":"shadow","oncePerRequest":true,"maxFiresPerHour":25,"missingData":"no_match","priority":100}}',
   ],
   [
     "When a loan is rejected, change stage to Closed",
-    '{"schemaVersion":3,"triggers":[{"event":"LOAN REJECTED"}],"conditions":{"logic":"AND","children":[{"field":"stage","operator":"is","value":"Closed"}]},"actions":[{"action":"change_stage","params":{"value":"Closed"}}],"controls":{"mode":"shadow","oncePerRequest":true,"maxFiresPerHour":25,"missingData":"no_match","priority":100}}',
+    '{"schemaVersion":3,"triggers":[{"event":"LOAN REJECTED"}],"conditions":{"logic":"AND","children":[]},"actions":[{"action":"change_stage","params":{"value":"Closed"}}],"controls":{"mode":"shadow","oncePerRequest":true,"maxFiresPerHour":25,"missingData":"no_match","priority":100}}',
   ],
 ];
 PILLS.forEach(([input, expected], i) => {

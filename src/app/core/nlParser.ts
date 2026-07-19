@@ -525,11 +525,19 @@ function matchConditions(
 ): RuleCondition[] {
   const conds: RuleCondition[] = [];
   const allowed = allowedFieldsForEvent(eventKey);
+  // Fields bound in pass 1 (by their own name) — pass 2's rough scan skips them
+  // and can't reuse their words.
+  const named = new Set<string>();
 
+  /* ---- Pass 1: label-NAMED conditions ("<field label> is <value>") --------
+   * Every canonical serialized condition names its field, so this pass binds
+   * all of them and consumes their spans. Running BEFORE the rough scan is what
+   * keeps a bare distinctive option in one clause ("Error") from being claimed
+   * by a sibling field whose real value lives in a DIFFERENT clause — the
+   * non-idempotency that made the text/builder/canvas surfaces drift. */
   for (const field of allowed) {
     const labelN = norm(field.label);
     const labelIdx = text.indexOf(labelN);
-    const fieldMentioned = labelIdx >= 0 || text.includes(field.key);
 
     if (field.kind === "orderedEnum" && field.options) {
       // "risk grade worse than B" / "grade better than C"
@@ -545,56 +553,31 @@ function matchConditions(
           operator: m[1] === "worse than" ? "worse_than" : "better_than",
           value: m[2].toUpperCase(),
         });
+        named.add(field.key);
         continue;
       }
     }
 
-    if ((field.kind === "enum" || field.kind === "orderedEnum") && field.options) {
-      // Label-adjacent binding first: when the field is named outright
-      // ("request stage is not Closed"), the option that directly follows the
-      // label wins. Without this, the whole-text scan below could bind the
-      // field to an option word leaking from another clause (e.g. the trigger
-      // phrase "loan approved" hijacking a stage condition). Fallback keeps
-      // the old rough-scan behavior for key-only or label-less mentions.
-      if (labelIdx >= 0) {
-        const optAlt = [...field.options]
-          .sort((a, b) => b.length - a.length)
-          .map((o) => escapeRe(norm(o)))
-          .join("|");
-        const adjacent = new RegExp(
-          `${escapeRe(labelN)}\\s+(?:(is\\s+not|isn't|is|not)\\s+)?(${optAlt})\\b`
-        ).exec(text);
-        if (adjacent) {
-          const opt = field.options.find((o) => norm(o) === adjacent[2]);
-          if (opt) {
-            consume(spans, adjacent.index, adjacent[0].length);
-            conds.push({
-              field: field.key,
-              operator: adjacent[1] && /not/.test(adjacent[1]) ? "is_not" : "is",
-              value: opt,
-            });
-            continue;
-          }
-        }
-      }
-      for (const opt of field.options) {
-        const optN = norm(opt);
-        // Short options (grades "A"–"E") need word boundaries + the field named;
-        // plain includes() would match single letters anywhere.
-        const optRe = new RegExp(`\\b${escapeRe(optN)}\\b`);
-        const optIdx =
-          optN.length <= 3 ? (optRe.exec(text)?.index ?? -1) : text.indexOf(optN);
-        if (optIdx === -1) continue;
-        const negated = new RegExp(`(is not|isn't|not)\\s+${escapeRe(optN)}`).test(text);
-        const applies =
-          optN.length <= 3
-            ? fieldMentioned
-            : (fieldMentioned && text.includes(optN)) || isDistinctive(opt);
-        if (applies) {
-          if (labelIdx >= 0) consume(spans, labelIdx, labelN.length);
-          consume(spans, optIdx, optN.length);
-          conds.push({ field: field.key, operator: negated ? "is_not" : "is", value: opt });
-          break;
+    if ((field.kind === "enum" || field.kind === "orderedEnum") && field.options && labelIdx >= 0) {
+      // Label-adjacent binding: when the field is named outright ("request
+      // stage is not Closed"), the option that directly follows the label wins.
+      const optAlt = [...field.options]
+        .sort((a, b) => b.length - a.length)
+        .map((o) => escapeRe(norm(o)))
+        .join("|");
+      const adjacent = new RegExp(
+        `${escapeRe(labelN)}\\s+(?:(is\\s+not|isn't|is|not)\\s+)?(${optAlt})\\b`
+      ).exec(text);
+      if (adjacent) {
+        const opt = field.options.find((o) => norm(o) === adjacent[2]);
+        if (opt) {
+          consume(spans, adjacent.index, adjacent[0].length);
+          conds.push({
+            field: field.key,
+            operator: adjacent[1] && /not/.test(adjacent[1]) ? "is_not" : "is",
+            value: opt,
+          });
+          named.add(field.key);
         }
       }
     } else if (field.kind === "numeric") {
@@ -614,6 +597,7 @@ function matchConditions(
           else if (/under|below|less than|</.test(opWord)) operator = "lt";
           else if (/at most|<=/.test(opWord)) operator = "lte";
           conds.push({ field: field.key, operator, value: amount });
+          named.add(field.key);
         }
       }
     } else if (field.kind === "text") {
@@ -624,6 +608,7 @@ function matchConditions(
       if (m) {
         const heard = m[1].trim();
         consume(spans, m.index, m[0].length);
+        named.add(field.key);
         // N1 for instance-shaped fields: resolve against the registry or slot.
         const list = INSTANCE_FIELDS.has(field.key) ? instanceListFor(field, opts) : null;
         if (list) {
@@ -642,6 +627,40 @@ function matchConditions(
         } else {
           conds.push({ field: field.key, operator: "is", value: titleCase(heard) });
         }
+      }
+    }
+  }
+
+  /* ---- Pass 2: rough distinctive-option scan for UNNAMED enum fields -------
+   * Catches an option mentioned WITHOUT its field label ("… is Confirmed").
+   * Runs on text with every pass-1 span masked out, so it can only claim words
+   * no named condition already took — the guarantee that canonical serialized
+   * text (all conditions named) round-trips to an exact, stable fixpoint. */
+  for (const field of allowed) {
+    if (named.has(field.key)) continue;
+    if (!((field.kind === "enum" || field.kind === "orderedEnum") && field.options)) continue;
+    const labelN = norm(field.label);
+    const labelIdx = text.indexOf(labelN);
+    const fieldMentioned = labelIdx >= 0 || text.includes(field.key);
+    const scanText = maskConsumed(text, spans);
+    for (const opt of field.options) {
+      const optN = norm(opt);
+      // Short options (grades "A"–"E") need word boundaries + the field named;
+      // plain includes() would match single letters anywhere.
+      const optRe = new RegExp(`\\b${escapeRe(optN)}\\b`);
+      const optIdx =
+        optN.length <= 3 ? (optRe.exec(scanText)?.index ?? -1) : scanText.indexOf(optN);
+      if (optIdx === -1) continue;
+      const negated = new RegExp(`(is not|isn't|not)\\s+${escapeRe(optN)}`).test(scanText);
+      const applies =
+        optN.length <= 3
+          ? fieldMentioned
+          : (fieldMentioned && scanText.includes(optN)) || isDistinctive(opt);
+      if (applies) {
+        if (labelIdx >= 0) consume(spans, labelIdx, labelN.length);
+        consume(spans, optIdx, optN.length);
+        conds.push({ field: field.key, operator: negated ? "is_not" : "is", value: opt });
+        break;
       }
     }
   }

@@ -79,7 +79,7 @@ function activationBlocker(rule: WorkflowRule): string | null {
   template: `
     <lj-page>
       <header header class="page-header">
-        <lj-box class="header" [padding]="4">
+        <lj-box class="header" [padding]="0">
           <div class="header-inner">
             <a class="back-link" routerLink="/workflows"><span aria-hidden="true">←</span> Workflows</a>
           </div>
@@ -99,7 +99,7 @@ function activationBlocker(rule: WorkflowRule): string | null {
           <a routerLink="/workflows">Return to workflows</a>
         </section>
       } @else if (record(); as workflow) {
-        <article>
+        <article class="workflow-detail-report report-shell">
           <header class="hero">
             <div class="hero-main">
               <p class="eyebrow">Workflow</p>
@@ -142,6 +142,21 @@ function activationBlocker(rule: WorkflowRule): string | null {
             </div>
           </header>
 
+          <dl class="facts metadata-strip" aria-label="Workflow activity">
+            <div>
+              <dt>Last updated</dt>
+              <dd>{{ workflow.updatedAt | date: 'MMM d, y · h:mm a' }}</dd>
+            </div>
+            <div>
+              <dt>Created</dt>
+              <dd>{{ workflow.createdAt | date: 'MMM d, y' }}</dd>
+            </div>
+            <div>
+              <dt>Version</dt>
+              <dd>{{ workflow.version }}</dd>
+            </div>
+          </dl>
+
           <div class="announcements" aria-live="polite">
             @if (workflow.proposalStatus === 'pending') {
               <div class="attention-note">
@@ -160,21 +175,6 @@ function activationBlocker(rule: WorkflowRule): string | null {
             }
           </div>
 
-          <dl class="facts" aria-label="Workflow activity">
-            <div>
-              <dt>Last updated</dt>
-              <dd>{{ workflow.updatedAt | date: 'MMM d, y · h:mm a' }}</dd>
-            </div>
-            <div>
-              <dt>Created</dt>
-              <dd>{{ workflow.createdAt | date: 'MMM d, y' }}</dd>
-            </div>
-            <div>
-              <dt>Version</dt>
-              <dd>{{ workflow.version }}</dd>
-            </div>
-          </dl>
-
           <section class="content-section interpretation-section" aria-labelledby="interpretation-title">
             <div class="section-heading">
               <p class="eyebrow">Interpretation</p>
@@ -185,7 +185,7 @@ function activationBlocker(rule: WorkflowRule): string | null {
               <p class="plain-summary">{{ interpretation()?.summary }}</p>
               <ul class="checklist">
                 @for (item of interpretation()?.checklist; track $index) {
-                  <li><span aria-hidden="true">✓</span>{{ item }}</li>
+                  <li><span class="list-mark" aria-hidden="true"></span>{{ item }}</li>
                 }
               </ul>
             </div>
@@ -261,7 +261,7 @@ function activationBlocker(rule: WorkflowRule): string | null {
             <ul class="protections-list">
               @for (protection of protections(); track protection.title) {
                 <li>
-                  <span class="protection-mark" aria-hidden="true">✓</span>
+                  <span class="protection-mark" aria-hidden="true"></span>
                   <div>
                     <h3>{{ protection.title }}</h3>
                     <p>{{ protection.description }}</p>
@@ -299,33 +299,35 @@ function activationBlocker(rule: WorkflowRule): string | null {
     }
   `,
   styles: `
-    .page-header { display: block; padding: var(--space-5) 0 0; }
-    .header-inner { width: min(100%, 1240px); margin: 0 auto; padding-inline: clamp(1rem, 3vw, 3rem); }
+    :host { display: block; }
+    .page-header { display: block; padding: var(--space-3) 0 0; }
+    .header-inner { width: min(100%, 1440px); margin: 0 auto; padding-inline: clamp(24px, 3vw, 40px); }
     .back-link {
-      min-height: 42px; display: inline-flex; align-items: center; gap: .55rem; padding: .5rem .2rem;
+      min-height: 36px; display: inline-flex; align-items: center; gap: .55rem; padding: .35rem 0;
       color: var(--text-dim); font-size: var(--text-sm); font-weight: 750; text-decoration: none;
     }
     .back-link:hover { color: var(--text); }
+    .workflow-detail-report { overflow: hidden; margin-top: var(--space-2); }
     .hero {
-      display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(15rem, .55fr); gap: clamp(3rem, 8vw, 8rem);
-      padding: clamp(2.5rem, 6vw, 6.5rem) 0 clamp(3rem, 7vw, 6rem); border-bottom: 1px solid var(--border);
+      display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); gap: var(--space-8);
+      padding: var(--space-6); border-bottom: 1px solid var(--border); background: var(--surface);
     }
-    .hero-main { max-width: 52rem; }
-    .hero-main .eyebrow, .section-heading .eyebrow, .internal-tools .eyebrow { margin: 0 0 var(--space-3); }
+    .hero-main { max-width: 58rem; }
+    .hero-main .eyebrow, .section-heading .eyebrow, .internal-tools .eyebrow { margin: 0 0 var(--space-2); }
     .hero h1 {
-      margin: 0; font-size: clamp(2.65rem, 6vw, 5.4rem); line-height: .98;
-      font-weight: 790; letter-spacing: -.055em; text-wrap: balance;
+      margin: 0; font-size: clamp(2rem, 3vw, 2.25rem); line-height: 1.12;
+      font-weight: 790; letter-spacing: -.035em; text-wrap: balance;
     }
-    .hero-purpose { margin: var(--space-6) 0 0; color: var(--text-dim); font-size: clamp(1.08rem, 2vw, 1.35rem); line-height: 1.65; }
-    .hero-side { align-self: end; padding-bottom: .35rem; }
-    .hero-side > p { margin: var(--space-3) 0 var(--space-6); color: var(--text-dim); font-size: var(--text-sm); line-height: 1.6; }
-    .status { display: inline-flex; align-items: center; gap: .65rem; color: var(--text); font-size: var(--text-md); font-weight: 780; }
-    .status-dot { width: .65rem; height: .65rem; border-radius: 50%; background: var(--text-soft); }
-    .status[data-state='active'] .status-dot { background: var(--success); box-shadow: 0 0 0 5px var(--success-bg); }
-    .status[data-state='observing'] .status-dot { background: var(--brand); box-shadow: 0 0 0 5px var(--info-bg); }
-    .announcements { padding-top: var(--space-6); }
+    .hero-purpose { margin: var(--space-3) 0 0; color: var(--text-dim); font-size: var(--text-sm); line-height: 1.55; }
+    .hero-side { align-self: stretch; padding-left: var(--space-6); border-left: 1px solid var(--border); }
+    .hero-side > p { margin: var(--space-2) 0 var(--space-4); color: var(--text-dim); font-size: var(--text-xs); line-height: 1.5; }
+    .status { min-height: 26px; display: inline-flex; align-items: center; gap: .55rem; padding: 3px 8px; border: 1px solid var(--border); border-radius: var(--radius-pill); background: var(--surface-inset); color: var(--text); font-size: var(--text-xs); font-weight: 780; }
+    .status-dot { width: .5rem; height: .5rem; border-radius: 50%; background: var(--text-soft); }
+    .status[data-state='active'] .status-dot { background: var(--success); }
+    .status[data-state='observing'] .status-dot { background: var(--brand); }
+    .announcements { padding: var(--space-3) var(--space-6) 0; }
     .announcements:empty { display: none; }
-    .attention-note, .notice, .error { border-radius: var(--radius-lg); font-size: var(--text-sm); }
+    .attention-note, .notice, .error { border-radius: var(--radius-md); font-size: var(--text-xs); }
     .attention-note {
       display: flex; align-items: center; justify-content: space-between; gap: var(--space-5);
       padding: var(--space-4) var(--space-5); background: var(--warn-bg); color: var(--warn-text);
@@ -335,36 +337,38 @@ function activationBlocker(rule: WorkflowRule): string | null {
     .notice, .error { margin: var(--space-3) 0 0; padding: .8rem 1rem; }
     .notice { background: var(--info-bg); color: var(--info); }
     .error { background: var(--danger-bg); color: var(--danger); }
-    .facts { display: flex; margin: 0; padding: var(--space-6) 0; border-bottom: 1px solid var(--border); }
-    .facts div { min-width: 10rem; padding: 0 var(--space-6); border-left: 1px solid var(--border); }
-    .facts div:first-child { padding-left: 0; border-left: 0; }
+    .facts { display: flex; border-top: 0; border-bottom: 1px solid var(--border); }
+    .facts div { min-width: 11rem; padding: 10px var(--space-6); border-left: 1px solid var(--border); }
+    .facts div:first-child { border-left: 0; }
     .facts dt { color: var(--text-soft); font-size: .68rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
-    .facts dd { margin: .3rem 0 0; color: var(--text); font-size: var(--text-sm); font-weight: 650; }
+    .facts dd { margin: .2rem 0 0; color: var(--text); font-size: var(--text-xs); font-weight: 650; }
     .content-section {
-      display: grid; grid-template-columns: minmax(13rem, .58fr) minmax(0, 1.42fr); gap: clamp(3rem, 8vw, 8rem);
-      padding: clamp(4rem, 8vw, 7rem) 0; border-bottom: 1px solid var(--border);
+      display: grid; grid-template-columns: minmax(180px, .42fr) minmax(0, 1.58fr); gap: var(--space-8);
+      padding: var(--space-6); border-top: 1px solid var(--border);
     }
-    .section-heading { max-width: 22rem; }
-    .section-heading h2, .internal-tools h2 { margin: 0; font-size: clamp(1.7rem, 3vw, 2.5rem); line-height: 1.1; letter-spacing: -.035em; }
-    .section-heading > p:not(.eyebrow), .internal-tools p:not(.eyebrow) { margin: var(--space-4) 0 0; color: var(--text-dim); line-height: 1.65; }
-    .plain-summary { margin: 0; font-size: clamp(1.25rem, 2.3vw, 1.75rem); line-height: 1.55; letter-spacing: -.02em; }
-    .checklist { list-style: none; margin: var(--space-8) 0 0; padding: 0; border-top: 1px solid var(--border); }
-    .checklist li { display: flex; gap: var(--space-3); padding: var(--space-4) 0; border-bottom: 1px solid var(--border); color: var(--text-dim); }
-    .checklist li span { color: var(--brand-text); font-weight: 850; }
-    .simulation-summary { display: flex; margin-bottom: var(--space-8); border-block: 1px solid var(--border); }
-    .simulation-summary p { flex: 1; margin: 0; padding: var(--space-5); border-left: 1px solid var(--border); }
-    .simulation-summary p:first-child { padding-left: 0; border-left: 0; }
-    .simulation-summary strong { display: block; font-size: clamp(1.8rem, 3vw, 2.55rem); line-height: 1; }
-    .simulation-summary span { display: block; margin-top: var(--space-2); color: var(--text-dim); font-size: var(--text-xs); font-weight: 750; }
-    .results { border-top: 1px solid var(--border); }
-    .result { padding: var(--space-6) 0; border-bottom: 1px solid var(--border); }
+    .section-heading { max-width: 18rem; }
+    .section-heading h2, .internal-tools h2 { margin: 0; font-size: 1.05rem; line-height: 1.3; letter-spacing: -.015em; }
+    .section-heading > p:not(.eyebrow), .internal-tools p:not(.eyebrow) { margin: var(--space-2) 0 0; color: var(--text-dim); font-size: var(--text-xs); line-height: 1.5; }
+    .plain-summary { margin: 0; font-size: var(--text-md); line-height: 1.55; letter-spacing: -.01em; }
+    .checklist { list-style: none; margin: var(--space-4) 0 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+    .checklist li { display: flex; gap: var(--space-3); padding: 10px var(--space-3); border-top: 1px solid var(--border); color: var(--text-dim); font-size: var(--text-sm); }
+    .checklist li:first-child { border-top: 0; }
+    .list-mark { width: 8px; height: 8px; flex: none; margin-top: 6px; border: 2px solid var(--brand); border-radius: 50%; }
+    .simulation-summary { display: flex; margin-bottom: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+    .simulation-summary p { flex: 1; margin: 0; padding: var(--space-3); border-left: 1px solid var(--border); }
+    .simulation-summary p:first-child { border-left: 0; }
+    .simulation-summary strong { display: block; font-size: 1.35rem; line-height: 1; }
+    .simulation-summary span { display: block; margin-top: var(--space-1); color: var(--text-dim); font-size: 10px; font-weight: 750; }
+    .results { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+    .result { padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border); }
+    .result:first-child { border-top: 0; }
     .result-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
     .request-id { margin: 0 0 .2rem; color: var(--text-soft); font-size: .67rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
     .result h3 { margin: 0; font-size: 1.05rem; }
     .outcome { padding: .28rem .7rem; border-radius: var(--radius-pill); background: var(--surface-inset); color: var(--text-dim); font-size: .7rem; font-weight: 800; white-space: nowrap; }
     .outcome[data-outcome='run'] { background: var(--success-bg); color: var(--success); }
     .outcome[data-outcome='needs_data'] { background: var(--warn-bg); color: var(--warn-text); }
-    .explanation { margin: var(--space-4) 0 0; color: var(--text-dim); line-height: 1.65; }
+    .explanation { margin: var(--space-2) 0 0; color: var(--text-dim); font-size: var(--text-sm); line-height: 1.5; }
     .action-label { margin: var(--space-4) 0 .25rem; color: var(--text-soft); font-size: var(--text-xs); font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
     .result-actions { margin: 0; padding-left: 1.2rem; color: var(--text); }
     .result details { margin-top: var(--space-4); }
@@ -375,12 +379,13 @@ function activationBlocker(rule: WorkflowRule): string | null {
     .result-checks li[data-check='missing'] span { color: var(--warn-text); }
     .show-results { min-height: 42px; margin-top: var(--space-5); padding: .6rem 0; border: 0; background: transparent; color: var(--brand-text); font: inherit; font-size: var(--text-sm); font-weight: 800; cursor: pointer; }
     .show-results:hover { text-decoration: underline; text-underline-offset: .25rem; }
-    .protections-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
-    .protections-list li { display: flex; gap: var(--space-4); padding: var(--space-5) 0; border-bottom: 1px solid var(--border); }
-    .protection-mark { flex: 0 0 auto; width: 1.55rem; height: 1.55rem; display: grid; place-items: center; border-radius: 50%; background: var(--info-bg); color: var(--brand-text); font-size: .7rem; font-weight: 900; }
-    .protections-list h3 { margin: 0; font-size: var(--text-md); }
-    .protections-list p { margin: .35rem 0 0; color: var(--text-dim); line-height: 1.6; }
-    .internal-tools { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); padding: var(--space-10) 0; }
+    .protections-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+    .protections-list li { display: flex; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border); }
+    .protections-list li:first-child { border-top: 0; }
+    .protection-mark { flex: 0 0 auto; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--brand); }
+    .protections-list h3 { margin: 0; font-size: var(--text-sm); }
+    .protections-list p { margin: .2rem 0 0; color: var(--text-dim); font-size: var(--text-xs); line-height: 1.5; }
+    .internal-tools { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); padding: var(--space-4) var(--space-6); border-top: 1px solid var(--border); background: var(--surface-inset); }
     .internal-tools > div { max-width: 42rem; }
     .internal-tools h2 { font-size: 1.25rem; }
     .internal-tools a { flex: 0 0 auto; color: var(--brand-text); font-weight: 800; text-decoration: none; }
@@ -394,23 +399,25 @@ function activationBlocker(rule: WorkflowRule): string | null {
     .not-found a { color: var(--brand-text); font-weight: 750; }
     @keyframes pulse { to { opacity: .3; transform: scale(.75); } }
     @media (max-width: 820px) {
-      .hero { grid-template-columns: 1fr; gap: var(--space-10); }
+      .hero { grid-template-columns: 1fr; gap: var(--space-4); }
       .hero-side { max-width: 28rem; }
-      .content-section { grid-template-columns: 1fr; gap: var(--space-10); }
+      .hero-side { padding: var(--space-4) 0 0; border-top: 1px solid var(--border); border-left: 0; }
+      .content-section { grid-template-columns: 1fr; gap: var(--space-4); }
       .section-heading { max-width: 35rem; }
     }
     @media (max-width: 560px) {
-      .hero { padding-top: var(--space-8); }
+      .hero { padding: var(--space-4); }
       .facts { display: grid; grid-template-columns: 1fr 1fr; row-gap: var(--space-5); }
       .facts div { min-width: 0; padding-inline: 0 var(--space-4); border-left: 0; }
       .facts div:last-child { grid-column: 1 / -1; }
       .attention-note, .internal-tools { align-items: flex-start; flex-direction: column; }
       .simulation-summary { display: grid; grid-template-columns: repeat(3, 1fr); }
       .simulation-summary p { padding: var(--space-4) var(--space-3); }
-      .simulation-summary p:first-child { padding-left: 0; }
       .result-heading { align-items: flex-start; flex-direction: column; }
       .result-checks li { flex-direction: column; gap: .1rem; }
-      .internal-tools { padding-block: var(--space-8); }
+      .announcements { padding-inline: var(--space-4); }
+      .content-section { padding: var(--space-4); }
+      .internal-tools { padding: var(--space-4); }
     }
     @media (prefers-reduced-motion: reduce) { .loading-mark { animation: none; } }
   `,

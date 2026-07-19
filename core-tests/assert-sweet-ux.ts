@@ -118,6 +118,13 @@ const spiralSource = source('../src/app/features/workflows/ui/sweet-spiral.ts');
 const composerSource = source('../src/app/features/workflows/pages/workflow-composer.page.ts');
 const builderSource = source('../src/app/features/workflows/pages/workflow-builder.page.ts');
 const detailSource = source('../src/app/features/workflows/pages/workflow-detail.page.ts');
+const listSource = source('../src/app/features/workflows/pages/workflows-list.page.ts');
+const proposalsSource = source('../src/app/features/workflows/pages/proposals.page.ts');
+const stylesSource = source('../src/styles.scss');
+const angularSource = source('../angular.json');
+const appSource = source('../src/app/app.html');
+const appStylesSource = source('../src/app/app.scss');
+const primitivesSource = source('../src/app/shared/lj/lj.ts');
 const routesSource = source('../src/app/features/workflows/workflows.routes.ts');
 const accessPolicySource = source(
   '../src/app/features/workflows/data/workflow-access-policy.ts'
@@ -138,15 +145,79 @@ t(
   'coarse pointers receive a calm non-following alternative',
   /@media[^\{]*\(pointer:\s*coarse\)/.test(spiralSource) &&
     /matchMedia\(['"]\(hover:\s*hover\)\s*and\s*\(pointer:\s*fine\)['"]\)/.test(spiralSource) &&
-    /if\s*\(!this\.finePointer\s*\|\|\s*this\.reducedMotion\)\s*return/.test(spiralSource)
+    /protected pointerEnter\(\)\s*{\s*if\s*\(!this\.finePointer\s*\|\|\s*this\.reducedMotion\)\s*return/.test(spiralSource) &&
+    /\[data-hovered=['"]true['"]\]\s+\.hover-plane\s*{\s*animation:\s*none/.test(spiralSource)
 );
 t(
-  'spiral rotates on hover and while any workflow editing surface is active',
-  /\[data-hovered=['"]true['"]\]\s+svg/.test(spiralSource) &&
-    /\[data-active=['"]true['"]\]\s+svg/.test(spiralSource) &&
-    /\[active\]\s*=\s*['"]spiralActive\(\)['"]/.test(composerSource) &&
-    /\(focusin\)\s*=\s*['"]workflowFocusIn\(\)['"]/.test(composerSource) &&
-    /\(pointerdown\)\s*=\s*['"]workflowPointerDown\(\)['"]/.test(composerSource)
+  'semantic workflow changes schedule bounded spiral bursts at key interaction points',
+  /phase\.set\(['"]submitted['"]\);\s*this\.pulseSpiral\(\)/.test(composerSource) &&
+    /private updateRule\([\s\S]*?this\.typeOut\(composed\);\s*this\.pulseSpiral\(\)/.test(composerSource) &&
+    /applyClarification[\s\S]*?this\.pulseSpiral\(\)/.test(composerSource) &&
+    /revision\.status === ['"]applied['"][\s\S]*?this\.pulseSpiral\(\)/.test(composerSource) &&
+    /protected arrangeCanvas\(\)[\s\S]*?this\.pulseSpiral\(\)/.test(composerSource) &&
+    /private addCanvasEdge\([\s\S]*?this\.pulseSpiral\(\)/.test(composerSource)
+);
+t(
+  'spiral uses finite two-turn edit bursts, settles, and remains hover-interactive',
+  /\[data-hovered=['"]true['"]\]\s+\.hover-plane/.test(spiralSource) &&
+    /transform:\s*['"]rotate\(720deg\)['"]/.test(spiralSource) &&
+    /duration:\s*1100/.test(spiralSource) &&
+    /playState\s*===\s*['"]running['"]/.test(spiralSource) &&
+    /\[spinPulse\]\s*=\s*['"]spinPulse\(\)['"]/.test(composerSource) &&
+    /private pulseSpiral\(\)[\s\S]*?setTimeout/.test(composerSource) &&
+    !/\[data-active=['"]true['"]\]/.test(spiralSource)
+);
+t(
+  'enterprise foundation is centralized across shell and shared primitives',
+  /--sweet-canvas:\s*#f4f6f8/.test(stylesSource) &&
+    /--sweet-surface:\s*#ffffff/.test(stylesSource) &&
+    /--sweet-line:\s*#d8dee8/.test(stylesSource) &&
+    /node_modules\/@fontsource-variable\/inter\/index\.css/.test(angularSource) &&
+    /class=['"]topbar-inner['"]/.test(appSource) &&
+    /width:\s*min\(100%,\s*1440px\)/.test(appStylesSource) &&
+    /width:\s*min\(100%,\s*1440px\)/.test(primitivesSource)
+);
+t(
+  'composer review is one bounded six-step operational report',
+  /class=['"]workflow-review report-shell['"]/.test(composerSource) &&
+    ['Trigger', 'Conditions', 'Actions', 'Non-matching behavior', 'Safeguards', 'Test results'].every(
+      (label) => composerSource.includes(`>${label}<`)
+    ) &&
+    /reviewTriggerRows\(\)/.test(composerSource) &&
+    /reviewConditionRows\(\)/.test(composerSource) &&
+    /reviewActionRows\(\)/.test(composerSource) &&
+    /reviewElseRows\(\)/.test(composerSource)
+);
+t(
+  'review rows preserve nested logic and expose accessible column semantics',
+  /groupPath:\s*logicPath\.join\(['"] › ['"]\)/.test(composerSource) &&
+    /Group \$\{index \+ 1\} · \$\{node\.logic\}/.test(composerSource) &&
+    /Grouping:\s*\{\{ row\.groupPath \}\}/.test(composerSource) &&
+    /role=['"]table['"]/.test(composerSource) &&
+    /role=['"]columnheader['"]/.test(composerSource) &&
+    /\[attr\.aria-pressed\]=['"]filter\(\) === ['"]run['"]['"]/.test(composerSource)
+);
+t(
+  'clarifications remain inline and activation-blocking inside the report',
+  /class=['"]clarification-callout['"]/.test(composerSource) &&
+    /data-status=['"]needs-clarification['"]/.test(composerSource) &&
+    /\(click\)=['"]answer\(question, option\)['"]/.test(composerSource) &&
+    /\[disabled\]=['"]gaps\(\)\.length > 0/.test(composerSource)
+);
+t(
+  'builder renders monochrome vectors instead of emoji decoration',
+  /class=['"]option-icon['"]/.test(composerSource) &&
+    /class=['"]card-icon['"]/.test(composerSource) &&
+    !/\{\{\s*entry\.emoji\s*\}\}/.test(composerSource) &&
+    !/\{\{\s*card\.emoji\s*\}\}/.test(composerSource)
+);
+t(
+  'list, detail, and review queue share bounded enterprise surfaces',
+  /class=['"]workflow-index data-surface['"]/.test(listSource) &&
+    /class=['"]workflow-detail-report report-shell['"]/.test(detailSource) &&
+    /class=['"]facts metadata-strip['"]/.test(detailSource) &&
+    /class=['"]queue-surface data-surface['"]/.test(proposalsSource) &&
+    /class=['"]empty['"]\s+aria-labelledby=['"]empty-title['"]/.test(proposalsSource)
 );
 t(
   'diagram supports pointer and touch node movement with a rule-backed trash target',

@@ -71,7 +71,7 @@ function activationBlocker(rule: WorkflowRule): string | null {
   template: `
     <lj-page>
       <header header class="page-header">
-        <lj-box class="header" [padding]="4">
+        <lj-box class="header" [padding]="0">
           <div class="header-inner">
             <div class="heading-copy">
               <p class="eyebrow">Operations</p>
@@ -155,7 +155,7 @@ function activationBlocker(rule: WorkflowRule): string | null {
           }
         </section>
       } @else {
-        <section class="workflow-index" aria-labelledby="workflow-index-title">
+        <section class="workflow-index data-surface" aria-labelledby="workflow-index-title">
           <h2 id="workflow-index-title" class="sr-only">Your workflows</h2>
           <div class="column-headings" aria-hidden="true">
             <span>Workflow and purpose</span>
@@ -250,18 +250,18 @@ function activationBlocker(rule: WorkflowRule): string | null {
   `,
   styles: `
     :host { display: block; }
-    .page-header { display: block; padding: var(--space-8) 0 var(--space-4); }
+    .page-header { display: block; padding: var(--space-6) 0 var(--space-3); }
     .header-inner {
-      width: min(100%, 1240px); margin: 0 auto; padding-inline: clamp(1rem, 3vw, 3rem);
-      display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-8);
+      width: min(100%, 1440px); margin: 0 auto; padding-inline: clamp(24px, 3vw, 40px);
+      display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-6);
     }
     .heading-copy { max-width: 42rem; }
-    .eyebrow { margin: 0 0 var(--space-3); }
-    .intro { margin: var(--space-4) 0 0; color: var(--text-dim); font-size: var(--text-lg); }
+    .eyebrow { margin: 0 0 var(--space-2); }
+    .intro { margin: var(--space-2) 0 0; color: var(--text-dim); font-size: var(--text-sm); }
     .header-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); flex-wrap: wrap; }
     .proposals-link {
-      min-height: 42px; display: inline-flex; align-items: center; gap: var(--space-2);
-      padding: 9px 14px; border-radius: var(--radius-pill); color: var(--text);
+      min-height: 40px; display: inline-flex; align-items: center; gap: var(--space-2);
+      padding: 8px 12px; border-radius: var(--radius-md); color: var(--text);
       font-size: var(--text-sm); font-weight: 750; text-decoration: none;
     }
     .proposals-link:hover { background: var(--surface-hover); }
@@ -271,14 +271,15 @@ function activationBlocker(rule: WorkflowRule): string | null {
       color: var(--warn-text); font-size: .68rem; font-weight: 850;
     }
     .overview {
-      display: flex; align-items: center; gap: 0; padding: var(--space-6) 0 var(--space-8);
-      border-bottom: 1px solid var(--border); color: var(--text-dim); font-size: var(--text-sm);
+      display: flex; align-items: center; gap: 0; margin-top: var(--space-3); padding: var(--space-3) var(--space-4);
+      border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface);
+      color: var(--text-dim); font-size: var(--text-xs); box-shadow: var(--shadow-soft);
     }
     .overview p { margin: 0; padding: 0 var(--space-5); border-left: 1px solid var(--border); }
     .overview p:first-child { padding-left: 0; border-left: 0; }
-    .overview strong { color: var(--text); font-size: 1.05rem; }
+    .overview strong { color: var(--text); font-size: var(--text-sm); }
     .overview .attention-count strong { color: var(--warn-text); }
-    .list-tools { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-8) 0 var(--space-5); }
+    .list-tools { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) 0 var(--space-3); }
     .search-label { color: var(--text-dim); font-size: var(--text-sm); font-weight: 700; }
     .search-wrap { position: relative; width: min(100%, 22rem); }
     .search-wrap svg {
@@ -286,9 +287,9 @@ function activationBlocker(rule: WorkflowRule): string | null {
       fill: none; stroke: var(--text-soft); stroke-width: 1.8; pointer-events: none;
     }
     .search {
-      width: 100%; min-height: 44px; padding: .68rem 1rem .68rem 2.45rem;
-      border: 1px solid var(--border); border-radius: var(--radius-pill);
-      background: transparent; color: var(--text); outline: none;
+      width: 100%; min-height: 38px; padding: .5rem .75rem .5rem 2.35rem;
+      border: 1px solid var(--border); border-radius: var(--radius-md);
+      background: var(--surface); color: var(--text); outline: none;
       transition: border-color var(--motion-fast) ease, background var(--motion-fast) ease;
     }
     .search:focus { border-color: var(--brand); background: var(--surface); box-shadow: var(--focus-ring); }
@@ -301,25 +302,27 @@ function activationBlocker(rule: WorkflowRule): string | null {
       display: grid; grid-template-columns: minmax(15rem, 1.75fr) minmax(7rem, .58fr) minmax(8.5rem, .7fr) minmax(8.5rem, .72fr) auto;
       column-gap: var(--space-6); align-items: center;
     }
+    .workflow-index { overflow: hidden; }
     .column-headings {
-      padding: 0 var(--space-2) var(--space-3); color: var(--text-soft);
+      padding: 9px var(--space-4); border-bottom: 1px solid var(--border); background: var(--surface-inset); color: var(--text-soft);
       font-size: .68rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
     }
-    .workflow-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
+    .workflow-list { list-style: none; margin: 0; padding: 0; }
     .workflow-row {
-      min-height: 8.4rem; padding: var(--space-6) var(--space-2); border-bottom: 1px solid var(--border);
+      min-height: 4.75rem; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border);
       transition: background var(--motion-fast) ease;
     }
-    .workflow-row:hover { background: color-mix(in srgb, var(--surface) 64%, transparent); }
+    .workflow-row:last-child { border-bottom: 0; }
+    .workflow-row:hover { background: var(--surface-inset); }
     .identity { min-width: 0; }
     .name {
-      color: var(--text); font-size: 1.12rem; font-weight: 780; letter-spacing: -.015em;
+      color: var(--text); font-size: var(--text-sm); font-weight: 780; letter-spacing: -.01em;
       text-decoration: none; text-underline-offset: .2em;
     }
     .name:hover { color: var(--brand-text); text-decoration: underline; }
     .purpose {
-      display: -webkit-box; margin: .45rem 0 0; overflow: hidden; color: var(--text-dim);
-      font-size: var(--text-sm); line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+      display: -webkit-box; margin: .2rem 0 0; overflow: hidden; color: var(--text-dim);
+      font-size: var(--text-xs); line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
     }
     .meta { color: var(--text-dim); font-size: var(--text-sm); }
     .mobile-label { display: none; }
@@ -334,8 +337,8 @@ function activationBlocker(rule: WorkflowRule): string | null {
     .attention[data-attention='clear'] { color: var(--success); }
     .row-actions { display: flex; align-items: center; justify-content: flex-end; gap: .2rem; }
     .view-link, .quiet-action, .delete-action {
-      min-height: 42px; display: inline-flex; align-items: center; justify-content: center;
-      padding: .55rem .7rem; border: 0; border-radius: var(--radius-pill); background: transparent;
+      min-height: 34px; display: inline-flex; align-items: center; justify-content: center;
+      padding: .4rem .55rem; border: 0; border-radius: var(--radius-md); background: transparent;
       color: var(--text-dim); font: inherit; font-size: var(--text-xs); font-weight: 750;
       text-decoration: none; white-space: nowrap; cursor: pointer;
     }
@@ -347,9 +350,9 @@ function activationBlocker(rule: WorkflowRule): string | null {
     .loading { padding: var(--space-16) 0; border-top: 1px solid var(--border); }
     .loading-line { display: block; width: min(32rem, 82%); height: 1rem; border-radius: var(--radius-pill); background: var(--surface-inset); animation: breathe 1.5s ease-in-out infinite alternate; }
     .loading-line.short { width: min(21rem, 54%); margin-top: var(--space-3); animation-delay: 160ms; }
-    .empty { max-width: 38rem; padding: var(--space-16) 0; border-top: 1px solid var(--border); }
-    .empty h2 { margin: 0; font-size: clamp(1.75rem, 4vw, 2.8rem); letter-spacing: -.035em; }
-    .empty > p:not(.eyebrow) { margin: var(--space-4) 0 var(--space-6); color: var(--text-dim); font-size: var(--text-lg); }
+    .empty { min-height: 110px; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+    .empty h2 { margin: 0; font-size: var(--text-lg); letter-spacing: -.02em; }
+    .empty > p:not(.eyebrow) { margin: var(--space-2) 0 var(--space-4); color: var(--text-dim); font-size: var(--text-sm); }
     @keyframes breathe { to { opacity: .45; } }
     @media (max-width: 1080px) {
       .column-headings, .workflow-row { grid-template-columns: minmax(14rem, 1.5fr) 7rem 8.6rem minmax(8rem, .7fr); }

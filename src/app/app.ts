@@ -1,5 +1,5 @@
-import { Component } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Component, inject } from '@angular/core';
+import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 /** DEV HARNESS shell — see app.html. Not part of the transplant unit. */
 @Component({
@@ -8,4 +8,11 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
-export class App {}
+export class App {
+  protected readonly router = inject(Router);
+
+  protected get workflowsActive(): boolean {
+    return this.router.url.startsWith('/workflows') &&
+      !this.router.url.startsWith('/workflows/proposals');
+  }
+}

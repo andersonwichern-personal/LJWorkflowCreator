@@ -18,7 +18,6 @@ import { SWEET_SPIRAL_STATUS, SweetSpiralState } from './sweet-spiral.state';
       class="spiral-stage"
       [attr.data-state]="state"
       [attr.data-status]="status"
-      [attr.data-active]="active"
       [attr.data-hovered]="hovered"
       aria-hidden="true"
       (pointerenter)="pointerEnter()"
@@ -27,7 +26,9 @@ import { SWEET_SPIRAL_STATUS, SweetSpiralState } from './sweet-spiral.state';
     >
       <div class="halo"></div>
       <div class="emblem-plane">
-        <svg viewBox="37.62 38.79 874.05 923.74" role="presentation" focusable="false">
+        <div class="pinwheel-plane">
+          <div class="hover-plane">
+            <svg viewBox="37.62 38.79 874.05 923.74" role="presentation" focusable="false">
           <g transform="rotate(180 474.645 500.66)">
             <g class="particle-field">
               <circle cx="435.5" cy="44.85" r="5.06" fill="#4b4d4f" />
@@ -94,7 +95,9 @@ import { SWEET_SPIRAL_STATUS, SweetSpiralState } from './sweet-spiral.state';
             <circle class="pulse-ring" cx="380.75" cy="508.68" r="82.96" />
             <circle class="focal-point" cx="380.75" cy="508.68" r="82.96" fill="#3d7df2" />
           </g>
-        </svg>
+            </svg>
+          </div>
+        </div>
       </div>
     </div>
   `,
@@ -120,6 +123,7 @@ import { SWEET_SPIRAL_STATUS, SweetSpiralState } from './sweet-spiral.state';
       transition: transform var(--motion-slow) var(--ease-settle);
       will-change: transform;
     }
+    .pinwheel-plane, .hover-plane { width: 100%; height: 100%; transform-origin: center; }
     svg {
       display: block; width: 100%; height: 100%; overflow: visible;
       transform: rotate(var(--sweet-turn)) scale(calc(1 + var(--sweet-energy) * .025));
@@ -128,7 +132,7 @@ import { SWEET_SPIRAL_STATUS, SweetSpiralState } from './sweet-spiral.state';
     }
     .particle-field {
       transform: translate(var(--sweet-parallax-x), var(--sweet-parallax-y));
-      transform-origin: center; animation: breathe 13s ease-in-out infinite alternate;
+      transform-origin: center;
       will-change: transform, opacity;
     }
     .focal-point {
@@ -144,30 +148,22 @@ import { SWEET_SPIRAL_STATUS, SweetSpiralState } from './sweet-spiral.state';
     [data-state='focused'] .focal-point,
     [data-state='typing'] .focal-point { filter: drop-shadow(0 0 24px rgb(61 125 242 / .22)); }
     [data-state='submitted'] .pulse-ring { animation: receive 520ms var(--ease-settle) both; }
-    [data-state='parsing'] .particle-field { animation: organize 2.4s var(--ease-standard) infinite; }
-    [data-state='parsing'] svg { animation: purpose 4s linear infinite; }
-    [data-active='true'] svg,
-    [data-hovered='true'] svg { animation: purpose 3.2s linear infinite; }
-    [data-active='true'] .halo,
+    [data-hovered='true'] .hover-plane { animation: purpose 3.2s linear infinite; }
     [data-hovered='true'] .halo { opacity: .42; }
-    [data-state='clarification'] .particle-field { animation: consider 2.8s ease-in-out infinite; }
-    [data-state='partial'] .particle-field { animation: unresolved 4.2s ease-in-out infinite; opacity: .82; }
+    [data-state='partial'] .particle-field { opacity: .82; }
     [data-state='understood'] .focal-point { animation: understood 760ms var(--ease-settle) both; }
     [data-state='parser-error'] .particle-field { animation-play-state: paused; opacity: .58; }
     [data-state='network-error'] .particle-field { animation-duration: 24s; opacity: .7; }
-    @keyframes breathe { from { transform: translate(var(--sweet-parallax-x), var(--sweet-parallax-y)) scale(.992); } to { transform: translate(var(--sweet-parallax-x), var(--sweet-parallax-y)) scale(1.008); } }
     @keyframes receive { 0% { opacity: 0; transform: scale(.7); } 35% { opacity: .65; } 100% { opacity: 0; transform: scale(1.65); } }
-    @keyframes organize { 0%, 100% { transform: translate(var(--sweet-parallax-x), var(--sweet-parallax-y)) scale(.99); } 50% { transform: translate(var(--sweet-parallax-x), var(--sweet-parallax-y)) scale(1.012); } }
-    @keyframes purpose { to { transform: rotate(calc(var(--sweet-turn) + 360deg)); } }
-    @keyframes consider { 0%,100% { transform: translateX(-3px); } 50% { transform: translateX(3px); } }
-    @keyframes unresolved { 0%,100% { transform: rotate(-.5deg); } 50% { transform: rotate(.5deg); } }
+    @keyframes purpose { to { transform: rotate(360deg); } }
     @keyframes understood { 0% { transform: scale(1); } 45% { transform: scale(1.14); } 100% { transform: scale(1); } }
     @media (hover: none), (pointer: coarse) {
       .emblem-plane { transform: none; }
+      [data-hovered='true'] .hover-plane { animation: none; }
       .particle-field { animation-duration: 18s; }
     }
     @media (prefers-reduced-motion: reduce) {
-      .emblem-plane, svg, .particle-field, .focal-point, .pulse-ring, .halo {
+      .emblem-plane, .pinwheel-plane, .hover-plane, svg, .particle-field, .focal-point, .pulse-ring, .halo {
         animation: none !important; transform: none !important; transition-duration: 1ms !important;
       }
       [data-state='focused'] .focal-point,
@@ -188,7 +184,7 @@ export class SweetSpiral implements OnChanges, OnDestroy {
 
   @Input() state: SweetSpiralState = 'idle';
   @Input() typingPulse = 0;
-  @Input() active = false;
+  @Input() spinPulse = 0;
 
   protected hovered = false;
 
@@ -199,6 +195,7 @@ export class SweetSpiral implements OnChanges, OnDestroy {
   private energy = 0;
   private frame: number | null = null;
   private bounds: DOMRect | null = null;
+  private spinAnimation: Animation | null = null;
 
   protected get status() {
     return SWEET_SPIRAL_STATUS[this.state];
@@ -209,16 +206,16 @@ export class SweetSpiral implements OnChanges, OnDestroy {
       this.energy = Math.min(1, this.energy + 0.18);
       this.requestFrame();
     }
+    if (changes['spinPulse'] && !changes['spinPulse'].firstChange) this.playSpinBurst();
   }
 
   protected pointerEnter() {
+    if (!this.finePointer || this.reducedMotion) return;
     this.hovered = true;
-    if (this.finePointer && !this.reducedMotion) {
-      // Cache the only layout read for the pointer session. Pointermove then
-      // updates composited CSS properties without forcing repeated layout.
-      this.bounds = this.host.nativeElement.getBoundingClientRect();
-      this.requestFrame();
-    }
+    // Cache the only layout read for the pointer session. Pointermove then
+    // updates composited CSS properties without forcing repeated layout.
+    this.bounds = this.host.nativeElement.getBoundingClientRect();
+    this.requestFrame();
   }
 
   protected pointerMove(event: PointerEvent) {
@@ -250,7 +247,7 @@ export class SweetSpiral implements OnChanges, OnDestroy {
     const style = this.host.nativeElement.style;
     style.setProperty('--sweet-tilt-x', `${(-this.currentY * 4).toFixed(2)}deg`);
     style.setProperty('--sweet-tilt-y', `${(this.currentX * 6).toFixed(2)}deg`);
-    style.setProperty('--sweet-turn', `${(this.currentX * 4 + this.energy * 2).toFixed(2)}deg`);
+    style.setProperty('--sweet-turn', `${(this.currentX * 4).toFixed(2)}deg`);
     style.setProperty('--sweet-parallax-x', `${(this.currentX * 4).toFixed(2)}px`);
     style.setProperty('--sweet-parallax-y', `${(this.currentY * 4).toFixed(2)}px`);
     style.setProperty('--sweet-energy', this.energy.toFixed(3));
@@ -262,7 +259,19 @@ export class SweetSpiral implements OnChanges, OnDestroy {
     if (moving) this.requestFrame();
   }
 
+  private playSpinBurst() {
+    if (this.reducedMotion) return;
+    const plane = this.host.nativeElement.querySelector('.pinwheel-plane') as HTMLElement | null;
+    if (!plane) return;
+    if (this.spinAnimation?.playState === 'running') return;
+    this.spinAnimation = plane.animate(
+      [{ transform: 'rotate(0deg)' }, { transform: 'rotate(720deg)' }],
+      { duration: 1100, easing: 'cubic-bezier(.16, 1, .3, 1)' }
+    );
+  }
+
   ngOnDestroy() {
     if (this.frame !== null) cancelAnimationFrame(this.frame);
+    this.spinAnimation?.cancel();
   }
 }

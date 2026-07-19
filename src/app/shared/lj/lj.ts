@@ -25,8 +25,8 @@ import { ChangeDetectionStrategy, Component, Directive, Input, booleanAttribute 
   styles: `
     :host { display: block; min-height: 100%; }
     .lj-page-body {
-      width: min(100%, 1240px); margin: 0 auto;
-      padding: 0 clamp(1rem, 3vw, 3rem) clamp(3rem, 8vw, 7rem);
+      width: min(100%, 1440px); margin: 0 auto;
+      padding: 0 clamp(24px, 3vw, 40px) var(--space-16);
     }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -83,16 +83,16 @@ export class LjPageHeading {}
   },
   styles: `
     :host {
-      min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
       font: inherit; font-weight: 750; font-size: var(--text-sm);
-      border-radius: var(--radius-pill); padding: 9px 16px; cursor: pointer;
+      border-radius: var(--radius-md); padding: 8px 14px; cursor: pointer;
       border: 1px solid var(--border); background: var(--surface); color: var(--text);
-      transition: background var(--motion-fast) ease, border-color var(--motion-fast) ease, transform var(--motion-medium) var(--ease-settle);
+      transition: background var(--motion-fast) ease, border-color var(--motion-fast) ease;
     }
-    :host(:hover:not(:disabled)) { background: var(--surface-hover); transform: translateY(-1px); }
+    :host(:hover:not(:disabled)) { background: var(--surface-hover); }
     :host(:disabled) { opacity: 0.45; cursor: not-allowed; }
     :host(.primary) {
-      background: var(--brand); border-color: var(--brand); color: var(--sweet-ink);
+      background: var(--brand); border-color: var(--brand); color: white;
     }
     :host(.primary:hover:not(:disabled)) { background: var(--brand-hover); }
     :host(.danger) { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 28%, var(--border)); }

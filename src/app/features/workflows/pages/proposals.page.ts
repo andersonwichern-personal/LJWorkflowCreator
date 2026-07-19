@@ -37,102 +37,79 @@ interface ReviewDecision {
         </div>
       </header>
 
-      @if (loading()) {
-        <p class="state" aria-live="polite">Loading review queue…</p>
-      } @else if (rows().length === 0) {
-        <section class="empty" aria-labelledby="empty-title">
-          <span class="empty-mark" aria-hidden="true">✓</span>
-          <div>
-            <h2 id="empty-title">Everything is reviewed</h2>
-            <p>New changes that need a second set of eyes will appear here.</p>
+      <section class="queue-surface data-surface" aria-label="Workflow review queue">
+        @if (loading()) {
+          <p class="state" aria-live="polite">Loading review queue…</p>
+        } @else if (rows().length === 0) {
+          <div class="empty" aria-labelledby="empty-title">
+            <span class="empty-mark" aria-hidden="true">
+              <svg viewBox="0 0 16 16"><path d="m3 8 3 3 7-7" /></svg>
+            </span>
+            <div>
+              <h2 id="empty-title">Everything is reviewed</h2>
+              <p>New changes that need a second set of eyes will appear here.</p>
+            </div>
           </div>
-        </section>
-      } @else {
-        <div class="review-list">
-          @for (proposal of reviewRows(); track proposal.id) {
-            <article class="proposal" [class.decided]="proposal.status !== 'pending'">
-              <div class="proposal-main">
-                <div class="proposal-copy">
-                  <div class="meta">
-                    <span
-                      class="status"
-                      [class.applied]="proposal.status === 'applied'"
-                      [class.rejected]="proposal.status === 'rejected'"
-                    >
-                      {{ statusLabel(proposal.status) }}
-                    </span>
-                    <span>{{ proposal.createdAt | date: 'MMM d, h:mm a' }}</span>
-                  </div>
-                  <h2>{{ proposal.workflowName }}</h2>
+        } @else {
+          <div class="queue-columns" aria-hidden="true">
+            <span>Workflow</span><span>Proposed changes</span><span>Submitted</span><span>Status</span><span>Actions</span>
+          </div>
+          <div class="review-list">
+            @for (proposal of reviewRows(); track proposal.id) {
+              <article class="proposal" [class.decided]="proposal.status !== 'pending'">
+                <div class="proposal-main">
+                  <div class="proposal-identity"><h2>{{ proposal.workflowName }}</h2></div>
                   <ul class="change-list" aria-label="Proposed changes">
-                    @if (proposal.proposedName) {
-                      <li>Rename to “{{ proposal.proposedName }}”</li>
-                    }
-                    @if (proposal.proposedEnabled !== null) {
-                      <li>{{ enabledChangeLabel(proposal) }}</li>
-                    }
-                    @if (modeChangeLabel(proposal); as modeChange) {
-                      <li class="live-change">{{ modeChange }}</li>
-                    }
+                    @if (proposal.proposedName) { <li>Rename to “{{ proposal.proposedName }}”</li> }
+                    @if (proposal.proposedEnabled !== null) { <li>{{ enabledChangeLabel(proposal) }}</li> }
+                    @if (modeChangeLabel(proposal); as modeChange) { <li class="live-change">{{ modeChange }}</li> }
                     <li>Update how this workflow behaves</li>
                   </ul>
+                  <div class="submitted"><span class="mobile-label">Submitted</span>{{ proposal.createdAt | date: 'MMM d, h:mm a' }}</div>
+                  <span
+                    class="status status-chip"
+                    [class.applied]="proposal.status === 'applied'"
+                    [class.rejected]="proposal.status === 'rejected'"
+                  >{{ statusLabel(proposal.status) }}</span>
+                  <div class="decision-actions" aria-label="Review decision">
+                    @if (proposal.status === 'pending') {
+                      <button type="button" lj-button class="danger" [disabled]="processingId() === proposal.id" (click)="requestDecision(proposal, 'reject')">Decline</button>
+                      <button type="button" lj-button class="primary" [disabled]="processingId() === proposal.id" (click)="requestDecision(proposal, 'approve')">
+                        {{ processingId() === proposal.id ? 'Applying…' : 'Approve change' }}
+                      </button>
+                    }
+                  </div>
                 </div>
 
-                @if (proposal.status === 'pending') {
-                  <div class="decision-actions" aria-label="Review decision">
-                    <button
-                      lj-button
-                      class="danger"
-                      [disabled]="processingId() === proposal.id"
-                      (click)="requestDecision(proposal, 'reject')"
-                    >
-                      Decline
-                    </button>
-                    <button
-                      lj-button
-                      class="primary"
-                      [disabled]="processingId() === proposal.id"
-                      (click)="requestDecision(proposal, 'approve')"
-                    >
-                      {{ processingId() === proposal.id ? 'Applying…' : 'Approve change' }}
-                    </button>
+                <button
+                  type="button"
+                  class="expand"
+                  [attr.aria-label]="'Internal details for ' + proposal.workflowName"
+                  [attr.aria-expanded]="openId() === proposal.id"
+                  [attr.aria-controls]="'proposal-diff-' + proposal.id"
+                  (click)="toggleOpen(proposal.id)"
+                >
+                  <span>Internal details</span>
+                  <span aria-hidden="true">{{ openId() === proposal.id ? '−' : '+' }}</span>
+                </button>
+
+                @if (openId() === proposal.id) {
+                  <div class="technical" role="region" [attr.aria-label]="'Rule comparison for ' + proposal.workflowName" [id]="'proposal-diff-' + proposal.id">
+                    <div class="technical-heading">
+                      <p class="eyebrow">Advanced · rule data</p>
+                      <p>Compare the current definition with the proposed definition.</p>
+                    </div>
+                    <div class="diff">
+                      <div class="pane"><div class="pane-title">Current definition</div><pre tabindex="0">{{ currentJson() }}</pre></div>
+                      <div class="pane"><div class="pane-title">Proposed definition</div><pre tabindex="0">{{ stringify(proposal.proposedRule) }}</pre></div>
+                    </div>
                   </div>
                 }
-              </div>
-
-              <button
-                type="button"
-                class="expand"
-                [attr.aria-expanded]="openId() === proposal.id"
-                [attr.aria-controls]="'proposal-diff-' + proposal.id"
-                (click)="toggleOpen(proposal.id)"
-              >
-                <span>Internal details</span>
-                <span aria-hidden="true">{{ openId() === proposal.id ? '−' : '+' }}</span>
-              </button>
-
-              @if (openId() === proposal.id) {
-                <div class="technical" [id]="'proposal-diff-' + proposal.id">
-                  <div class="technical-heading">
-                    <p class="eyebrow">Advanced · rule data</p>
-                    <p>Compare the current definition with the proposed definition.</p>
-                  </div>
-                  <div class="diff">
-                    <div class="pane">
-                      <div class="pane-title">Current definition</div>
-                      <pre tabindex="0">{{ currentJson() }}</pre>
-                    </div>
-                    <div class="pane">
-                      <div class="pane-title">Proposed definition</div>
-                      <pre tabindex="0">{{ stringify(proposal.proposedRule) }}</pre>
-                    </div>
-                  </div>
-                </div>
-              }
-            </article>
-          }
-        </div>
-      }
+              </article>
+            }
+          </div>
+        }
+      </section>
       @if (error(); as message) {
         <div class="error-bar" role="alert">{{ message }}</div>
       }
@@ -150,71 +127,80 @@ interface ReviewDecision {
   `,
   styles: `
     .page-header {
-      width: min(100%, 1240px); margin: 0 auto;
-      padding: var(--space-8) clamp(1rem, 3vw, 3rem) var(--space-12);
-      border-bottom: 1px solid var(--border);
+      width: min(100%, 1440px); margin: 0 auto;
+      padding: var(--space-4) clamp(24px, 3vw, 40px) var(--space-3);
     }
     .back {
-      min-height: 42px; margin: 0 0 var(--space-10); padding: 0;
+      min-height: 34px; margin: 0 0 var(--space-3); padding: 0;
       border: 0; background: transparent; color: var(--text-dim);
       font-weight: 750; cursor: pointer;
     }
     .back:hover { color: var(--text); }
-    .masthead { display: flex; align-items: end; justify-content: space-between; gap: var(--space-10); }
-    .eyebrow { margin: 0 0 var(--space-3); }
-    .lede { max-width: 40rem; margin: var(--space-5) 0 0; color: var(--text-dim); font-size: var(--text-lg); }
+    .masthead { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-6); }
+    .eyebrow { margin: 0 0 var(--space-2); }
+    .lede { max-width: 40rem; margin: var(--space-2) 0 0; color: var(--text-dim); font-size: var(--text-sm); }
     .count {
-      display: grid; flex: 0 0 auto; justify-items: end; color: var(--text-dim);
+      min-height: 30px; display: flex; flex: 0 0 auto; align-items: baseline; gap: var(--space-2);
+      padding: 5px 9px; border: 1px solid var(--border); border-radius: var(--radius-pill);
+      background: var(--surface); color: var(--text-dim);
     }
-    .count strong { color: var(--text); font-size: clamp(2.5rem, 5vw, 4.5rem); line-height: .9; letter-spacing: -.06em; }
-    .count span { margin-top: var(--space-2); font-size: var(--text-xs); font-weight: 750; }
+    .count strong { color: var(--text); font-size: var(--text-sm); line-height: 1; }
+    .count span { font-size: var(--text-xs); font-weight: 750; }
     .count.zero strong { color: var(--text-soft); }
-    .state { color: var(--text-dim); padding: var(--space-16) 0; }
+    .queue-surface { overflow: hidden; }
+    .state { margin: 0; color: var(--text-dim); padding: var(--space-8) var(--space-4); }
     .empty {
-      display: flex; align-items: flex-start; gap: var(--space-5);
-      padding: var(--space-16) 0; border-bottom: 1px solid var(--border);
+      min-height: 110px; display: flex; align-items: center; gap: var(--space-4);
+      padding: var(--space-4);
     }
     .empty-mark {
-      display: grid; place-items: center; width: 2.5rem; height: 2.5rem;
-      border-radius: 50%; color: var(--success); background: var(--success-bg); font-weight: 800;
+      display: grid; place-items: center; width: 2rem; height: 2rem; flex: none;
+      border: 1px solid #b9ddce; border-radius: 50%; color: var(--success); background: var(--success-bg);
     }
-    .empty h2 { margin: 0; font-size: var(--text-lg); }
-    .empty p { margin: var(--space-2) 0 0; color: var(--text-dim); }
-    .review-list { border-top: 1px solid var(--border); }
-    .proposal { padding: var(--space-10) 0 var(--space-6); border-bottom: 1px solid var(--border); }
+    .empty-mark svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .empty h2 { margin: 0; font-size: var(--text-md); }
+    .empty p { margin: var(--space-1) 0 0; color: var(--text-dim); font-size: var(--text-sm); }
+    .queue-columns, .proposal-main {
+      display: grid; grid-template-columns: minmax(150px, 1fr) minmax(230px, 1.55fr) 120px 100px minmax(170px, auto);
+      align-items: center; gap: var(--space-4);
+    }
+    .queue-columns { padding: 8px var(--space-4); border-bottom: 1px solid var(--border); background: var(--surface-inset); color: var(--text-soft); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .proposal { border-bottom: 1px solid var(--border); }
+    .proposal:last-child { border-bottom: 0; }
     .proposal.decided h2 { color: var(--text-dim); }
-    .proposal-main { display: flex; justify-content: space-between; align-items: center; gap: var(--space-10); }
-    .proposal-copy { min-width: 0; }
-    .meta { display: flex; align-items: center; gap: var(--space-3); color: var(--text-soft); font-size: var(--text-xs); }
-    .status { color: var(--warn-text); font-weight: 800; }
-    .status.applied { color: var(--success); }
-    .status.rejected { color: var(--text-dim); }
-    h2 { margin: var(--space-3) 0 0; font-size: clamp(1.35rem, 2.5vw, 2rem); line-height: 1.15; letter-spacing: -.025em; }
-    .change-copy { margin: var(--space-3) 0 0; color: var(--text-dim); }
-    .change-list { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); margin: var(--space-3) 0 0; padding: 0; list-style: none; color: var(--text-dim); }
+    .proposal-main { min-height: 68px; padding: var(--space-3) var(--space-4); }
+    .proposal-identity { min-width: 0; }
+    h2 { margin: 0; overflow-wrap: anywhere; font-size: var(--text-sm); line-height: 1.35; letter-spacing: -.01em; }
+    .change-list { margin: 0; padding: 0; list-style: none; color: var(--text-dim); font-size: var(--text-xs); }
+    .change-list li + li { margin-top: 2px; }
     .change-list li::before { content: '·'; margin-right: var(--space-2); color: var(--brand); font-weight: 900; }
     .change-list .live-change { color: var(--danger); font-weight: 800; }
     .change-list .live-change::before { content: '→'; color: var(--danger); }
-    .decision-actions { display: flex; align-items: center; gap: var(--space-3); flex: 0 0 auto; }
+    .submitted { color: var(--text-dim); font-size: var(--text-xs); }
+    .mobile-label { display: none; }
+    .status { color: var(--warn-text); }
+    .status.applied { border-color: #b9ddce; background: var(--success-bg); color: var(--success); }
+    .status.rejected { color: var(--text-dim); }
+    .decision-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); min-width: 0; }
     .expand {
-      width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: space-between;
-      margin-top: var(--space-5); padding: var(--space-3) 0 0;
-      border: 0; border-top: 1px solid transparent; background: transparent;
+      width: 100%; min-height: 36px; display: flex; align-items: center; justify-content: space-between;
+      margin: 0; padding: 7px var(--space-4);
+      border: 0; border-top: 1px solid var(--border); background: var(--surface-inset);
       color: var(--text-dim); font-size: var(--text-xs); font-weight: 750; cursor: pointer;
     }
     .expand:hover { color: var(--text); }
-    .technical { margin-top: var(--space-4); padding: var(--space-6); background: var(--surface-inset); border-radius: var(--radius-lg); }
+    .technical { min-width: 0; max-width: 100%; padding: var(--space-4); border-top: 1px solid var(--border); background: var(--surface-inset); }
     .technical-heading { display: flex; align-items: end; justify-content: space-between; gap: var(--space-6); }
     .technical-heading .eyebrow { margin: 0; }
-    .technical-heading > p:last-child { margin: 0; color: var(--text-dim); font-size: var(--text-sm); }
-    .diff { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-4); margin-top: var(--space-5); }
-    .pane { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: var(--surface); }
+    .technical-heading > p:last-child { margin: 0; color: var(--text-dim); font-size: var(--text-xs); }
+    .diff { min-width: 0; max-width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-3); margin-top: var(--space-3); }
+    .pane { min-width: 0; max-width: 100%; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: var(--surface); }
     .pane-title {
       padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border);
       color: var(--text-dim); font-size: .68rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
     }
     pre {
-      max-height: 26rem; margin: 0; padding: var(--space-4); overflow: auto;
+      max-height: 22rem; margin: 0; padding: var(--space-3); overflow: auto;
       color: var(--sweet-graphite); font: .72rem/1.65 var(--font-mono);
     }
     .error-bar {
@@ -222,22 +208,24 @@ interface ReviewDecision {
       border-left: 3px solid var(--danger); color: var(--danger); background: var(--danger-bg);
       font-size: var(--text-sm);
     }
-    @media (max-width: 900px) {
-      .masthead, .proposal-main { align-items: flex-start; }
-      .proposal-main { flex-direction: column; }
-      .decision-actions { align-self: stretch; justify-content: flex-end; }
+    @media (max-width: 940px) {
+      .queue-columns { display: none; }
+      .proposal-main { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+      .proposal-identity { grid-column: 1; }
+      .status { grid-column: 2; grid-row: 1; }
+      .change-list { grid-column: 1 / -1; }
+      .submitted { grid-column: 1; }
+      .decision-actions { grid-column: 2; }
       .diff { grid-template-columns: 1fr; }
     }
     @media (max-width: 600px) {
-      .page-header { padding-top: var(--space-6); padding-bottom: var(--space-8); }
-      .back { margin-bottom: var(--space-8); }
-      .masthead { align-items: flex-start; flex-direction: column; }
-      .count { justify-items: start; }
-      .count strong { font-size: 2.5rem; }
-      .proposal { padding-block: var(--space-8) var(--space-5); }
+      .page-header { padding-top: var(--space-3); }
+      .masthead { align-items: flex-start; flex-direction: column; gap: var(--space-3); }
+      .proposal-main { grid-template-columns: 1fr; }
+      .proposal-identity, .status, .change-list, .submitted, .decision-actions { grid-column: 1; grid-row: auto; }
+      .mobile-label { display: block; margin-bottom: 2px; color: var(--text-soft); font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
       .decision-actions { display: grid; grid-template-columns: 1fr; width: 100%; }
       .decision-actions button { width: 100%; }
-      .technical { margin-inline: calc(-1 * var(--space-2)); padding: var(--space-4); }
       .technical-heading { align-items: flex-start; flex-direction: column; gap: var(--space-2); }
     }
   `,

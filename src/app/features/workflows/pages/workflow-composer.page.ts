@@ -30,12 +30,14 @@ import {
   ACTIONS,
   ActionDef,
   CondLogic,
+  ConditionGroup,
   ConditionLeaf,
   EVENTS,
   EventDef,
   FIELDS,
   OPERATORS,
   ScopeValue,
+  RuleOutput,
   WorkflowRule,
   allowedFieldsForTriggers,
   condFieldDef,
@@ -211,6 +213,19 @@ interface ActionCard {
   value: string;
 }
 
+type WorkflowReviewStatus = 'Confirmed' | 'Unconfirmed' | 'Needs clarification';
+
+interface WorkflowReviewRow {
+  connector: 'WHEN' | 'IF' | 'AND' | 'OR' | 'THEN' | 'ELSE';
+  field: string;
+  operator: string;
+  value: string;
+  status: WorkflowReviewStatus;
+  statusKey: 'confirmed' | 'unconfirmed' | 'needs-clarification';
+  depth: number;
+  groupPath?: string;
+}
+
 /* ---- Workflow canvas diagram (Phase 1.7) --------------------------------- */
 
 interface CanvasNode {
@@ -283,16 +298,13 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
         <section
           class="hero"
           aria-labelledby="composer-title"
-          (focusin)="workflowFocusIn()"
-          (focusout)="workflowFocusOut($event)"
-          (pointerdown)="workflowPointerDown()"
         >
           <div class="hero-top">
             <div class="spiral-wrap">
               <wf-sweet-spiral
                 [state]="spiralState()"
                 [typingPulse]="typingPulse()"
-                [active]="spiralActive()"
+                [spinPulse]="spinPulse()"
               />
             </div>
 
@@ -369,7 +381,9 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
                       [attr.aria-pressed]="selectedEvents().has(entry.key)"
                       (click)="selectTrigger(entry.key)"
                     >
-                      <span class="option-emoji" aria-hidden="true">{{ entry.emoji }}</span>
+                      <span class="option-icon" aria-hidden="true">
+                        <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" /><path d="M8 4.5v3.8l2.5 1.5" /></svg>
+                      </span>
                       <span class="option-label">{{ entry.label }}</span>
                       @if (entry.unconfirmed) {
                         <span class="unconfirmed" title="Not yet confirmed against the live platform">unconfirmed</span>
@@ -417,7 +431,7 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
                             class="remove"
                             (click)="removeCondition(card.index)"
                             [attr.aria-label]="'Remove condition: ' + card.label"
-                          >✕</button>
+                          ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8" /></svg></button>
                         </header>
                         @if (card.leaf; as leaf) {
                           <div class="card-controls">
@@ -484,7 +498,9 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
                   <p class="group-label">{{ group.label }}</p>
                   @for (entry of group.entries; track entry.key) {
                     <button type="button" class="option" (click)="addAction(entry.key)">
-                      <span class="option-emoji" aria-hidden="true">{{ entry.emoji }}</span>
+                      <span class="option-icon" aria-hidden="true">
+                        <svg viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10" rx="2" /><path d="m6 8 1.5 1.5L10.5 6" /></svg>
+                      </span>
                       <span class="option-label">{{ entry.label }}</span>
                       @if (entry.unconfirmed) {
                         <span class="unconfirmed" title="Not yet confirmed against the live platform">unconfirmed</span>
@@ -500,13 +516,18 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
                   @for (card of actionCards(); track card.index) {
                     <article class="card">
                       <header class="card-head">
-                        <h3><span aria-hidden="true">{{ card.emoji }}</span> {{ card.label }}</h3>
+                        <h3>
+                          <span class="card-icon" aria-hidden="true">
+                            <svg viewBox="0 0 16 16"><path d="M3 8h9m-3-3 3 3-3 3" /></svg>
+                          </span>
+                          {{ card.label }}
+                        </h3>
                         <button
                           type="button"
                           class="remove"
                           (click)="removeAction(card.index)"
                           [attr.aria-label]="'Remove action: ' + card.label"
-                        >✕</button>
+                        ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8" /></svg></button>
                       </header>
                       @if (card.mode === 'select') {
                         <div class="card-controls">
@@ -814,165 +835,247 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
             <ol>
               @for (step of journeySteps(); track step.label) {
                 <li [class.current]="step.current" [class.done]="step.done">
-                  <span>{{ step.number }}</span>{{ step.label }}
+                  <span class="journey-number">{{ step.number }}</span><span class="journey-label">{{ step.label }}</span>
                 </li>
               }
             </ol>
           </nav>
 
-          <div class="review-flow">
-            <section class="review-section" aria-labelledby="interpretation-title">
-              <p class="section-index">01 · Review</p>
-              <div>
-                <h2 id="interpretation-title">What Sweet understood</h2>
-                <p class="interpretation">{{ interpretation()?.summary }}</p>
-                <ul class="checklist">
-                  @for (item of interpretation()?.checklist; track $index) {
-                    <li>{{ item }}</li>
-                  }
-                </ul>
-              </div>
-            </section>
-
-            @if (gaps().length) {
-              <section class="review-section" aria-labelledby="clarification-title">
-                <p class="section-index">02 · Clarify</p>
-                <div>
-                  <h2 id="clarification-title">
-                    {{ gaps().length }} detail{{ gaps().length === 1 ? '' : 's' }} need your answer
-                  </h2>
-                  <p class="section-intro">
-                    Sweet won’t activate a partial interpretation. Choose only what you intend.
-                  </p>
-                  @for (question of visibleQuestions(); track question.id) {
-                    <article class="question">
-                      <p>{{ question.question }}</p>
-                      <div class="answer-row">
-                        @for (option of question.options; track option) {
-                          <button type="button" (click)="answer(question, option)">{{ option }}</button>
-                        }
-                        @if (question.allowDismiss) {
-                          <button type="button" class="quiet" (click)="dismiss(question)">
-                            Intentionally leave it out
-                          </button>
-                        }
-                      </div>
-                      @if (question.kind === 'unresolved' && question.options.length) {
-                        <form class="answer-free" (submit)="answerFree($event, question)">
-                          <label class="sr-only" [for]="'answer-' + question.id">Confirmed answer</label>
-                          <input [id]="'answer-' + question.id" type="text" placeholder="Or type one of the suggested answers" />
-                          <button type="submit">Answer</button>
-                        </form>
-                      }
-                    </article>
-                  }
-                  @if (gapNotes().length) {
-                    <ul class="gap-notes">
-                      @for (note of gapNotes(); track note) {
-                        <li>{{ note }}</li>
-                      }
-                    </ul>
-                  }
-                  @if (visibleQuestions().length && gaps().length > visibleQuestions().length) {
-                    <p class="more">{{ gaps().length - visibleQuestions().length }} more after these.</p>
-                  }
-                </div>
-              </section>
-            }
-
-            <section class="review-section" aria-labelledby="revise-title">
-              <p class="section-index">{{ gaps().length ? '03' : '02' }} · Refine</p>
-              <div>
-                <h2 id="revise-title">Change it conversationally</h2>
-                <form class="revise" (submit)="revise($event)">
-                  <label class="sr-only" for="workflow-revision">Describe a change</label>
-                  <input
-                    id="workflow-revision"
-                    type="text"
-                    [value]="revisionText()"
-                    (input)="revisionText.set($any($event.target).value)"
-                    placeholder="Raise the amount to $500,000."
-                  />
-                  <button type="submit" [disabled]="!revisionText().trim()">Apply change</button>
-                </form>
-                @if (revisionNote(); as note) {
-                  <p class="feedback success" role="status">Updated. {{ note }}</p>
-                }
-                @if (revisionError(); as message) {
-                  <p class="feedback warning" role="alert">{{ message }}</p>
-                }
-              </div>
-            </section>
-
-            @if (simulation(); as sim) {
-              <section class="review-section" aria-labelledby="simulation-title">
-                <p class="section-index">{{ gaps().length ? '04' : '03' }} · Test</p>
-                <div>
-                  <h2 id="simulation-title">Tried against {{ sim.tested }} recent requests</h2>
-                  <div class="sim-totals" aria-label="Simulation outcome summary">
-                    <button type="button" [class.active]="filter() === 'run'" (click)="filter.set('run')">
-                      <strong>{{ sim.wouldRun }}</strong><span>Would run</span>
-                    </button>
-                    <button type="button" [class.active]="filter() === 'skip'" (click)="filter.set('skip')">
-                      <strong>{{ sim.wouldSkip }}</strong><span>Would skip</span>
-                    </button>
-                    <button type="button" [class.active]="filter() === 'needs_data'" (click)="filter.set('needs_data')">
-                      <strong>{{ sim.needsData }}</strong><span>Could not evaluate</span>
-                    </button>
-                  </div>
-                  <button type="button" class="show-all" (click)="filter.set('all')">Show every outcome</button>
-                  <div class="results">
-                    @for (result of filteredResults(); track result.requestId) {
-                      <details class="sim-result">
-                        <summary>
-                          <span class="outcome" [attr.data-outcome]="result.outcome"></span>
-                          <span>{{ result.requestName }}</span>
-                          <small>{{
-                            result.outcome === 'run'
-                              ? 'Would run'
-                              : result.outcome === 'skip'
-                                ? 'Would skip'
-                                : 'Could not evaluate'
-                          }}</small>
-                        </summary>
-                        <p>{{ result.explanation }}</p>
-                        @if (result.actions.length) {
-                          <ul>
-                            @for (action of result.actions; track $index) {
-                              <li>{{ action }}</li>
-                            }
-                          </ul>
-                        }
-                      </details>
-                    }
-                  </div>
-                </div>
-              </section>
-            }
-
-            <section class="final-actions" [class.blocked]="gaps().length">
-              <div>
-                <p class="eyebrow">{{ gaps().length ? 'Waiting for clarity' : 'Safe by default' }}</p>
-                <h2>{{ gaps().length ? 'Answer the open questions to continue.' : 'Start by observing what would happen.' }}</h2>
-                <details class="protections">
-                  <summary>Protections applied</summary>
+          <article class="workflow-review report-shell" aria-labelledby="workflow-review-title">
+            <header class="review-header">
+              <div class="review-title-block">
+                <p class="eyebrow">Workflow review</p>
+                <h2 id="workflow-review-title">{{ draftName() }}</h2>
+                <p class="review-summary">{{ interpretation()?.summary }}</p>
+                <details class="plain-checks">
+                  <summary>What Sweet understood</summary>
                   <ul>
-                    @for (protection of protections(); track protection.title) {
-                      <li><strong>{{ protection.title }}</strong> — {{ protection.description }}</li>
+                    @for (item of interpretation()?.checklist; track $index) {
+                      <li>{{ item }}</li>
                     }
                   </ul>
                 </details>
               </div>
-              <button
-                type="button"
-                class="observe"
-                [disabled]="gaps().length > 0 || parsedDescription() !== text().trim() || saving()"
-                (click)="save()"
-              >
+              <dl class="review-metadata metadata-strip">
+                <div>
+                  <dt>Status</dt>
+                  <dd>
+                    <span class="review-status status-chip" [attr.data-status]="reviewStatusKey(reviewState())">
+                      {{ reviewState() }}
+                    </span>
+                  </dd>
+                </div>
+                <div><dt>Version</dt><dd>Rule schema v{{ builderRule()?.schemaVersion }}</dd></div>
+                <div><dt>Last updated</dt><dd>Unsaved draft</dd></div>
+              </dl>
+            </header>
+
+            <div class="review-sequence">
+              <section class="review-step" aria-labelledby="review-trigger-title">
+                <div class="review-marker" aria-hidden="true">1</div>
+                <div class="review-step-body">
+                  <header><p>WHEN</p><h3 id="review-trigger-title">Trigger</h3></header>
+                  <div class="flow-table" role="table" aria-label="Workflow trigger">
+                    <div class="flow-head" role="row"><span role="columnheader">Logic</span><span role="columnheader">Field</span><span role="columnheader">Operator</span><span role="columnheader">Value</span><span role="columnheader">Status</span></div>
+                    @for (row of reviewTriggerRows(); track $index) {
+                      <div class="flow-row structured-row" role="row">
+                        <strong class="flow-keyword" role="cell">{{ row.connector }}</strong>
+                        <span class="flow-cell" role="cell"><small>Field</small>{{ row.field }}</span>
+                        <span class="flow-cell" role="cell"><small>Operator</small>{{ row.operator }}</span>
+                        <span class="flow-cell" role="cell"><small>Value</small>{{ row.value }}</span>
+                        <span class="review-status status-chip" role="cell" [attr.data-status]="row.statusKey">{{ row.status }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              </section>
+
+              <section class="review-step" aria-labelledby="review-conditions-title">
+                <div class="review-marker" aria-hidden="true">2</div>
+                <div class="review-step-body">
+                  <header><p>IF</p><h3 id="review-conditions-title">Conditions</h3></header>
+                  @if (reviewConditionRows().length) {
+                    <div class="flow-table" role="table" aria-label="Workflow conditions">
+                      <div class="flow-head" role="row"><span role="columnheader">Logic</span><span role="columnheader">Field</span><span role="columnheader">Operator</span><span role="columnheader">Value</span><span role="columnheader">Status</span></div>
+                      @for (row of reviewConditionRows(); track $index) {
+                        <div class="flow-row structured-row" role="row">
+                          <strong class="flow-keyword" role="cell">{{ row.connector }}</strong>
+                          <span class="flow-cell" role="cell" [style.padding-left.px]="row.depth * 12"><small>Field</small>@if (row.groupPath) { <span class="group-context">Grouping: {{ row.groupPath }}</span> }{{ row.field }}</span>
+                          <span class="flow-cell" role="cell"><small>Operator</small>{{ row.operator }}</span>
+                          <span class="flow-cell" role="cell"><small>Value</small>{{ row.value }}</span>
+                          <span class="review-status status-chip" role="cell" [attr.data-status]="row.statusKey">{{ row.status }}</span>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <p class="structured-empty">No conditions are configured.</p>
+                  }
+
+                  @if (gaps().length) {
+                    <div class="clarification-callout" aria-labelledby="clarification-title">
+                      <div class="clarification-heading">
+                        <span class="review-status status-chip" data-status="needs-clarification">Needs clarification</span>
+                        <div>
+                          <h4 id="clarification-title">{{ gaps().length }} detail{{ gaps().length === 1 ? '' : 's' }} need your answer</h4>
+                          <p>Sweet won’t activate a partial interpretation. Choose only what you intend.</p>
+                        </div>
+                      </div>
+                      <div class="review-questions">
+                        @for (question of visibleQuestions(); track question.id) {
+                          <article class="question">
+                            <p>{{ question.question }}</p>
+                            <div class="answer-row">
+                              @for (option of question.options; track option) {
+                                <button type="button" (click)="answer(question, option)">{{ option }}</button>
+                              }
+                              @if (question.allowDismiss) {
+                                <button type="button" class="quiet" (click)="dismiss(question)">Intentionally leave it out</button>
+                              }
+                            </div>
+                            @if (question.kind === 'unresolved' && question.options.length) {
+                              <form class="answer-free" (submit)="answerFree($event, question)">
+                                <label class="sr-only" [for]="'answer-' + question.id">Confirmed answer</label>
+                                <input [id]="'answer-' + question.id" type="text" placeholder="Or type one of the suggested answers" />
+                                <button type="submit">Answer</button>
+                              </form>
+                            }
+                          </article>
+                        }
+                      </div>
+                      @if (gapNotes().length) {
+                        <ul class="gap-notes">
+                          @for (note of gapNotes(); track note) { <li>{{ note }}</li> }
+                        </ul>
+                      }
+                      @if (visibleQuestions().length && gaps().length > visibleQuestions().length) {
+                        <p class="more">{{ gaps().length - visibleQuestions().length }} more after these.</p>
+                      }
+                    </div>
+                  }
+                </div>
+              </section>
+
+              <section class="review-step" aria-labelledby="review-actions-title">
+                <div class="review-marker" aria-hidden="true">3</div>
+                <div class="review-step-body">
+                  <header><p>THEN</p><h3 id="review-actions-title">Actions</h3></header>
+                  @if (reviewActionRows().length) {
+                    <div class="flow-table" role="table" aria-label="Workflow actions">
+                      <div class="flow-head" role="row"><span role="columnheader">Logic</span><span role="columnheader">Action</span><span role="columnheader">Parameter</span><span role="columnheader">Value</span><span role="columnheader">Status</span></div>
+                      @for (row of reviewActionRows(); track $index) {
+                        <div class="flow-row structured-row" role="row">
+                          <strong class="flow-keyword" role="cell">{{ row.connector }}</strong>
+                          <span class="flow-cell" role="cell"><small>Action</small>{{ row.field }}</span>
+                          <span class="flow-cell" role="cell"><small>Parameter</small>{{ row.operator }}</span>
+                          <span class="flow-cell" role="cell"><small>Value</small>{{ row.value }}</span>
+                          <span class="review-status status-chip" role="cell" [attr.data-status]="row.statusKey">{{ row.status }}</span>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <p class="structured-empty">No actions are configured.</p>
+                  }
+                </div>
+              </section>
+
+              <section class="review-step" aria-labelledby="review-else-title">
+                <div class="review-marker" aria-hidden="true">4</div>
+                <div class="review-step-body">
+                  <header><p>ELSE</p><h3 id="review-else-title">Non-matching behavior</h3></header>
+                  @if (reviewElseRows().length) {
+                    <div class="flow-table" role="table" aria-label="Non-matching workflow actions">
+                      <div class="flow-head" role="row"><span role="columnheader">Logic</span><span role="columnheader">Action</span><span role="columnheader">Parameter</span><span role="columnheader">Value</span><span role="columnheader">Status</span></div>
+                      @for (row of reviewElseRows(); track $index) {
+                        <div class="flow-row structured-row" role="row">
+                          <strong class="flow-keyword" role="cell">{{ row.connector }}</strong>
+                          <span class="flow-cell" role="cell"><small>Action</small>{{ row.field }}</span>
+                          <span class="flow-cell" role="cell"><small>Parameter</small>{{ row.operator }}</span>
+                          <span class="flow-cell" role="cell"><small>Value</small>{{ row.value }}</span>
+                          <span class="review-status status-chip" role="cell" [attr.data-status]="row.statusKey">{{ row.status }}</span>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <p class="structured-empty">{{ nonMatchingSummary() }}</p>
+                  }
+                </div>
+              </section>
+
+              <section class="review-step" aria-labelledby="review-safeguards-title">
+                <div class="review-marker" aria-hidden="true">5</div>
+                <div class="review-step-body">
+                  <header><p>SAFE</p><h3 id="review-safeguards-title">Safeguards</h3></header>
+                  <ul class="safeguard-rows">
+                    @for (protection of protections(); track protection.title) {
+                      <li>
+                        <div><strong>{{ protection.title }}</strong><p>{{ protection.description }}</p></div>
+                        <span class="review-status status-chip" data-status="confirmed">Confirmed</span>
+                      </li>
+                    }
+                  </ul>
+                </div>
+              </section>
+
+              <section class="review-step" aria-labelledby="simulation-title">
+                <div class="review-marker" aria-hidden="true">6</div>
+                <div class="review-step-body">
+                  <header><p>TEST</p><h3 id="simulation-title">Test results</h3></header>
+                  @if (simulation(); as sim) {
+                    <p class="test-caption">Tried against {{ sim.tested }} recent requests</p>
+                    <div class="test-totals" aria-label="Simulation outcome summary">
+                      <button type="button" [class.active]="filter() === 'run'" [attr.aria-pressed]="filter() === 'run'" (click)="filter.set('run')"><strong>{{ sim.wouldRun }}</strong><span>Would run</span></button>
+                      <button type="button" [class.active]="filter() === 'skip'" [attr.aria-pressed]="filter() === 'skip'" (click)="filter.set('skip')"><strong>{{ sim.wouldSkip }}</strong><span>Would skip</span></button>
+                      <button type="button" [class.active]="filter() === 'needs_data'" [attr.aria-pressed]="filter() === 'needs_data'" (click)="filter.set('needs_data')"><strong>{{ sim.needsData }}</strong><span>Could not evaluate</span></button>
+                    </div>
+                    <button type="button" class="show-all" [attr.aria-pressed]="filter() === 'all'" (click)="filter.set('all')">Show every outcome</button>
+                    <div class="test-results">
+                      @for (result of filteredResults(); track result.requestId) {
+                        <details class="test-result">
+                          <summary>
+                            <span class="request-id">{{ result.requestId }}</span>
+                            <span>{{ result.requestName }}</span>
+                            <span class="review-status status-chip" [attr.data-status]="result.outcome">{{ result.outcome === 'run' ? 'Would run' : result.outcome === 'skip' ? 'Would skip' : 'Could not evaluate' }}</span>
+                          </summary>
+                          <p>{{ result.explanation }}</p>
+                          @if (result.actions.length) {
+                            <ul>@for (action of result.actions; track $index) { <li>{{ action }}</li> }</ul>
+                          }
+                          @if (result.checks.length) {
+                            <ul class="test-checks">
+                              @for (check of result.checks; track $index) { <li><strong>{{ check.state }}</strong>{{ check.label }}</li> }
+                            </ul>
+                          }
+                        </details>
+                      }
+                    </div>
+                  } @else {
+                    <div class="test-blocked"><span class="review-status status-chip" data-status="needs-clarification">Could not evaluate</span><p>Answer the open questions to continue.</p></div>
+                  }
+                </div>
+              </section>
+            </div>
+
+            <section class="review-refine" aria-labelledby="revise-title">
+              <div><h3 id="revise-title">Change it conversationally</h3></div>
+              <form class="review-revise" (submit)="revise($event)">
+                <label class="sr-only" for="workflow-revision">Describe a change</label>
+                <input id="workflow-revision" type="text" [value]="revisionText()" (input)="revisionText.set($any($event.target).value)" placeholder="Raise the amount to $500,000." />
+                <button type="submit" [disabled]="!revisionText().trim()">Apply change</button>
+              </form>
+              @if (revisionNote(); as note) { <p class="feedback success" role="status">Updated. {{ note }}</p> }
+              @if (revisionError(); as message) { <p class="feedback warning" role="alert">{{ message }}</p> }
+            </section>
+
+            <footer class="review-footer" [class.blocked]="gaps().length">
+              <div>
+                <p class="eyebrow">{{ gaps().length ? 'Waiting for clarity' : 'Safe by default' }}</p>
+                <h2>{{ gaps().length ? 'Answer the open questions to continue.' : 'Start by observing what would happen.' }}</h2>
+              </div>
+              <button type="button" class="observe" [disabled]="gaps().length > 0 || parsedDescription() !== text().trim() || saving()" (click)="save()">
                 {{ saving() ? 'Starting…' : 'Start observing' }} <span aria-hidden="true">↗</span>
               </button>
-            </section>
-          </div>
+            </footer>
+          </article>
         }
 
         @if (error(); as message) {
@@ -985,65 +1088,70 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
     :host { display: block; }
     .composer-shell { padding-top: var(--space-6); }
     .back {
-      min-height: 42px; display: inline-flex; align-items: center; gap: var(--space-2);
-      margin-left: max(0px, calc((100% - 1160px) / 2)); border: 0; background: transparent;
+      min-height: 36px; display: inline-flex; align-items: center; gap: var(--space-2);
+      margin-left: 0; padding: 0; border: 0; background: transparent;
       color: var(--text-dim); font-size: var(--text-sm); font-weight: 700; cursor: pointer;
     }
     .back:hover { color: var(--text); }
-    .hero { width: min(100%, 1160px); margin: 0 auto; padding: var(--space-2) 0 var(--space-12); }
-    .hero-top { display: flex; align-items: center; gap: var(--space-6); }
-    .spiral-wrap { width: 120px; height: 120px; flex: none; }
+    .hero { width: 100%; margin: 0 auto; padding: var(--space-2) 0 var(--space-8); }
+    .hero-top { display: flex; align-items: center; gap: var(--space-4); }
+    .spiral-wrap { width: 72px; height: 72px; flex: none; }
     .invitation { min-width: 0; }
     h1 {
-      margin: var(--space-2) 0 0; font-size: clamp(1.55rem, 2.6vw, 2rem);
-      line-height: 1.08; letter-spacing: -.045em; font-weight: 760;
+      margin: var(--space-1) 0 0; font-size: clamp(1.65rem, 2.4vw, 2rem);
+      line-height: 1.12; letter-spacing: -.035em; font-weight: 760;
     }
-    .composer { position: relative; display: flex; align-items: flex-end; margin-top: var(--space-6); }
+    .composer {
+      position: relative; display: flex; align-items: flex-end; margin-top: var(--space-4);
+      border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface);
+      box-shadow: var(--shadow-soft);
+    }
     textarea {
-      width: 100%; min-height: 3.6rem; max-height: 14rem; padding: .55rem 3.5rem .7rem 0;
+      width: 100%; min-height: 3.25rem; max-height: 14rem; padding: .85rem 3.5rem .85rem 1rem;
       border: 0; outline: 0; resize: none; overflow: hidden; color: var(--text); background: transparent;
-      font-size: clamp(1.2rem, 2.2vw, 1.75rem); line-height: 1.42; caret-color: var(--brand);
+      font-size: var(--text-md); line-height: 1.5; caret-color: var(--brand);
     }
     textarea::placeholder { color: var(--text-soft); opacity: 1; }
     .send {
-      position: absolute; right: 0; bottom: .55rem; width: 2.75rem; height: 2.75rem;
-      border: 0; border-radius: 50%; background: var(--brand); color: var(--sweet-ink);
-      font-weight: 900; cursor: pointer; transition: transform var(--motion-medium) var(--ease-settle);
+      position: absolute; right: .5rem; bottom: .45rem; width: 2.35rem; height: 2.35rem;
+      border: 0; border-radius: var(--radius-md); background: var(--brand); color: white;
+      font-weight: 900; cursor: pointer; transition: background var(--motion-fast) ease;
     }
-    .send:hover { transform: translateY(-2px) rotate(3deg); }
-    .guidance { margin: var(--space-3) 0 0; color: var(--text-soft); font-size: var(--text-xs); }
+    .send:hover { background: var(--brand-hover); }
+    .guidance { margin: var(--space-2) 0 0; color: var(--text-soft); font-size: var(--text-xs); }
 
     /* ---- Structured visual builder (Phase 1.5) ---- */
     .visual-builder {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: var(--space-4);
-      margin-top: var(--space-8);
-      align-items: start;
+      gap: 0;
+      margin-top: var(--space-5);
+      align-items: stretch;
+      overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg);
+      background: var(--surface); box-shadow: var(--shadow-soft);
     }
     .builder-column {
       display: flex; flex-direction: column; gap: var(--space-3);
       background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
+      border: 0;
+      border-radius: 0;
       padding: var(--space-4);
-      min-height: 480px;
-      box-shadow: var(--shadow-soft);
-      transition: border-color var(--motion-medium) var(--ease-standard);
+      min-height: 420px;
+      box-shadow: none;
     }
-    .builder-column:hover { border-color: var(--border-strong); }
+    .builder-column + .builder-column { border-left: 1px solid var(--border); }
     .column-header {
       display: flex; align-items: center; gap: var(--space-2); margin: 0;
-      font-size: var(--text-lg); letter-spacing: -.02em; font-weight: 780;
+      font-size: var(--text-md); letter-spacing: -.015em; font-weight: 780;
     }
     .step {
       width: 1.5rem; height: 1.5rem; display: grid; place-items: center; flex: none;
-      border-radius: 50%; background: var(--brand); color: var(--sweet-ink);
+      border-radius: 50%; background: var(--brand); color: white;
       font-size: var(--text-xs); font-weight: 800;
     }
     .provisional-hint {
       grid-column: 1 / -1; margin: 0; padding: var(--space-2) var(--space-3);
-      border: 1px dashed var(--border-strong); border-radius: var(--radius-md);
+      border: 0; border-bottom: 1px dashed var(--border-strong); border-radius: 0;
       color: var(--text-dim); font-size: var(--text-xs); font-weight: 650;
     }
     .column-search, .card-controls select, .card-controls input, .logic {
@@ -1055,8 +1163,8 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
       border-color: var(--brand);
     }
     .column-search {
-      width: 100%; min-height: 40px; padding-inline: .85rem;
-      border-color: var(--border); border-radius: var(--radius-pill); background: var(--surface-inset);
+      width: 100%; min-height: 38px; padding-inline: .75rem;
+      border-color: var(--border); border-radius: var(--radius-md); background: var(--surface-inset);
     }
     .column-search:focus { background: var(--surface); }
     .option-list { display: flex; flex-direction: column; gap: 2px; max-height: 330px; overflow-y: auto; }
@@ -1071,9 +1179,12 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
       color: var(--text); font-size: var(--text-sm); font-weight: 650; text-align: left; cursor: pointer;
     }
     .option:hover { background: var(--surface-inset); border-color: var(--border); }
-    .option.selected { background: var(--brand); border-color: var(--brand); color: var(--sweet-ink); }
+    .option.selected { background: var(--brand); border-color: var(--brand); color: white; }
     .option.selected .unconfirmed { color: inherit; }
     .option-label { flex: 1; min-width: 0; }
+    .option-icon, .card-icon { width: 1rem; height: 1rem; display: inline-grid; place-items: center; flex: none; color: var(--text-soft); }
+    .option-icon svg, .card-icon svg, .remove svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .option.selected .option-icon { color: white; }
     .unconfirmed {
       flex: none; color: var(--warn-text); font-size: .6rem; font-weight: 800;
       letter-spacing: .06em; text-transform: uppercase;
@@ -1082,7 +1193,7 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
     .pill-row { display: flex; flex-wrap: wrap; gap: var(--space-2); }
     .pill {
       min-height: 34px; padding: .3rem .75rem; border: 1px solid var(--border-strong);
-      border-radius: var(--radius-pill); background: var(--surface-inset); color: var(--text);
+      border-radius: var(--radius-md); background: var(--surface-inset); color: var(--text);
       font-size: var(--text-xs); font-weight: 750; cursor: pointer;
     }
     .pill:hover { border-color: var(--brand); color: var(--brand-text); }
@@ -1092,14 +1203,14 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
       background: var(--surface-inset); padding: var(--space-3);
     }
     .card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
-    .card-head h3 { margin: 0; font-size: var(--text-sm); font-weight: 760; }
-    .remove { flex: none; padding: .15rem .35rem; border: 0; background: transparent; color: var(--text-soft); cursor: pointer; }
+    .card-head h3 { display: flex; align-items: center; gap: var(--space-2); margin: 0; font-size: var(--text-sm); font-weight: 760; }
+    .remove { width: 28px; height: 28px; flex: none; padding: 6px; border: 0; background: transparent; color: var(--text-soft); cursor: pointer; }
     .remove:hover { color: var(--danger); }
     .card-controls { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); margin-top: var(--space-2); }
     .card-controls select, .card-controls input { width: 100%; min-width: 0; }
     .card-controls select:only-child, .card-controls input:only-child { grid-column: 1 / -1; }
     .logic {
-      align-self: center; min-height: 34px; border-radius: var(--radius-pill);
+      align-self: center; min-height: 34px; border-radius: var(--radius-md);
       font-size: var(--text-xs); font-weight: 800; cursor: pointer;
     }
     .group-note { margin: var(--space-2) 0 0; color: var(--text-dim); font-size: var(--text-xs); }
@@ -1108,12 +1219,12 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
     .notice p { margin: .25rem 0; }
     .notice-kicker { font-weight: 800; }
     .notice.error { color: var(--danger); }
-    .journey { width: min(100%, 980px); margin: 0 auto var(--space-16); border-block: 1px solid var(--border); }
-    .journey ol { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--space-3); margin: 0; padding: var(--space-4) 0; list-style: none; }
+    .journey { width: min(100%, 1160px); margin: 0 auto var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+    .journey ol { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--space-3); margin: 0; padding: var(--space-2) var(--space-4); list-style: none; }
     .journey li { display: flex; align-items: center; gap: var(--space-2); color: var(--text-soft); font-size: var(--text-xs); font-weight: 750; }
-    .journey li span { width: 1.6rem; height: 1.6rem; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 50%; }
+    .journey li .journey-number { width: 1.5rem; height: 1.5rem; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 50%; }
     .journey li.done { color: var(--text); }
-    .journey li.done span { border-color: var(--brand); background: var(--brand); color: var(--sweet-ink); }
+    .journey li.done .journey-number { border-color: var(--brand); background: var(--brand); color: white; }
     .journey li.current { color: var(--brand-text); }
     .review-flow { width: min(100%, 980px); margin: 0 auto; }
     .review-section { display: grid; grid-template-columns: 9rem 1fr; gap: var(--space-8); padding: var(--space-12) 0; border-top: 1px solid var(--border); }
@@ -1174,16 +1285,18 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
       .hero { padding-top: 0; }
       .visual-builder { grid-template-columns: 1fr; }
       .builder-column { min-height: auto; }
+      .builder-column + .builder-column { border-top: 1px solid var(--border); border-left: 0; }
       .review-section { grid-template-columns: 7rem 1fr; }
     }
     @media (max-width: 620px) {
       .composer-shell { padding-top: var(--space-3); }
       .hero-top { gap: var(--space-4); }
-      .spiral-wrap { width: 88px; height: 88px; }
+      .spiral-wrap { width: 72px; height: 72px; }
       h1 { font-size: clamp(1.35rem, 6vw, 1.75rem); }
       .review-section { grid-template-columns: 1fr; gap: var(--space-3); padding: var(--space-10) 0; }
-      .journey { overflow-x: auto; }
-      .journey ol { min-width: 34rem; }
+      .journey ol { min-width: 0; gap: var(--space-1); padding-inline: var(--space-2); }
+      .journey li { justify-content: center; }
+      .journey-label { display: none; }
       .sim-totals { grid-template-columns: 1fr; }
       .sim-totals button { border-right: 0; border-bottom: 1px solid var(--border); }
       .sim-totals button:last-child { border-bottom: 0; }
@@ -1199,6 +1312,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
   private readonly service = inject(WorkflowsService);
   private readonly injector = inject(Injector);
   private buildGeneration = 0;
+  private spinTimer: ReturnType<typeof setTimeout> | null = null;
 
   @ViewChild('composerInput') private composerInput?: ElementRef<HTMLTextAreaElement>;
 
@@ -1207,8 +1321,8 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly focused = signal(false);
-  protected readonly workflowEditing = signal(false);
   protected readonly typingPulse = signal(0);
+  protected readonly spinPulse = signal(0);
   protected readonly phase = signal<ComposerPhase>('idle');
   protected readonly parsedDescription = signal<string | null>(null);
 
@@ -1416,12 +1530,130 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     });
   });
 
+  protected readonly reviewState = computed<WorkflowReviewStatus>(() => {
+    if (this.gaps().length) return 'Needs clarification';
+    const rows = [
+      ...this.reviewTriggerRows(),
+      ...this.reviewConditionRows(),
+      ...this.reviewActionRows(),
+      ...this.reviewElseRows(),
+    ];
+    return rows.some((row) => row.status === 'Unconfirmed') ? 'Unconfirmed' : 'Confirmed';
+  });
+
+  protected readonly nonMatchingSummary = computed(() => {
+    const checks = this.interpretation()?.checklist ?? [];
+    return checks[checks.length - 1] ?? '';
+  });
+
+  protected draftName(): string {
+    return this.nameForDescription(this.text().trim());
+  }
+
+  protected reviewStatusKey(status: WorkflowReviewStatus): WorkflowReviewRow['statusKey'] {
+    if (status === 'Needs clarification') return 'needs-clarification';
+    return status === 'Unconfirmed' ? 'unconfirmed' : 'confirmed';
+  }
+
+  protected reviewTriggerRows(): WorkflowReviewRow[] {
+    return (this.builderRule()?.triggers ?? []).map((trigger, index) => {
+      const event = getEvent(trigger.event);
+      const scope = trigger.scope ? scopeLabel(trigger.scope) : '';
+      const status = this.reviewStatus(event?.confidence, !event);
+      return {
+        connector: index === 0 ? 'WHEN' : 'OR',
+        field: 'Event',
+        operator: 'is',
+        value: `${event?.label ?? trigger.event}${scope ? ` · ${scope}` : ''}`,
+        status,
+        statusKey: this.reviewStatusKey(status),
+        depth: 0,
+      };
+    });
+  }
+
+  protected reviewConditionRows(): WorkflowReviewRow[] {
+    const root = this.builderRule()?.conditions;
+    if (!root) return [];
+    const rows: WorkflowReviewRow[] = [];
+    const visit = (
+      group: ConditionGroup,
+      depth: number,
+      logicPath: string[],
+      entryConnector: 'IF' | CondLogic
+    ) => {
+      for (const [index, node] of group.children.entries()) {
+        const connector = rows.length === 0 ? 'IF' : index === 0 ? entryConnector : group.logic;
+        if (isGroup(node)) {
+          visit(
+            node,
+            depth + 1,
+            [...logicPath, `Group ${index + 1} · ${node.logic}`],
+            connector
+          );
+          continue;
+        }
+        const field = condFieldDef(node.field);
+        const valueless = isValuelessOperator(node.operator);
+        const value = scopeLabel(node.value);
+        const status = this.reviewStatus(field?.confidence, !field || (!valueless && !value.trim()));
+        rows.push({
+          connector,
+          field: sentence(condFieldLabel(node.field)),
+          operator: opLabel(condFieldKind(node.field), node.operator),
+          value: valueless ? '—' : value || '—',
+          status,
+          statusKey: this.reviewStatusKey(status),
+          depth,
+          groupPath: logicPath.join(' › '),
+        });
+      }
+    };
+    visit(root, 0, [`Root · ${root.logic}`], 'IF');
+    return rows;
+  }
+
+  protected reviewActionRows(): WorkflowReviewRow[] {
+    return this.reviewOutputRows(this.builderRule()?.actions ?? [], 'THEN');
+  }
+
+  protected reviewElseRows(): WorkflowReviewRow[] {
+    return this.reviewOutputRows(this.builderRule()?.else ?? [], 'ELSE');
+  }
+
+  private reviewOutputRows(
+    outputs: RuleOutput[],
+    connector: 'THEN' | 'ELSE'
+  ): WorkflowReviewRow[] {
+    return outputs.map((output) => {
+      const action = getAction(output.action);
+      const parameter = action ? scopeLabel(output.params[paramKeyFor(action.key)]) : '';
+      const incomplete = !action || (action.paramKind !== 'none' && !parameter.trim());
+      const status = this.reviewStatus(action?.confidence, incomplete);
+      return {
+        connector,
+        field: sentence(action?.label ?? output.action),
+        operator: action?.paramKind === 'none' ? '—' : action?.paramLabel || 'value',
+        value: action?.paramKind === 'none' ? '—' : parameter || '—',
+        status,
+        statusKey: this.reviewStatusKey(status),
+        depth: 0,
+      };
+    });
+  }
+
+  private reviewStatus(confidence: string | undefined, incomplete: boolean): WorkflowReviewStatus {
+    if (incomplete || !confidence) return 'Needs clarification';
+    return confidence === 'unconfirmed' ? 'Unconfirmed' : 'Confirmed';
+  }
+
   ngAfterViewInit() {
     requestAnimationFrame(() => this.composerInput?.nativeElement.focus());
   }
 
   ngOnDestroy() {
     this.cancelTypeOut();
+    if (this.spinTimer !== null) clearTimeout(this.spinTimer);
   }
 
   /* ---- Builder → text type-out (Phase 1.6) ----
@@ -1504,10 +1736,6 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
   protected readonly selectedCanvasNode = computed(
     () => this.canvasNodes().find((node) => node.id === this.selectedCanvasNodeId()) ?? null
   );
-  protected readonly spiralActive = computed(
-    () => this.workflowEditing() || this.draggingCanvasNodeId() !== null || this.tempEdge() !== null
-  );
-
   protected readonly edgePaths = computed(() => {
     const byId = new Map(this.canvasNodes().map((node) => [node.id, node]));
     const paths: { key: string; d: string }[] = [];
@@ -1638,6 +1866,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     this.connectFrom.set(null);
     this.tempEdge.set(null);
     this.typingPulse.update((pulse) => pulse + 1);
+    this.pulseSpiral();
   }
 
   protected selectCanvasNode(id: number) {
@@ -1690,6 +1919,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
       this.draggingCanvasNodeId.set(null);
       this.trashHot.set(false);
       if (remove) this.deleteCanvasNode(node.id);
+      else this.pulseSpiral();
     };
     finish = (ev: PointerEvent) => {
       if (ev.pointerId !== e.pointerId) return;
@@ -1763,9 +1993,9 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     const fromNode = this.canvasNodes().find((node) => node.id === from);
     const toNode = this.canvasNodes().find((node) => node.id === to);
     if (!fromNode || !toNode || !this.canConnectCanvasNodes(fromNode, toNode)) return;
-    this.canvasEdges.update((edges) =>
-      edges.some((edge) => edge.from === from && edge.to === to) ? edges : [...edges, { from, to }]
-    );
+    if (this.canvasEdges().some((edge) => edge.from === from && edge.to === to)) return;
+    this.canvasEdges.update((edges) => [...edges, { from, to }]);
+    this.pulseSpiral();
   }
 
   private canConnectCanvasNodes(from: CanvasNode, to: CanvasNode): boolean {
@@ -2014,20 +2244,13 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     this.setActionParam(node.ref, value);
   }
 
-  /* Text composer, structured builder, and diagram share one motion channel. */
-  protected workflowFocusIn() {
-    this.workflowEditing.set(true);
-    this.typingPulse.update((pulse) => pulse + 1);
-  }
-
-  protected workflowFocusOut(event: FocusEvent) {
-    const surface = event.currentTarget as HTMLElement | null;
-    if (surface?.contains(event.relatedTarget as Node | null)) return;
-    this.workflowEditing.set(false);
-  }
-
-  protected workflowPointerDown() {
-    this.typingPulse.update((pulse) => pulse + 1);
+  /* Text composer, structured builder, and diagram share one finite motion channel. */
+  private pulseSpiral() {
+    if (this.spinTimer !== null) clearTimeout(this.spinTimer);
+    this.spinTimer = setTimeout(() => {
+      this.spinPulse.update((pulse) => pulse + 1);
+      this.spinTimer = null;
+    }, 180);
   }
 
   protected onInput(event: Event) {
@@ -2081,6 +2304,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     this.result.set(null);
     this.parsedDescription.set(null);
     this.phase.set('submitted');
+    this.pulseSpiral();
 
     // Let Angular commit each semantic phase before advancing. This makes the
     // submitted and parsing feedback observable without introducing a fake
@@ -2133,6 +2357,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     const composed = composeRuleText(rule);
     this.parsedDescription.set(composed);
     this.typeOut(composed);
+    this.pulseSpiral();
     this.phase.set('idle');
     this.error.set(null);
     this.clearRevisionFeedback();
@@ -2266,6 +2491,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     } else {
       this.result.set(applyClarification(result, question.id, value));
     }
+    this.pulseSpiral();
   }
 
   protected answerFree(event: Event, question: Clarification) {
@@ -2288,6 +2514,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     if (!result) return;
     this.clearRevisionFeedback();
     this.result.set(applyClarification(result, question.id, { dismiss: true }));
+    this.pulseSpiral();
   }
 
   protected revise(event: Event) {
@@ -2302,6 +2529,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
       this.result.set({ ...result, rule: revision.rule });
       this.revisionNote.set(revision.summary);
       this.revisionText.set('');
+      this.pulseSpiral();
     } else {
       this.revisionError.set(revision.reason);
     }
@@ -2325,11 +2553,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     this.saving.set(true);
     this.error.set(null);
     const description = this.text().trim();
-    const name = description
-      ? description.length > 60
-        ? `${description.slice(0, 57)}…`
-        : description
-      : 'Untitled workflow';
+    const name = this.nameForDescription(description);
     this.service
       .create({ name, description, ruleJson: applyOrgPolicy(validated.rule) })
       .subscribe({
@@ -2340,6 +2564,14 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
           this.phase.set('network-error');
         },
       });
+  }
+
+  private nameForDescription(description: string): string {
+    return description
+      ? description.length > 60
+        ? `${description.slice(0, 57)}…`
+        : description
+      : 'Untitled workflow';
   }
 
   protected back() {

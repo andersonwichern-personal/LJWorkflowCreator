@@ -1,16 +1,22 @@
 <!-- Standalone shell only. The feature still transplants beneath the admin shell. -->
 <a class="skip-link" href="#main-content">Skip to content</a>
 <header class="topbar">
-  <a class="brand" routerLink="/workflows" aria-label="Sweet home">
-    <img src="/brand/sweettech_positive.svg" alt="Sweet" />
-  </a>
-  <nav class="nav" aria-label="Primary navigation">
-    <a routerLink="/workflows" routerLinkActive="active" ariaCurrentWhenActive="page" [routerLinkActiveOptions]="{ exact: true }">
-      Workflows
+  <div class="topbar-inner">
+    <a class="brand" routerLink="/workflows" aria-label="Sweet home">
+      <img src="/brand/sweettech_positive.svg" alt="Sweet" />
     </a>
-    <a routerLink="/workflows/proposals" routerLinkActive="active" ariaCurrentWhenActive="page">Reviews</a>
-  </nav>
-  <a class="create" routerLink="/workflows/new">Create workflow <span aria-hidden="true">↗</span></a>
+    <nav class="nav" aria-label="Primary navigation">
+      <a
+        routerLink="/workflows"
+        [class.active]="workflowsActive"
+        [attr.aria-current]="workflowsActive ? 'page' : null"
+      >
+        Workflows
+      </a>
+      <a routerLink="/workflows/proposals" routerLinkActive="active" ariaCurrentWhenActive="page">Reviews</a>
+    </nav>
+    <a class="create" routerLink="/workflows/new">Create workflow <span aria-hidden="true">↗</span></a>
+  </div>
 </header>
 
 <main class="content" id="main-content">

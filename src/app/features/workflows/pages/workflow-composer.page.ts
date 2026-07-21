@@ -349,6 +349,19 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
               Enter to continue <span aria-hidden="true">·</span> Shift + Enter for a new line
             </p>
           }
+
+          <!-- Phase 1.9.4: pre-configured demo descriptions — fill, parse, and
+               populate the builder + canvas in one click. -->
+          <div class="demo-toolbar" aria-label="Demo templates">
+            <span class="demo-label"><span aria-hidden="true">🧪</span> Try a demo:</span>
+            <div class="demo-options" role="group" aria-label="Demo workflows">
+              @for (demo of demoWorkflows; track demo.id) {
+                <button type="button" class="demo-pill" (click)="fillDemo(demo.id)">
+                  {{ demo.label }}
+                </button>
+              }
+            </div>
+          </div>
           <p class="sr-only" aria-live="polite" aria-atomic="true">{{ liveStatus() }}</p>
 
           <section class="visual-builder" aria-label="Structured workflow builder">
@@ -1119,6 +1132,9 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
     }
     .send:hover { background: var(--brand-hover); }
     .guidance { margin: var(--space-2) 0 0; color: var(--text-soft); font-size: var(--text-xs); }
+    /* Demo toolbar (Phase 1.9.4) is a page-scoped partial in styles.scss —
+       kept out of component styles to stay under the anyComponentStyle budget,
+       same precedent as the Phase 1.7 canvas rules. */
 
     /* ---- Structured visual builder (Phase 1.5) ---- */
     .visual-builder {
@@ -1317,6 +1333,48 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
   @ViewChild('composerInput') private composerInput?: ElementRef<HTMLTextAreaElement>;
 
   protected readonly text = signal('');
+
+  /**
+   * Phase 1.9.4: pre-configured demo descriptions. Each is a recognizable
+   * scenario, prefixed with "DEMO: " so it is unmistakable as sample data.
+   * fillDemo() drops the text into the composer and runs the live parser, which
+   * populates the 3-column builder and the canvas via the shared rule signal.
+   *
+   * Each string is phrased against the LIVE vocabulary so it parses to a
+   * complete rule (trigger + conditions + resolved actions) with zero uncovered
+   * or unresolved gaps — verified by probe. The 1.9.4 spec's original texts
+   * targeted capabilities the engine does not have yet (credit-FICO conditions,
+   * loan-maturity timing triggers — the deferred scheduler tranche —, and
+   * schedule-reminder / trigger-booking actions), so they were re-grounded on
+   * the shipped grammar; "Maturity SLA" became "Document Intake" because timing
+   * triggers are not built. See docs/agent/task.md (Phase 1.9.4) for the gap.
+   */
+  protected readonly demoWorkflows: ReadonlyArray<{ id: number; label: string; text: string }> = [
+    {
+      id: 1,
+      label: 'Credit Underwriting',
+      text:
+        'DEMO: when a loan application is approved, if the credit score is below 620, set underwriting result to Rejected and assign to Underwriting Team',
+    },
+    {
+      id: 2,
+      label: 'Offer Rejection',
+      text: 'DEMO: when offer rejected, change stage to Closed and notify Omar',
+    },
+    {
+      id: 3,
+      label: 'Booking Error',
+      text:
+        'DEMO: when a fiserv loan books, if the booking status is Error, assign to Booking Team and notify Wael',
+    },
+    {
+      id: 4,
+      label: 'Document Intake',
+      text:
+        'DEMO: when a document is uploaded, run document extraction and assign to Wael',
+    },
+  ];
+
   protected readonly result = signal<ParseResult | null>(null);
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
@@ -2290,6 +2348,24 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
       event.preventDefault();
       this.build();
     }
+  }
+
+  /**
+   * Phase 1.9.4: fill the composer with a pre-configured demo description and
+   * run it through the parser in one click. The text is placed into the shared
+   * `text` signal (so the textarea, autosave, and revision flows see it exactly
+   * as if typed), the textarea is grown/focused, and build() commits the parse
+   * — which populates the 3-column builder and the canvas via the rule signal.
+   */
+  protected fillDemo(id: number) {
+    const demo = this.demoWorkflows.find((entry) => entry.id === id);
+    if (!demo) return;
+    this.text.set(demo.text);
+    this.syncComposerHeight();
+    this.composerInput?.nativeElement.focus();
+    // build() resets error/revision/live state and runs the full parse, so the
+    // builder columns and canvas rebuild from the committed result.
+    this.build();
   }
 
   protected build(event?: Event) {

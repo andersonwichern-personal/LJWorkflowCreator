@@ -672,3 +672,60 @@ work otherwise holds — 0 flips / 0 oscillations / 0 drops across all 23 events
 - [x] Verify: `npm test` 883 PASS / exit 0 (18 gates incl. purity + sync);
       `npm run build` clean, no budget warnings. Scoped to `packages/rule-core`
       (+ vendored sync) and parser tests; no UI files touched.
+
+---
+
+# Phase 1.9.4: Fill in with Demo Data (2026-07-21)
+
+Spec: `docs/2026-07-21_fill-demo-data_v1.md`
+
+- [x] Add compact demo toolbar under the composer form (data-driven `@for` over
+      `demoWorkflows`, `role="group"`, Sweet tokens)
+- [x] Add `fillDemo(id: number)` to `WorkflowComposerPage` class — sets the
+      shared `text` signal, grows + focuses the textarea, and calls the existing
+      `build()` so the commit path (result signal → builder columns + canvas
+      effect) runs exactly as it does for typed input. Autosave/revision/
+      keyboard-submit paths are untouched (all funnel through the same signals).
+- [x] Implement four recognizable demo workflow scenarios
+- [x] Ensure that selecting a scenario updates the input description and
+      immediately triggers the parser, builder, and diagram
+- [x] Check styles and layout against Sweet design tokens
+- [x] Verify using `npm test` (884 PASS / exit 0) and `npm run build` (clean, no
+      budget warnings)
+- [x] Commit as `feat(composer): Phase 1.9.4 – fill in with demo data`
+
+Implementation notes / deviations (Claude, 2026-07-21):
+
+- **Demo texts re-grounded on the shipped grammar.** The spec's 4 literal
+  strings do NOT parse against the current vocabulary — a probe showed 2 (Credit
+  Underwriting, Maturity SLA) yield a NULL rule and 2 (Offer Rejection, Booking
+  Error) yield a partial rule with **zero actions** (everything dumped to
+  `uncovered`). They target capabilities the engine does not have: credit-FICO
+  conditions, loan-maturity **timing/scheduler triggers** (the explicitly
+  deferred parser tranche), and `schedule reminder` / `trigger booking event`
+  actions (no such vocabulary actions; `trigger_booking`'s label is actually
+  "send booking to"). Anderson chose "whatever you recommend," so the toolbar +
+  handler ship as specified but the 4 strings were rewritten to vocabulary-
+  aligned phrasings that each parse to a COMPLETE rule (trigger + conditions +
+  resolved actions, zero uncovered/unresolved/ambiguities — verified by probe):
+    1. Credit Underwriting — LOAN APPROVED + credit_score < 620 →
+       set_underwriting_result Rejected + assign Underwriting Team
+    2. Offer Rejection — OFFER REJECTED → change_stage Closed + notify Omar
+    3. Booking Error — FISERV LOAN + bookstatus Error → assign Booking Team +
+       notify Wael
+    4. Document Intake — DOCUMENT UPLOADED → run_extraction + assign Wael
+  "Maturity SLA" → "Document Intake" because timing triggers are not built. The
+  DEMO: prefix is retained per spec; phrasings were chosen so it does not leak
+  into `uncovered`. The richer spec scenarios become buildable when the parser
+  gains those capabilities — a Gemini-spec'd tranche (scheduler triggers /
+  credit-result conditions / new actions), same gate as the other deferred
+  parser capability.
+- **Styles live in `styles.scss`, not the component.** The demo-toolbar CSS put
+  the composer's component styles 341 B over the 12 kB anyComponentStyle budget,
+  so the rules moved to a page-scoped `styles.scss` partial (unique `demo-`
+  prefix) — same precedent as the Phase 1.7 canvas rules. `angular.json`
+  untouched; build has zero warnings. Used `--radius-pill` (the repo token)
+  instead of the spec's non-existent `--radius-full`.
+- UI-layer only (composer page + global stylesheet). No parser/vocab/core
+  changes and no test files touched; the full suite (884 PASS / exit 0, incl.
+  purity + sync gates) reflects the demo texts being pure UI data.

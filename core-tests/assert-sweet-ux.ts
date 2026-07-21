@@ -242,9 +242,21 @@ t(
   /addCanvasNode\(type, 0, 0, true\)/.test(composerSource) &&
     /private layoutCanvasNodes\(/.test(composerSource) &&
     /private canonicalCanvasEdges\(/.test(composerSource) &&
-    /this\.canvasEdges\.set\(this\.canonicalCanvasEdges\(remaining\)\)/.test(composerSource) &&
+    // 1.9.5: edges resolve as canonical topology + user overrides; delete
+    // recomputes through resolveCanvasEdges, which seeds from the canonical set.
+    /this\.canvasEdges\.set\(this\.resolveCanvasEdges\(remaining\)\)/.test(composerSource) &&
+    /for \(const edge of this\.canonicalCanvasEdges\(nodes\)\) keys\.add/.test(composerSource) &&
     /\(click\)\s*=\s*['"]arrangeCanvas\(\)['"]/.test(composerSource) &&
     !/\(click\)\s*=\s*['"]clearCanvas\(\)['"]/.test(composerSource)
+);
+t(
+  'diagram nodes carry stable ids so positions, selection, and user edges survive rebuilds (1.9.5)',
+  /function canvasNodeId\(/.test(composerSource) &&
+    /const prev = new Map\(this\.canvasNodes\(\)\.map/.test(composerSource) &&
+    /private resolveCanvasEdges\(/.test(composerSource) &&
+    /protected removeCanvasEdge\(/.test(composerSource) &&
+    /\(click\)\s*=\s*['"]removeCanvasEdge\(edge, \$event\)['"]/.test(composerSource) &&
+    !/canvasSourced/.test(composerSource)
 );
 t(
   'shape-aware connector paths stay reactive while connected nodes move',

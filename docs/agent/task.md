@@ -729,3 +729,67 @@ Implementation notes / deviations (Claude, 2026-07-21):
 - UI-layer only (composer page + global stylesheet). No parser/vocab/core
   changes and no test files touched; the full suite (884 PASS / exit 0, incl.
   purity + sync gates) reflects the demo texts being pure UI data.
+
+---
+
+# Phase 1.9.5: Editable workflow diagram + permissive fields (2026-07-21)
+
+Anderson's directive: the workflow diagram was glitchy — nodes could not be
+moved or removed once connected, and arrows could not be added/deleted. Make the
+diagram fully editable and keep the text / builder / canvas surfaces in sync.
+Also: let any mentioned field/value work even if it is not backed by real data,
+and label it "not backed by real data".
+
+## Canvas editability (composer page — UI, Claude)
+
+- [x] **Stable node ids** — `canvasNodeId(type, ref)` replaces the per-rebuild
+      `++canvasSeq`. Root cause of the glitch: every rebuild regenerated ids and
+      re-ran the full auto-layout, so a rule change (typing, an inspector edit,
+      add/delete) discarded manual positions AND cleared the selection (the old
+      id never matched). Stable ids let a rebuild carry positions, selection,
+      and user edges forward.
+- [x] **Rebuild preserves state** — `rebuildCanvasFromRule` reads the current
+      positions (`prev` map) and reuses them; new nodes lane-lay-out, moved nodes
+      stay put. Selection/connect-from survive if their node still exists. The
+      `canvasSourced` guard is GONE — the rebuild is now idempotent w.r.t. manual
+      state, so a canvas-originated edit no longer needs to skip its own rebuild.
+- [x] **Effect reads only the rule** — the sync effect tracks `builderRule()`
+      and runs the rebuild inside `untracked()`; the rebuild both reads and writes
+      `canvasNodes`, so tracking those reads would self-trigger an infinite loop.
+- [x] **User-editable, persistent arrows** — edges are `canonical ∪ edgesAdded −
+      edgesRemoved` (override sets keyed by stable id pairs), resolved by
+      `resolveCanvasEdges` and filtered to existing endpoints (crash-safe on
+      stale keys). Add via port-drag / connect-mode (now persists across
+      rebuilds); **delete by clicking an arrow** (transparent wide `canvas-edge-hit`
+      path, `pointer-events: stroke`). `Arrange` clears overrides + re-lays-out.
+      `canConnectCanvasNodes` relaxed to any two distinct nodes (arrows are visual
+      annotation). Node delete re-indexes sibling refs/ids, prunes stale overrides.
+- [x] Contracts: updated the diagram source contract for the new delete path and
+      added a 1.9.5 contract (`canvasNodeId`, position carry, `resolveCanvasEdges`,
+      `removeCanvasEdge`, `canvasSourced` gone). `assert-sweet-ux` now 41.
+
+## Permissive fields — "not backed by real data" (rule-core + UI)
+
+- [x] **Opt-in parser flag** `ParseOptions.allowUnbackedValues` + a new optional
+      `ParseResult.unbacked: string[]` sidecar (rule-core `nlParser.ts`). At every
+      value-rejection site (condition value, assignee, authority, change_stage,
+      generic action param) the value is coerced to its literal and pushed to
+      `unbacked` INSTEAD of an UnresolvedSlot — but ONLY when the flag is set.
+      Default stays reject-don't-coerce (N1); the 884-assertion baseline is
+      byte-identical. Vendored via `npm run sync:angular-core`.
+- [x] Composer parses permissively (`parseOpts()` on all three parse calls) and
+      surfaces a non-blocking amber "Not backed by real data" notice listing the
+      accepted-but-unbacked values (`unbackedNotes` computed). The rule works and
+      the save gate is not blocked (unbacked ≠ unresolved).
+- [x] `core-tests/assert-parser-engine.ts` — +3 pins: default rejects, permissive
+      accepts + reports `unbacked`, and a backed value is never marked. Now 137.
+
+## Verify
+
+- [x] `npm test` 888 PASS / exit 0 (all gates incl. purity + sync).
+- [x] `npm run build` clean, no bundle/style budget warnings (demo/unbacked CSS
+      in the page-scoped `styles.scss` partial, per the Phase 1.7 precedent).
+- [x] Dev server compiles and serves `/workflows` (HTTP 200, no runtime errors).
+      NOT done: a human drag/click-through — no browser automation in this
+      session; the interaction logic is covered by reasoning + source contracts.
+- [x] Commit as `feat(composer): Phase 1.9.5 – editable diagram + permissive fields`

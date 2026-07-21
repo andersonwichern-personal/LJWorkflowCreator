@@ -206,6 +206,33 @@ t('coverage: a phrase matching no vocabulary label still surfaces as uncovered',
   r.uncovered.some((fragment) => fragment.includes('request tax returns')),
   JSON.stringify(r.uncovered));
 
+/* ---- Permissive authoring (1.9.5): unbacked values work, and are flagged --- */
+{
+  const input = 'when a loan is approved, assign to Jordan Rivera and change stage to Underboarding';
+  // Default: reject-don't-coerce — unknown values slot, never land in the rule.
+  const strict = parseInstruction(input);
+  t('permissive off (default): unknown values stay unresolved, not coerced',
+    strict.unresolved.length === 2 &&
+      (strict.unbacked?.length ?? 0) === 0 &&
+      strict.rule?.actions.every((o) => Object.keys(o.params).length === 0) === true,
+    JSON.stringify({ unresolved: strict.unresolved.map((s) => s.heard), actions: strict.rule?.actions }));
+  // Permissive: the literal lands in the rule AND is reported in `unbacked`.
+  const loose = parseInstruction(input, { allowUnbackedValues: true });
+  t('permissive on: unknown values are accepted and reported as unbacked',
+    loose.unresolved.length === 0 &&
+      loose.rule?.actions.some((o) => o.action === 'assign_user' && o.params.assignee === 'Jordan Rivera') === true &&
+      loose.rule?.actions.some((o) => o.action === 'change_stage' && o.params.value === 'Underboarding') === true &&
+      (loose.unbacked ?? []).includes('Jordan Rivera') &&
+      (loose.unbacked ?? []).includes('Underboarding'),
+    JSON.stringify({ unbacked: loose.unbacked, actions: loose.rule?.actions }));
+  // The flag never fabricates for backed values: a known assignee is not unbacked.
+  const backed = parseInstruction('when a loan is approved, assign to Wael', { allowUnbackedValues: true });
+  t('permissive on: a backed (known) value is never marked unbacked',
+    (backed.unbacked ?? []).length === 0 &&
+      backed.rule?.actions[0]?.action === 'assign_user',
+    JSON.stringify({ unbacked: backed.unbacked, actions: backed.rule?.actions }));
+}
+
 /* ---- Sanity: getEvent stays total over the sweep -------------------------- */
 t('vocabulary sanity: every swept event exists', EVENTS.every((event) => !!getEvent(event.key)));
 

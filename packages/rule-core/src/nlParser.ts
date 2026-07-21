@@ -74,6 +74,16 @@ export interface ParseOptions {
    *  resolves exactly AND has a registry entry, the parser emits an instance
    *  ScopeRef instead of a bare string. */
   instanceRegistry?: Record<string, { id: string; label: string }[]>;
+  /**
+   * Permissive authoring (Phase 1.9.5): accept a mentioned condition/action
+   * value even when it matches no vocabulary option or live registry, coercing
+   * it to its literal instead of rejecting it as an UnresolvedSlot. The literal
+   * still lands in the rule (so the field "works"), and every such value is
+   * reported in `ParseResult.unbacked` so the UI can flag it as "not backed by
+   * real data". OFF by default — the default parser stays reject-don't-coerce
+   * (N1), which the assertion suite pins.
+   */
+  allowUnbackedValues?: boolean;
 }
 
 export interface ParseResult {
@@ -84,6 +94,12 @@ export interface ParseResult {
   /** Input fragments the parser did not consume (N2). */
   uncovered: string[];
   ambiguities: ParseAmbiguity[];
+  /**
+   * Values accepted under `allowUnbackedValues` that matched no vocabulary
+   * option / live registry — the rule works with the literal, but the UI should
+   * flag each as "not backed by real data". Empty unless permissive mode is on.
+   */
+  unbacked?: string[];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -100,6 +116,19 @@ function escapeRe(s: string): string {
 
 function titleCase(s: string): string {
   return s.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Permissive authoring (Phase 1.9.5): record a mentioned value that matched no
+ * vocabulary option in `unbacked` and return its literal, so the field works
+ * even though it is not backed by real data. Callers use this in the else-branch
+ * of a match ONLY when `opts.allowUnbackedValues` is set; otherwise the value
+ * still becomes an UnresolvedSlot (reject-don't-coerce, N1).
+ */
+function acceptUnbackedValue(unbacked: string[], heard: string): string {
+  const literal = titleCase(heard);
+  unbacked.push(literal);
+  return literal;
 }
 
 /** Strip trailing punctuation that leaks into regex captures (e.g. \"Wael.\" → \"Wael\"). */
@@ -521,7 +550,8 @@ function matchConditions(
   eventKey: string,
   spans: Spans,
   opts: ParseOptions | undefined,
-  unresolved: UnresolvedSlot[]
+  unresolved: UnresolvedSlot[],
+  unbacked: string[]
 ): RuleCondition[] {
   const conds: RuleCondition[] = [];
   const allowed = allowedFieldsForEvent(eventKey);
@@ -615,6 +645,8 @@ function matchConditions(
           const exact = list.find((o) => norm(o) === heard);
           if (exact) {
             conds.push({ field: field.key, operator: "is", value: toInstanceRef(field.key, exact, opts) });
+          } else if (opts?.allowUnbackedValues) {
+            conds.push({ field: field.key, operator: "is", value: acceptUnbackedValue(unbacked, heard) });
           } else {
             conds.push({ field: field.key, operator: "is", value: "" });
             unresolved.push({
@@ -692,11 +724,12 @@ function parseActionGate(
   clause: string,
   eventKey: string,
   opts: ParseOptions | undefined,
-  unresolved: UnresolvedSlot[]
+  unresolved: UnresolvedSlot[],
+  unbacked: string[]
 ): ConditionGroup | undefined {
   const text = norm(clause).replace(/^(?:if|when)\s+/, "");
   if (!text) return undefined;
-  const gateConds = matchConditions(text, eventKey, [], opts, unresolved);
+  const gateConds = matchConditions(text, eventKey, [], opts, unresolved, unbacked);
   if (!gateConds.length) return undefined;
   return { logic: "AND", children: gateConds };
 }
@@ -711,7 +744,8 @@ function matchOutputs(
   spans: Spans,
   opts: ParseOptions | undefined,
   unresolved: UnresolvedSlot[],
-  notes: string[]
+  notes: string[],
+  unbacked: string[]
 ): RuleOutput[] {
   const outputs: RuleOutput[] = [];
   const assigneeList = opts?.assignees?.length ? opts.assignees : ASSIGNEES;
@@ -734,6 +768,8 @@ function matchOutputs(
     const exact = assigneeList.find((a) => norm(a) === norm(heard));
     if (exact) {
       outputs.push({ action, params: { [param]: toInstanceRef(action, exact, opts) } });
+    } else if (opts?.allowUnbackedValues) {
+      outputs.push({ action, params: { [param]: acceptUnbackedValue(unbacked, heard) } });
     } else {
       outputs.push({ action, params: {} });
       unresolved.push({
@@ -748,7 +784,7 @@ function matchOutputs(
 
   function attachActionGate(actionIndex: number, clause?: string) {
     if (!clause) return;
-    const gate = parseActionGate(clause, eventKey, opts, unresolved);
+    const gate = parseActionGate(clause, eventKey, opts, unresolved, unbacked);
     if (gate) outputs[actionIndex].when = gate;
   }
 
@@ -760,6 +796,8 @@ function matchOutputs(
     const exact = options.find((a) => norm(a) === norm(heard));
     if (exact) {
       outputs.push({ action: "assign_authority", params: { [param]: exact } });
+    } else if (opts?.allowUnbackedValues) {
+      outputs.push({ action: "assign_authority", params: { [param]: acceptUnbackedValue(unbacked, heard) } });
     } else {
       outputs.push({ action: "assign_authority", params: {} });
       unresolved.push({
@@ -863,6 +901,8 @@ function matchOutputs(
       const exact = options.find((o) => norm(o) === norm(heard));
       if (exact) {
         outputs.push({ action: "change_stage", params: { value: exact } });
+      } else if (opts?.allowUnbackedValues) {
+        outputs.push({ action: "change_stage", params: { value: acceptUnbackedValue(unbacked, heard) } });
       } else {
         outputs.push({ action: "change_stage", params: {} });
         unresolved.push({
@@ -909,7 +949,7 @@ function matchOutputs(
   // grammar is derived from each ActionDef's label/aliases, so every other
   // action in the vocabulary — including future client actions — parses with
   // zero changes to this file (process over content).
-  matchOutputsGeneric(maskConsumed(text, spans), eventKey, spans, opts, unresolved, excluded, outputs);
+  matchOutputsGeneric(maskConsumed(text, spans), eventKey, spans, opts, unresolved, excluded, outputs, unbacked);
 
   return outputs;
 }
@@ -1006,7 +1046,8 @@ function matchOutputsGeneric(
   opts: ParseOptions | undefined,
   unresolved: UnresolvedSlot[],
   excludedVerbs: Set<string>,
-  outputs: RuleOutput[]
+  outputs: RuleOutput[],
+  unbacked: string[]
 ) {
   const matches: GenericActionMatch[] = [];
   for (const action of ACTIONS) {
@@ -1029,9 +1070,12 @@ function matchOutputsGeneric(
       const exact = options.find((option) => norm(option) === norm(heard));
       if (exact) {
         output.params[param] = def.paramKind === "text" ? toInstanceRef(def.key, exact, opts) : exact;
-      } else if (options.length) {
+      } else if (options.length && !opts?.allowUnbackedValues) {
         // Reject-don't-coerce: an unknown value never lands in the rule.
         slot = { where: "action-param", actionIndex: 0, param, heard, suggestions: fuzzyMatches(heard, options) };
+      } else if (options.length) {
+        // Permissive (1.9.5): accept the literal, flagged as not backed by data.
+        output.params[param] = acceptUnbackedValue(unbacked, heard);
       } else {
         output.params[param] = heard;
       }
@@ -1041,7 +1085,7 @@ function matchOutputsGeneric(
       if (delayMinutes != null) output.delayMinutes = delayMinutes;
     }
     if (match.gate) {
-      const gate = parseActionGate(match.gate, eventKey, opts, unresolved);
+      const gate = parseActionGate(match.gate, eventKey, opts, unresolved, unbacked);
       if (gate) output.when = gate;
     }
     outputs.push(output);
@@ -1123,6 +1167,7 @@ function matchCategoryConditions(text: string, spans: Spans, existing: RuleCondi
 export function parseInstruction(input: string, opts?: ParseOptions): ParseResult {
   const notes: string[] = [];
   const unresolved: UnresolvedSlot[] = [];
+  const unbacked: string[] = [];
   const spans: Spans = [];
   const text = norm(input);
   if (!text) {
@@ -1169,8 +1214,8 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
   // Approved"), and the action must be able to claim them first. The
   // condition scan reads the raw text and never consults spans, so its own
   // results are order-independent.
-  const outputs = matchOutputs(mainText, eventKey, spans, opts, unresolved, notes);
-  const conds = matchConditions(text, eventKey, spans, opts, unresolved);
+  const outputs = matchOutputs(mainText, eventKey, spans, opts, unresolved, notes, unbacked);
+  const conds = matchConditions(text, eventKey, spans, opts, unresolved, unbacked);
   conds.push(...matchCategoryConditions(text, spans, conds));
   const controlPatch = matchControls(text);
   // AND/OR is decided on the UNCONSUMED text only: the trigger's own "or"
@@ -1188,7 +1233,7 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
     !!elseMatch &&
     /^(?:do\s+)?nothing\b|^(?:take\s+)?no\s+action\b|^leave\s+(?:it|them|the\s+requests?)?\s*(?:alone|unchanged|as[- ]is)\b|^skip\s+(?:it|them)?$/i.test(elseText);
   const elseOutputs = elseMatch && !elseIsNoop
-    ? matchOutputs(elseText, eventKey, [], opts, unresolved, notes)
+    ? matchOutputs(elseText, eventKey, [], opts, unresolved, notes, unbacked)
     : [];
   // Consume the else clause only when it was actually understood — either as
   // real else-actions or as the explicit no-op. Anything else ("otherwise fly
@@ -1241,6 +1286,9 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
   for (const slot of unresolved) {
     notes.push(`Needs your pick: ${slot.param ?? "value"} (heard "${slot.heard}").`);
   }
+  for (const value of unbacked) {
+    notes.push(`Using “${value}” — not backed by real data.`);
+  }
 
   return {
     rule: {
@@ -1255,6 +1303,7 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
     unresolved,
     uncovered,
     ambiguities: [],
+    unbacked,
   };
 }
 
@@ -1270,6 +1319,9 @@ export function parseActionFragment(
   opts?: ParseOptions
 ): { outputs: RuleOutput[]; unresolved: UnresolvedSlot[] } {
   const unresolved: UnresolvedSlot[] = [];
-  const outputs = matchOutputs(norm(text), eventKey ?? "SYSTEM ERROR", [], opts, unresolved, []);
+  // The fragment path shares the grammar; permissive coercion (if opts sets it)
+  // still lands the literal in outputs — the unbacked marker list is not part of
+  // this function's contract, so it is collected locally and discarded.
+  const outputs = matchOutputs(norm(text), eventKey ?? "SYSTEM ERROR", [], opts, unresolved, [], []);
   return { outputs, unresolved };
 }

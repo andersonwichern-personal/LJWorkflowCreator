@@ -11,11 +11,12 @@ import {
   effect,
   inject,
   signal,
+  untracked,
 } from '@angular/core';
 import { Router } from '@angular/router';
 import { Clarification, applyClarification, clarificationsFor } from '../../../core/clarifications';
 import { interpretRule } from '../../../core/interpretation';
-import { ParseResult, parseInstruction } from '../../../core/nlParser';
+import { ParseResult, ParseOptions, parseInstruction } from '../../../core/nlParser';
 import { applyOrgPolicy, protectionsFor } from '../../../core/orgPolicy';
 import { parseGateReport } from '../../../core/parseGate';
 import { applyRevision } from '../../../core/revisions';
@@ -251,6 +252,25 @@ const CANVAS_NODE_HALF_WIDTH = 76;
 const CANVAS_NODE_HALF_HEIGHT = 34;
 const CANVAS_TRASH_HEIGHT = 82;
 
+/** Rank of each lane; also the flow direction a default connection follows. */
+const CANVAS_TYPE_RANK: Record<CanvasNode['type'], number> = { event: 0, condition: 1, output: 2 };
+
+/**
+ * Deterministic node id from (type, ref). Stable across rebuilds — a re-parse,
+ * an inspector edit, or a keystroke reproduces the SAME id for the same rule
+ * piece, so manual positions, the current selection, and user-drawn edges all
+ * survive the rebuild instead of being regenerated (the Phase 1.9.5 fix for the
+ * "can't move/remove once connected" glitch). ref < 100000 by construction.
+ */
+function canvasNodeId(type: CanvasNode['type'], ref: number): number {
+  return CANVAS_TYPE_RANK[type] * 100000 + ref;
+}
+
+/** Stable key for a directed edge, used by the add/remove override sets. */
+function canvasEdgeKey(from: number, to: number): string {
+  return `${from}->${to}`;
+}
+
 /**
  * Intersection of the line between two node centers and the edge of the
  * enterprise node card. Keeping the anchor on the actual card boundary makes
@@ -363,6 +383,19 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
             </div>
           </div>
           <p class="sr-only" aria-live="polite" aria-atomic="true">{{ liveStatus() }}</p>
+
+          @if (unbackedNotes().length) {
+            <div class="unbacked-note" role="status">
+              <span class="unbacked-badge">Not backed by real data</span>
+              <span>
+                Using
+                @for (value of unbackedNotes(); track value; let last = $last) {
+                  <strong>{{ value }}</strong>{{ last ? '' : ', ' }}
+                }
+                — accepted so the workflow works, but not backed by real data.
+              </span>
+            </div>
+          }
 
           <section class="visual-builder" aria-label="Structured workflow builder">
             @if (provisional()) {
@@ -637,7 +670,7 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
                   <span class="palette-copy"><strong>Action</strong><small>Completes the work</small></span>
                   <span class="palette-add" aria-hidden="true">+</span>
                 </button>
-                <p class="palette-hint">Drag a node’s right handle to make a custom connection.</p>
+                <p class="palette-hint">Drag a node’s right handle to connect. Click an arrow to remove it.</p>
               </aside>
 
               <div
@@ -656,6 +689,14 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
                   </defs>
                   @for (edge of edgePaths(); track edge.key) {
                     <path class="canvas-edge" [attr.d]="edge.d" marker-end="url(#wf-arrow)" />
+                    <path
+                      class="canvas-edge-hit"
+                      [attr.d]="edge.d"
+                      (pointerdown)="$event.stopPropagation()"
+                      (click)="removeCanvasEdge(edge, $event)"
+                    >
+                      <title>{{ edge.label }} (click to remove)</title>
+                    </path>
                   }
                   @if (tempEdgePath(); as d) {
                     <path class="canvas-edge canvas-edge-temp" [attr.d]="d" />
@@ -1423,6 +1464,13 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     }
     return [...new Set([...parseIssues, ...validationIssues, ...authoringIssues])];
   });
+  /** Values accepted under permissive authoring (Phase 1.9.5) that match no
+   *  vocabulary option — surfaced as a non-blocking "not backed by real data"
+   *  notice so the rule still works but the author knows the field is unbacked. */
+  protected readonly unbackedNotes = computed<string[]>(() => {
+    const values = this.result()?.unbacked ?? [];
+    return [...new Set(values)];
+  });
   /** Gap messages with no interactive question — rendered as a plain list so a
    *  validation-only block never becomes an unexplained dead end. */
   protected readonly gapNotes = computed(() =>
@@ -1767,16 +1815,18 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     });
   }
 
-  /* ---- Workflow canvas diagram (Phase 1.7) ----
-   * Spatial view of the same rule signal. Rule → canvas: an effect rebuilds a
-   * left-to-right auto-layout whenever the rule changes from the parser, the
-   * live rough match, or the 3-column builder. Canvas → rule: every canvas
-   * mutation is a surgical immutable patch on the rule piece a node points at
-   * (node.ref = index into triggers / conditions.children / actions),
-   * funneled through updateRule(); the canvasSourced guard keeps the effect
-   * from discarding manual node positions in response. Edges render
-   * reactively from signals — no imperative SVG writes. Nested condition
-   * groups stay in the rule untouched; the canvas shows root-level leaves. */
+  /* ---- Workflow canvas diagram (Phase 1.7, editable in 1.9.5) ----
+   * Spatial view of the same rule signal. Rule → canvas: an effect rebuilds
+   * whenever the rule changes from the parser, the live rough match, or the
+   * 3-column builder. Canvas → rule: every structural canvas mutation is a
+   * surgical immutable patch on the rule piece a node points at (node.ref =
+   * index into triggers / conditions.children / actions), funneled through
+   * updateRule(). Node ids are STABLE (derived from type+ref), so a rebuild
+   * carries manual positions, the selection, and user-drawn edges forward
+   * instead of regenerating them — that is what makes nodes movable/removable
+   * and arrows add/deletable once connected (1.9.5). Edges render reactively
+   * from signals — no imperative SVG writes. Nested condition groups stay in
+   * the rule untouched; the canvas shows root-level leaves. */
 
   @ViewChild('canvasStage') private canvasStage?: ElementRef<HTMLDivElement>;
 
@@ -1788,20 +1838,31 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
   protected readonly tempEdge = signal<{ fromId: number; x: number; y: number } | null>(null);
   protected readonly draggingCanvasNodeId = signal<number | null>(null);
   protected readonly trashHot = signal(false);
-  private canvasSeq = 0;
-  private canvasSourced = false;
+
+  // User edge overrides, keyed by canvasEdgeKey. `edgesAdded` are arrows the
+  // user drew on top of the canonical topology; `edgesRemoved` are canonical
+  // arrows the user deleted. Both are keyed by the STABLE node ids, so they
+  // survive every rebuild — that is what makes add/delete arrow persistent.
+  private readonly edgesAdded = new Set<string>();
+  private readonly edgesRemoved = new Set<string>();
 
   protected readonly selectedCanvasNode = computed(
     () => this.canvasNodes().find((node) => node.id === this.selectedCanvasNodeId()) ?? null
   );
   protected readonly edgePaths = computed(() => {
     const byId = new Map(this.canvasNodes().map((node) => [node.id, node]));
-    const paths: { key: string; d: string }[] = [];
+    const paths: { key: string; d: string; from: number; to: number; label: string }[] = [];
     for (const edge of this.canvasEdges()) {
       const a = byId.get(edge.from);
       const b = byId.get(edge.to);
       if (a && b) {
-        paths.push({ key: `${edge.from}-${edge.to}`, d: canvasConnectorPath(a, b) });
+        paths.push({
+          key: `${edge.from}-${edge.to}`,
+          d: canvasConnectorPath(a, b),
+          from: edge.from,
+          to: edge.to,
+          label: `Remove connection ${this.canvasNodeLabel(a)} → ${this.canvasNodeLabel(b)}`,
+        });
       }
     }
     return paths;
@@ -1815,44 +1876,58 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
   });
 
   private readonly canvasSync = effect(() => {
-    // Read the dependency BEFORE the guard: an early return that never reads
-    // builderRule() would untrack it and the effect would never fire again.
+    // The canvas is a pure projection of the working rule: it rebuilds on every
+    // change. There is no "canvas-sourced" guard — a rebuild now PRESERVES
+    // manual node positions, the current selection, and user-drawn edges (all
+    // keyed by stable ids), so a canvas-originated edit no longer needs to skip
+    // its own rebuild to avoid clobbering itself.
     const rule = this.builderRule();
-    if (this.canvasSourced) {
-      this.canvasSourced = false;
-      return;
-    }
-    if (!rule) {
-      this.canvasNodes.set([]);
-      this.canvasEdges.set([]);
-      this.selectedCanvasNodeId.set(null);
-      this.connectFrom.set(null);
-      return;
-    }
-    this.rebuildCanvasFromRule(rule);
+    // Everything after the tracked builderRule() read runs untracked: the
+    // rebuild READS canvasNodes/selection to carry them forward and also WRITES
+    // them, so tracking those reads would make the effect depend on its own
+    // output and loop. The effect's only dependency is the working rule.
+    untracked(() => {
+      if (!rule) {
+        this.canvasNodes.set([]);
+        this.canvasEdges.set([]);
+        this.selectedCanvasNodeId.set(null);
+        this.connectFrom.set(null);
+        return;
+      }
+      this.rebuildCanvasFromRule(rule);
+    });
   });
 
   private rebuildCanvasFromRule(rule: WorkflowRule) {
+    // Carry the current positions forward so a rebuild never snaps a node the
+    // user moved back to its lane. Stable ids make this a plain id lookup.
+    const prev = new Map(this.canvasNodes().map((node) => [node.id, { x: node.x, y: node.y }]));
     const nodes: CanvasNode[] = [];
     rule.triggers.forEach((_, i) =>
-      nodes.push({ id: ++this.canvasSeq, type: 'event', x: 0, y: 0, ref: i })
+      nodes.push({ id: canvasNodeId('event', i), type: 'event', x: 0, y: 0, ref: i })
     );
     const leafRefs = rule.conditions.children
       .map((child, i) => (isGroup(child) ? -1 : i))
       .filter((i) => i >= 0);
-    leafRefs.forEach((childIndex, i) =>
-      nodes.push({ id: ++this.canvasSeq, type: 'condition', x: 0, y: 0, ref: childIndex })
+    leafRefs.forEach((childIndex) =>
+      nodes.push({ id: canvasNodeId('condition', childIndex), type: 'condition', x: 0, y: 0, ref: childIndex })
     );
     rule.actions.forEach((_, i) =>
-      nodes.push({ id: ++this.canvasSeq, type: 'output', x: 0, y: 0, ref: i })
+      nodes.push({ id: canvasNodeId('output', i), type: 'output', x: 0, y: 0, ref: i })
     );
-    const laidOut = this.layoutCanvasNodes(nodes);
+    const laidOut = this.layoutCanvasNodes(nodes).map((node) => {
+      const kept = prev.get(node.id);
+      return kept ? { ...node, ...kept } : node;
+    });
     this.canvasNodes.set(laidOut);
-    this.canvasEdges.set(this.canonicalCanvasEdges(laidOut));
+    this.canvasEdges.set(this.resolveCanvasEdges(laidOut));
+    // Keep the selection if its node still exists (survives typing / edits).
     if (!laidOut.some((node) => node.id === this.selectedCanvasNodeId())) {
       this.selectedCanvasNodeId.set(null);
     }
-    this.connectFrom.set(null);
+    if (!laidOut.some((node) => node.id === this.connectFrom())) {
+      this.connectFrom.set(null);
+    }
   }
 
   /** Compact three-lane layout sized from the actual canvas, including mobile. */
@@ -1899,6 +1974,31 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     return edges;
   }
 
+  /**
+   * Rendered edges = canonical topology, plus the user's added arrows, minus the
+   * user's removed arrows — then filtered to arrows whose endpoints still exist.
+   * Deterministic and crash-safe: a stale override (e.g. an endpoint deleted, or
+   * a ref that shifted after a delete) is simply dropped, never rendered.
+   */
+  private resolveCanvasEdges(nodes: CanvasNode[]): CanvasEdge[] {
+    const ids = new Set(nodes.map((node) => node.id));
+    const keys = new Set<string>();
+    for (const edge of this.canonicalCanvasEdges(nodes)) keys.add(canvasEdgeKey(edge.from, edge.to));
+    for (const key of this.edgesAdded) keys.add(key);
+    for (const key of this.edgesRemoved) keys.delete(key);
+    const edges: CanvasEdge[] = [];
+    for (const key of keys) {
+      const [from, to] = key.split('->').map(Number);
+      if (ids.has(from) && ids.has(to) && from !== to) edges.push({ from, to });
+    }
+    return edges;
+  }
+
+  /** Recompute the rendered edges from the current nodes + override sets. */
+  private refreshCanvasEdges() {
+    this.canvasEdges.set(this.resolveCanvasEdges(this.canvasNodes()));
+  }
+
   /* ---- Canvas: palette + stage interactions ---- */
 
   protected paletteDragStart(e: DragEvent, type: CanvasNode['type']) {
@@ -1918,9 +2018,13 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
   }
 
   protected arrangeCanvas() {
+    // Deterministic reset: re-lay-out every node AND drop the user's edge
+    // overrides so the diagram returns to the clean canonical topology.
+    this.edgesAdded.clear();
+    this.edgesRemoved.clear();
     const nodes = this.layoutCanvasNodes(this.canvasNodes());
     this.canvasNodes.set(nodes);
-    this.canvasEdges.set(this.canonicalCanvasEdges(nodes));
+    this.canvasEdges.set(this.resolveCanvasEdges(nodes));
     this.connectFrom.set(null);
     this.tempEdge.set(null);
     this.typingPulse.update((pulse) => pulse + 1);
@@ -2051,14 +2155,31 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     const fromNode = this.canvasNodes().find((node) => node.id === from);
     const toNode = this.canvasNodes().find((node) => node.id === to);
     if (!fromNode || !toNode || !this.canConnectCanvasNodes(fromNode, toNode)) return;
-    if (this.canvasEdges().some((edge) => edge.from === from && edge.to === to)) return;
-    this.canvasEdges.update((edges) => [...edges, { from, to }]);
+    const key = canvasEdgeKey(from, to);
+    // Record the intent in the override sets so the arrow survives rebuilds; a
+    // previously-removed same arrow is un-removed.
+    this.edgesRemoved.delete(key);
+    this.edgesAdded.add(key);
+    this.refreshCanvasEdges();
     this.pulseSpiral();
   }
 
+  /** Delete an arrow: suppress it if canonical, or drop it if user-added. */
+  protected removeCanvasEdge(edge: CanvasEdge, event?: Event) {
+    event?.stopPropagation();
+    event?.preventDefault();
+    const key = canvasEdgeKey(edge.from, edge.to);
+    this.edgesAdded.delete(key);
+    this.edgesRemoved.add(key);
+    this.refreshCanvasEdges();
+    this.typingPulse.update((pulse) => pulse + 1);
+    this.pulseSpiral();
+  }
+
+  /** Arrows are visual annotations, so any two distinct nodes may connect;
+   *  duplicates are collapsed by the override set's key. */
   private canConnectCanvasNodes(from: CanvasNode, to: CanvasNode): boolean {
-    const rank: Record<CanvasNode['type'], number> = { event: 0, condition: 1, output: 2 };
-    return rank[from.type] < rank[to.type] || (from.type === 'condition' && to.type === 'condition');
+    return from.id !== to.id;
   }
 
   /* ---- Canvas: add / delete nodes (each maps to a rule piece) ---- */
@@ -2089,23 +2210,25 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
       ref = base.actions.length;
       rule = { ...base, actions: [...base.actions, { action: def.key, params: defaultParamFor(def) }] };
     }
-    const id = ++this.canvasSeq;
-    const stage = this.canvasStage?.nativeElement;
-    const width = Math.max(320, stage?.clientWidth ?? 760);
-    const height = Math.max(380, stage?.clientHeight ?? 520);
-    const placed: CanvasNode = {
-      id,
-      type,
-      ref,
-      x: Math.max(CANVAS_NODE_HALF_WIDTH + 8, Math.min(width - CANVAS_NODE_HALF_WIDTH - 8, x)),
-      y: Math.max(CANVAS_NODE_HALF_HEIGHT + 8, Math.min(height - CANVAS_TRASH_HEIGHT - 16, y)),
-    };
-    const appended = [...this.canvasNodes(), placed];
-    const nodes = autoArrange ? this.layoutCanvasNodes(appended) : appended;
-    this.canvasNodes.set(nodes);
-    this.canvasEdges.set(this.canonicalCanvasEdges(nodes));
+    const id = canvasNodeId(type, ref);
+    // Drag-drop keeps the drop point; a palette click lets the rebuild lane the
+    // new node. Either way we pre-seed the node so the rebuild's position-carry
+    // preserves it, and select it. The rebuild (via updateRule) is the single
+    // place that reconciles nodes/edges with the rule.
+    if (!autoArrange) {
+      const stage = this.canvasStage?.nativeElement;
+      const width = Math.max(320, stage?.clientWidth ?? 760);
+      const height = Math.max(380, stage?.clientHeight ?? 520);
+      const placed: CanvasNode = {
+        id,
+        type,
+        ref,
+        x: Math.max(CANVAS_NODE_HALF_WIDTH + 8, Math.min(width - CANVAS_NODE_HALF_WIDTH - 8, x)),
+        y: Math.max(CANVAS_NODE_HALF_HEIGHT + 8, Math.min(height - CANVAS_TRASH_HEIGHT - 16, y)),
+      };
+      this.canvasNodes.update((nodes) => [...nodes, placed]);
+    }
     this.selectedCanvasNodeId.set(id);
-    this.canvasSourced = true;
     this.updateRule(rule);
   }
 
@@ -2127,15 +2250,31 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     } else if (node.type === 'output' && base.actions[node.ref]) {
       rule = { ...base, actions: base.actions.filter((_, i) => i !== node.ref) };
     }
+    // Re-index siblings in the same lane and recompute their stable ids, keeping
+    // their manual positions so a delete never scrambles the rest of the lane.
     const remaining = this.canvasNodes()
       .filter((n) => n.id !== id)
-      .map((n) => (n.type === node.type && n.ref > node.ref ? { ...n, ref: n.ref - 1 } : n));
+      .map((n) =>
+        n.type === node.type && n.ref > node.ref
+          ? { ...n, ref: n.ref - 1, id: canvasNodeId(n.type, n.ref - 1) }
+          : n
+      );
     this.canvasNodes.set(remaining);
-    this.canvasEdges.set(this.canonicalCanvasEdges(remaining));
+    this.pruneEdgeOverrides(remaining);
+    this.canvasEdges.set(this.resolveCanvasEdges(remaining));
     if (this.selectedCanvasNodeId() === id) this.selectedCanvasNodeId.set(null);
-    if (rule) {
-      this.canvasSourced = true;
-      this.updateRule(rule);
+    if (rule) this.updateRule(rule);
+  }
+
+  /** Drop override keys whose endpoints no longer exist (keeps the sets bounded
+   *  after deletes / re-indexes; resolveCanvasEdges already ignores them). */
+  private pruneEdgeOverrides(nodes: CanvasNode[]) {
+    const ids = new Set(nodes.map((n) => n.id));
+    for (const set of [this.edgesAdded, this.edgesRemoved]) {
+      for (const key of set) {
+        const [from, to] = key.split('->').map(Number);
+        if (!ids.has(from) || !ids.has(to)) set.delete(key);
+      }
     }
   }
 
@@ -2143,9 +2282,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
    *  re-runs the gap gate + review flow; commits a provisional rough match). */
   protected commitCanvasToRule() {
     const rule = this.builderRule();
-    if (!rule) return;
-    this.canvasSourced = true;
-    this.updateRule(rule);
+    if (!rule) return;    this.updateRule(rule);
   }
 
   /* ---- Canvas: node ↔ rule lookups for labels + inspector ---- */
@@ -2233,9 +2370,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     const node = this.findCanvasNode(id, 'event');
     if (!node || !getEvent(eventKey)) return;
     const base = this.baseRule();
-    if (!base.triggers[node.ref] || base.triggers[node.ref].event === eventKey) return;
-    this.canvasSourced = true;
-    this.updateRule({
+    if (!base.triggers[node.ref] || base.triggers[node.ref].event === eventKey) return;    this.updateRule({
       ...base,
       triggers: base.triggers.map((trigger, i) =>
         i === node.ref ? { ...trigger, event: eventKey } : trigger
@@ -2254,9 +2389,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
       operator: OPERATORS[field.kind][0].value,
       value: defaultValueFor(field),
     };
-    const base = this.baseRule();
-    this.canvasSourced = true;
-    this.updateRule({
+    const base = this.baseRule();    this.updateRule({
       ...base,
       conditions: {
         ...base.conditions,
@@ -2267,16 +2400,12 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
 
   protected setCanvasNodeOperator(id: number, operator: string) {
     const node = this.findCanvasNode(id, 'condition');
-    if (!node || !this.canvasLeaf(node)) return;
-    this.canvasSourced = true;
-    this.setConditionOperator(node.ref, operator);
+    if (!node || !this.canvasLeaf(node)) return;    this.setConditionOperator(node.ref, operator);
   }
 
   protected setCanvasNodeValue(id: number, value: string) {
     const node = this.findCanvasNode(id, 'condition');
-    if (!node || !this.canvasLeaf(node)) return;
-    this.canvasSourced = true;
-    this.setConditionValue(node.ref, value);
+    if (!node || !this.canvasLeaf(node)) return;    this.setConditionValue(node.ref, value);
   }
 
   protected setCanvasNodeAction(id: number, actionKey: string) {
@@ -2285,9 +2414,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     if (!node || !def) return;
     const base = this.baseRule();
     const existing = base.actions[node.ref];
-    if (!existing || existing.action === actionKey) return;
-    this.canvasSourced = true;
-    this.updateRule({
+    if (!existing || existing.action === actionKey) return;    this.updateRule({
       ...base,
       actions: base.actions.map((output, i) =>
         i === node.ref ? { action: def.key, params: defaultParamFor(def) } : output
@@ -2297,9 +2424,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
 
   protected setCanvasNodeParam(id: number, value: string) {
     const node = this.findCanvasNode(id, 'output');
-    if (!node || !this.baseRule().actions[node.ref]) return;
-    this.canvasSourced = true;
-    this.setActionParam(node.ref, value);
+    if (!node || !this.baseRule().actions[node.ref]) return;    this.setActionParam(node.ref, value);
   }
 
   /* Text composer, structured builder, and diagram share one finite motion channel. */
@@ -2330,6 +2455,16 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     this.refreshLiveParse(textarea.value);
   }
 
+  /**
+   * Parser options for the composer. Phase 1.9.5: authoring is permissive — a
+   * mentioned value that isn't in the vocabulary still lands in the rule (so the
+   * field works), and is reported in `unbacked` so the UI flags it as "not
+   * backed by real data" instead of blocking on an unresolved slot.
+   */
+  private parseOpts(extra?: ParseOptions): ParseOptions {
+    return { allowUnbackedValues: true, ...extra };
+  }
+
   private refreshLiveParse(raw: string) {
     const trimmed = raw.trim();
     if (!trimmed) {
@@ -2337,7 +2472,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
       return;
     }
     try {
-      this.liveResult.set(parseInstruction(trimmed));
+      this.liveResult.set(parseInstruction(trimmed, this.parseOpts()));
     } catch {
       this.liveResult.set(null);
     }
@@ -2401,7 +2536,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
   private parseSubmittedDescription(description: string, generation: number) {
     if (generation !== this.buildGeneration) return;
     try {
-      const result = parseInstruction(description);
+      const result = parseInstruction(description, this.parseOpts());
       if (generation !== this.buildGeneration) return;
       this.result.set(result);
       this.parsedDescription.set(result.rule ? description : null);
@@ -2563,7 +2698,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
         this.revisionError.set('Choose one of the confirmed options so Sweet does not guess.');
         return;
       }
-      this.result.set(parseInstruction(this.text().trim(), { forceEvent: permitted }));
+      this.result.set(parseInstruction(this.text().trim(), this.parseOpts({ forceEvent: permitted })));
     } else {
       this.result.set(applyClarification(result, question.id, value));
     }

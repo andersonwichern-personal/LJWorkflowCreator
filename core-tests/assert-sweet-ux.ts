@@ -259,6 +259,15 @@ t(
     !/canvasSourced/.test(composerSource)
 );
 t(
+  'diagram: arrows add via port-drag + delete via a visible × handle; no connect-mode button (1.9.5)',
+  // Add: the out-port drags to a target node. Delete: an always-on × per arrow.
+  /\(pointerdown\)\s*=\s*['"]portPointerDown\(\$event, node\)['"]/.test(composerSource) &&
+    /class=['"]canvas-edge-del['"]/.test(composerSource) &&
+    // The redundant connect-mode button + its machinery are gone.
+    !/connectMode/.test(composerSource) &&
+    !/handleConnectClick/.test(composerSource)
+);
+t(
   'shape-aware connector paths stay reactive while connected nodes move',
   /function canvasNodeAnchor\(/.test(composerSource) &&
     /function canvasConnectorPath\(/.test(composerSource) &&

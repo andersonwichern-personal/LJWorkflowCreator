@@ -793,3 +793,30 @@ and label it "not backed by real data".
       NOT done: a human drag/click-through — no browser automation in this
       session; the interaction logic is covered by reasoning + source contracts.
 - [x] Commit as `feat(composer): Phase 1.9.5 – editable diagram + permissive fields`
+
+### 1.9.5 follow-up — browser-verified + discoverability (2026-07-21)
+
+Anderson asked how add/delete arrows work and what the "Connect nodes" button
+does — a discoverability signal, not a bug. Drove the real UI in headless Chrome
+(puppeteer-core → system Chrome) and confirmed every interaction works:
+move node, move persists across a rebuild (stage-relative measurement so page
+scroll can't confound it), delete arrow, add arrow via port-drag, add arrow via
+the connect button; zero console/page errors.
+
+- [x] **Removed the "Connect nodes" button** and all its machinery (connectMode
+      / connectFrom signals, toggleConnectMode, handleConnectClick, the
+      nodePointerDown connect branch, `.cn-connect-from`). It was a redundant
+      second way to draw the same cosmetic arrow (port-drag already does it) and
+      confused the user. Port-drag is now the single add path.
+- [x] **Per-arrow delete handle** — an always-visible × at each arrow midpoint
+      (`.canvas-edge-del`), so removing an arrow is discoverable; clicking the
+      arrow line still works too. Verified: a real mouse click on the × deletes.
+- [x] Palette hint reworded; `assert-sweet-ux` +1 contract (× handle present,
+      port-drag add, connect-mode machinery gone) → 42 assertions.
+- [x] Verify: `npm test` 889 PASS / exit 0; `npm run build` clean, no budget
+      warnings; headless-Chrome drive of move / add / delete all PASS, no errors.
+- [x] Commit as `refactor(composer): 1.9.5 follow-up – drop connect button, add × delete handle`
+
+Note: arrows are visual annotations (the WHEN/IF/THEN rule has no arbitrary graph
+semantics) — drawing/removing them does not change workflow logic. If arrows
+should ever mean sequence/flow, that is a rule-model change and needs a spec.

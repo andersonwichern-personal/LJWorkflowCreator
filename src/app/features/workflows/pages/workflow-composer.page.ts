@@ -616,16 +616,6 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
                 <p>{{ canvasNodes().length }} nodes · {{ canvasEdges().length }} connections</p>
               </div>
               <div class="canvas-toolbar" aria-label="Diagram tools">
-                <button
-                  type="button"
-                  class="canvas-btn"
-                  [class.active]="connectMode()"
-                  [attr.aria-pressed]="connectMode()"
-                  (click)="toggleConnectMode()"
-                >
-                  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 10.5 10.5 5.5M4 7H2.75A1.75 1.75 0 0 0 1 8.75v3.5A1.75 1.75 0 0 0 2.75 14h3.5A1.75 1.75 0 0 0 8 12.25V11m0-6V3.75A1.75 1.75 0 0 1 9.75 2h3.5A1.75 1.75 0 0 1 15 3.75v3.5A1.75 1.75 0 0 1 13.25 9H12" /></svg>
-                  {{ connectMode() ? 'Choose destination' : 'Connect nodes' }}
-                </button>
                 <button type="button" class="canvas-btn ghost" (click)="arrangeCanvas()">
                   <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3h12M2 8h12M2 13h12M4 1v4m4 1v4m4 1v4" /></svg>
                   Arrange
@@ -670,7 +660,7 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
                   <span class="palette-copy"><strong>Action</strong><small>Completes the work</small></span>
                   <span class="palette-add" aria-hidden="true">+</span>
                 </button>
-                <p class="palette-hint">Drag a node’s right handle to connect. Click an arrow to remove it.</p>
+                <p class="palette-hint">Drag a node’s right handle onto another node to connect. Click an arrow’s × to remove it.</p>
               </aside>
 
               <div
@@ -718,7 +708,6 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
                     [class.cn-condition]="node.type === 'condition'"
                     [class.cn-output]="node.type === 'output'"
                     [class.cn-selected]="selectedCanvasNodeId() === node.id"
-                    [class.cn-connect-from]="connectFrom() === node.id"
                     [class.cn-dragging]="draggingCanvasNodeId() === node.id"
                     [style.left.px]="node.x"
                     [style.top.px]="node.y"
@@ -742,6 +731,24 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
                       (pointerdown)="portPointerDown($event, node)"
                     ></span>
                   </div>
+                }
+
+                <!-- Delete-connection handles: one × at each arrow midpoint, so
+                     removing an arrow is discoverable (clicking the thin line
+                     also works). Hidden while dragging a node. -->
+                @if (draggingCanvasNodeId() === null) {
+                  @for (edge of edgePaths(); track edge.key) {
+                    <button
+                      type="button"
+                      class="canvas-edge-del"
+                      [style.left.px]="edge.mx"
+                      [style.top.px]="edge.my"
+                      [attr.aria-label]="edge.label"
+                      [title]="edge.label"
+                      (pointerdown)="$event.stopPropagation()"
+                      (click)="removeCanvasEdge(edge, $event)"
+                    >×</button>
+                  }
                 }
 
                 <div
@@ -1833,8 +1840,6 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
   protected readonly canvasNodes = signal<CanvasNode[]>([]);
   protected readonly canvasEdges = signal<CanvasEdge[]>([]);
   protected readonly selectedCanvasNodeId = signal<number | null>(null);
-  protected readonly connectMode = signal(false);
-  protected readonly connectFrom = signal<number | null>(null);
   protected readonly tempEdge = signal<{ fromId: number; x: number; y: number } | null>(null);
   protected readonly draggingCanvasNodeId = signal<number | null>(null);
   protected readonly trashHot = signal(false);
@@ -1851,7 +1856,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
   );
   protected readonly edgePaths = computed(() => {
     const byId = new Map(this.canvasNodes().map((node) => [node.id, node]));
-    const paths: { key: string; d: string; from: number; to: number; label: string }[] = [];
+    const paths: { key: string; d: string; from: number; to: number; label: string; mx: number; my: number }[] = [];
     for (const edge of this.canvasEdges()) {
       const a = byId.get(edge.from);
       const b = byId.get(edge.to);
@@ -1861,6 +1866,8 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
           d: canvasConnectorPath(a, b),
           from: edge.from,
           to: edge.to,
+          mx: (a.x + b.x) / 2,
+          my: (a.y + b.y) / 2,
           label: `Remove connection ${this.canvasNodeLabel(a)} → ${this.canvasNodeLabel(b)}`,
         });
       }
@@ -1891,7 +1898,6 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
         this.canvasNodes.set([]);
         this.canvasEdges.set([]);
         this.selectedCanvasNodeId.set(null);
-        this.connectFrom.set(null);
         return;
       }
       this.rebuildCanvasFromRule(rule);
@@ -1924,9 +1930,6 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     // Keep the selection if its node still exists (survives typing / edits).
     if (!laidOut.some((node) => node.id === this.selectedCanvasNodeId())) {
       this.selectedCanvasNodeId.set(null);
-    }
-    if (!laidOut.some((node) => node.id === this.connectFrom())) {
-      this.connectFrom.set(null);
     }
   }
 
@@ -2025,7 +2028,6 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     const nodes = this.layoutCanvasNodes(this.canvasNodes());
     this.canvasNodes.set(nodes);
     this.canvasEdges.set(this.resolveCanvasEdges(nodes));
-    this.connectFrom.set(null);
     this.tempEdge.set(null);
     this.typingPulse.update((pulse) => pulse + 1);
     this.pulseSpiral();
@@ -2037,10 +2039,6 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
 
   protected nodePointerDown(e: PointerEvent, node: CanvasNode) {
     if ((e.target as HTMLElement).classList.contains('cn-port') || e.button !== 0) return;
-    if (this.connectMode()) {
-      this.handleConnectClick(node.id);
-      return;
-    }
     e.preventDefault();
     this.selectedCanvasNodeId.set(node.id);
     const stage = this.canvasStage?.nativeElement;
@@ -2134,21 +2132,6 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     document.addEventListener('pointerup', finish);
     document.addEventListener('pointercancel', finish);
     document.addEventListener('mouseup', mouseFinish);
-  }
-
-  protected toggleConnectMode() {
-    this.connectMode.update((on) => !on);
-    this.connectFrom.set(null);
-  }
-
-  protected handleConnectClick(id: number) {
-    const from = this.connectFrom();
-    if (from === null) {
-      this.connectFrom.set(id);
-    } else {
-      if (from !== id) this.addCanvasEdge(from, id);
-      this.connectFrom.set(null);
-    }
   }
 
   private addCanvasEdge(from: number, to: number) {

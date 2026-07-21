@@ -490,6 +490,17 @@ summary { -webkit-tap-highlight-color: transparent; }
    Re-enables pointer events (the parent .canvas-svg sets pointer-events: none). */
 .canvas-edge-hit { fill: none; stroke: transparent; stroke-width: 16; stroke-linecap: round; cursor: pointer; pointer-events: stroke; }
 .canvas-edge-hit:hover { stroke: rgb(200 60 60 / .32); }
+/* Always-visible delete handle at each arrow midpoint (discoverability). */
+.canvas-edge-del {
+  position: absolute; z-index: 3; width: 18px; height: 18px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  transform: translate(-50%, -50%); border: 1px solid #c0ccdd; border-radius: 50%;
+  background: #fff; color: #7b91b2; font-size: 13px; line-height: 1; cursor: pointer;
+  opacity: .55; transition: opacity var(--motion-fast), background var(--motion-fast), color var(--motion-fast), border-color var(--motion-fast);
+}
+.canvas-edge-del:hover, .canvas-edge-del:focus-visible {
+  opacity: 1; background: var(--danger-bg); border-color: #d49a9a; color: var(--danger); outline: 0;
+}
 .canvas-empty {
   position: absolute; top: 50%; left: 50%; width: min(280px, calc(100% - 32px));
   transform: translate(-50%, -50%); color: var(--canvas-muted); text-align: center; pointer-events: none;
@@ -505,7 +516,6 @@ summary { -webkit-tap-highlight-color: transparent; }
 }
 .canvas-node:hover { border-color: #8ca0bc; box-shadow: 0 3px 8px rgb(15 23 42 / .1); }
 .canvas-node:focus-visible, .canvas-node.cn-selected { border-color: var(--brand); box-shadow: 0 0 0 3px rgb(61 125 242 / .18); outline: 0; }
-.canvas-node.cn-connect-from { border-color: var(--brand); outline: 2px dashed var(--brand); outline-offset: 3px; }
 .canvas-node.cn-dragging { z-index: 4; cursor: grabbing; box-shadow: 0 8px 18px rgb(15 23 42 / .16); }
 .cn-accent { width: 4px; flex: none; border-radius: 7px 0 0 7px; background: var(--brand); }
 .cn-event .cn-accent { background: var(--success); }

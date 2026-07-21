@@ -376,7 +376,13 @@ function activationBlocker(rule: WorkflowRule): string | null {
       .row-actions { grid-column: 1 / -1; margin-top: 0; padding-top: var(--space-2); border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent); }
     }
     @media (max-width: 430px) {
-      .overview p { padding-inline: var(--space-4); }
+      .overview {
+        display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+        padding: 0; overflow: visible;
+      }
+      .overview p { min-width: 0; padding: var(--space-3) var(--space-4); }
+      .overview p:nth-child(odd) { border-left: 0; }
+      .overview p:nth-child(n + 3) { border-top: 1px solid var(--border); }
       .workflow-row { grid-template-columns: 1fr; }
       .identity, .row-actions { grid-column: 1; }
       .row-actions { flex-wrap: wrap; }

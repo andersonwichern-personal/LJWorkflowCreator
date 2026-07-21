@@ -544,9 +544,9 @@ scope after the initial no-overflow check.
 - [x] Make the Sweet spiral spin briefly on workflow changes, settle fully, and remain hover-interactive
 - [x] Refine workflow detail into a compact metadata header and Interpretation/Test/Safeguards report shell
 - [x] Refine the reviews queue, proposal rows, and empty state without fabricating fields
-- [x] Format-check affected files and extend browserless UI contracts (39 assertions; no formatter or lint command is configured)
+- [x] Format-check affected files and extend browserless UI contracts (40 assertions; no formatter or lint command is configured)
 - [x] Verify the full test suite and production build
-- [ ] Browser-QA affected routes at 1710x981, 1024x768, and 390x844 — blocked because the in-app browser runtime reported no available browser; affected routes served HTTP 200 and responsive source contracts/build passed
+- [x] Browser-QA affected routes at 1710x981, 1024x768, and 390x844 — passed on 2026-07-19 for the loaded workflow list, composer, workflow detail, and Reviews queue with no console errors or page-level horizontal overflow. The pass found and fixed a clipped 390px overview metric by switching that strip to a two-column grid; the new browserless contract passes with the full suite and production build.
 - [x] Commit as release 1.9
 
 ---
@@ -643,3 +643,32 @@ change can only desync the text↔rule round-trip, which this fixpoint now
 guarantees. The remaining known no-op: an INCOMPLETE condition (empty value,
 already gated from save) serializes to "…" and drops on re-parse — an
 authoring draft state, not a saved-rule sync case.
+
+---
+
+# 1.9.3 — Trigger-clause scoping (2026-07-19, Claude)
+
+Picked up the parser-engine hardening thread from the 1.9.2 checkpoint. A
+known-limits probe over the whole event vocabulary confirmed the single
+documented limit that was a real correctness bug (the 1.6 "FISERV/FMAC combo"
+note): the direct event-key match scanned the WHOLE input and took the longest
+key, so a longer key buried in a later clause flipped the trigger. E.g.
+"when a fmac loan is booked, notify omar that the loan approved" re-parsed to
+trigger **LOAN APPROVED** (found in the action clause) and dumped the real
+"fmac loan" trigger into `uncovered`. The probe also confirmed the fixpoint
+work otherwise holds — 0 flips / 0 oscillations / 0 drops across all 23 events.
+
+- [x] **Trigger-clause scoping** (rule-core `nlParser.ts` `matchEvent`): hoisted
+      the existing trigger-clause boundary (text before the first
+      comma/"and"/"then", already used for subject detection) above the
+      direct-key block. A key NAMED in the trigger clause now beats a longer key
+      that only appears later; whole-text scan remains the fallback when the
+      trigger clause names no event key (single-clause inputs, trailing key), so
+      every pinned single-clause behavior is byte-identical. Content-agnostic:
+      derived from the clause boundary, not from any client's event names.
+- [x] `core-tests/assert-parser-engine.ts` — +2 pins (now 134): the buried
+      longer key does not flip the trigger, and the real trigger clause is not
+      dumped into `uncovered`. Vendored via `npm run sync:angular-core`.
+- [x] Verify: `npm test` 883 PASS / exit 0 (18 gates incl. purity + sync);
+      `npm run build` clean, no budget warnings. Scoped to `packages/rule-core`
+      (+ vendored sync) and parser tests; no UI files touched.

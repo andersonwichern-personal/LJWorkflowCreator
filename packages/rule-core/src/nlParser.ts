@@ -197,20 +197,27 @@ function matchEvent(
     return { event: forceEvent, ambiguity: null };
   }
 
-  // Direct event-key mention wins outright (longest first).
-  const hits = EVENTS.map((e) => e.key).filter((k) => text.includes(norm(k)));
+  // Trigger detection is scoped to the TRIGGER CLAUSE (the text before the
+  // first comma/"and"/"then"): an event key or subject word inside a condition
+  // or action clause ("…, request document w9") must never define the trigger —
+  // the same cross-clause contamination class as the dual-trigger hijack.
+  const clauseBreak = /,|\band\b|\bthen\b/.exec(text);
+  const triggerClause = clauseBreak ? text.slice(0, clauseBreak.index) : text;
+
+  // Direct event-key mention wins outright (longest first). A key NAMED in the
+  // trigger clause beats a longer key that only appears later — otherwise
+  // "when a fmac loan is booked, notify omar that the loan approved" flips the
+  // trigger to LOAN APPROVED (buried in the action clause) and dumps the real
+  // trigger into `uncovered`. Fall back to a whole-text scan only when the
+  // trigger clause names no event key (single-clause inputs, trailing key).
+  const allHits = EVENTS.map((e) => e.key).filter((k) => text.includes(norm(k)));
+  const clauseHits = allHits.filter((k) => triggerClause.includes(norm(k)));
+  const hits = clauseHits.length ? clauseHits : allHits;
   if (hits.length) {
     const key = hits.sort((a, b) => b.length - a.length)[0];
     consume(spans, text.indexOf(norm(key)), norm(key).length);
     return { event: key, ambiguity: null };
   }
-
-  // Subject detection is scoped to the TRIGGER CLAUSE (the text before the
-  // first comma/"and"/"then"): a subject word inside a condition or action
-  // clause ("…, request document w9") must never create trigger ambiguity —
-  // the same cross-clause contamination class as the dual-trigger hijack.
-  const clauseBreak = /,|\band\b|\bthen\b/.exec(text);
-  const triggerClause = clauseBreak ? text.slice(0, clauseBreak.index) : text;
 
   const dualTriggerMatch = /\b(approved|rejected|denied|declined|accepted)\b\s+or\s+\b(approved|rejected|denied|declined|accepted)\b/.exec(text);
   if (dualTriggerMatch) {

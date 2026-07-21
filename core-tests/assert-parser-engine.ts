@@ -155,6 +155,16 @@ r = parseInstruction('make the operations run smoothly every day');
 t('no-hijack: unrelated prose stays triggerless',
   r.rule === null && r.ambiguities.length === 0);
 
+/* ---- Trigger clause scoping: a longer event key buried in a later clause
+        must not flip the trigger (was FMAC LOAN -> LOAN APPROVED). --------- */
+r = parseInstruction('when a fmac loan is booked, notify omar that the loan approved');
+t('clause-scope: buried longer event key does not flip the trigger',
+  r.rule?.triggers[0]?.event === 'FMAC LOAN',
+  JSON.stringify({ triggers: r.rule?.triggers, uncovered: r.uncovered }));
+t('clause-scope: the real trigger clause is not dumped into uncovered',
+  !r.uncovered.some((fragment) => fragment.includes('fmac loan')),
+  JSON.stringify(r.uncovered));
+
 /* ---- Generic action grammar: alias {param} template ----------------------- */
 r = parseInstruction('when a loan is approved, move it into the rejected queue');
 t('alias template: mid-phrase {param} parses route_to_queue',

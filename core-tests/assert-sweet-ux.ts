@@ -220,6 +220,16 @@ t(
     /class=['"]empty['"]\s+aria-labelledby=['"]empty-title['"]/.test(proposalsSource)
 );
 t(
+  'workflow overview becomes a non-clipping two-column grid on narrow screens',
+  /@media\s*\(max-width:\s*430px\)[\s\S]*?\.overview\s*{[\s\S]*?display:\s*grid;\s*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);[\s\S]*?overflow:\s*visible/.test(
+    listSource
+  ) &&
+    /\.overview p:nth-child\(odd\)\s*{\s*border-left:\s*0/.test(listSource) &&
+    /\.overview p:nth-child\(n \+ 3\)\s*{\s*border-top:\s*1px solid var\(--border\)/.test(
+      listSource
+    )
+);
+t(
   'diagram supports pointer and touch node movement with a rule-backed trash target',
   /class=['"]canvas-trash['"]/.test(composerSource) &&
     /\(pointerdown\)\s*=\s*['"]nodePointerDown\(\$event, node\)['"]/.test(composerSource) &&

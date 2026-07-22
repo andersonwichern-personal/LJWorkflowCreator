@@ -58,6 +58,7 @@ import {
   walkLeaves,
 } from '../../../core/vocabulary';
 import { LJ_PRIMITIVES } from '../../../shared/lj/lj';
+import { DraftEngineService } from '../data/draft-engine.service';
 import { WorkflowsService } from '../data/workflows.service';
 import { SweetSpiral } from '../ui/sweet-spiral';
 import {
@@ -1374,6 +1375,7 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
 export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly service = inject(WorkflowsService);
+  private readonly engine = inject(DraftEngineService);
   private readonly injector = inject(Injector);
   private buildGeneration = 0;
   private spinTimer: ReturnType<typeof setTimeout> | null = null;
@@ -2518,17 +2520,16 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
 
   private parseSubmittedDescription(description: string, generation: number) {
     if (generation !== this.buildGeneration) return;
-    try {
-      const result = parseInstruction(description, this.parseOpts());
+    // Real-AI engine, falling back to the deterministic parser in mock mode or
+    // on model failure (DraftEngineService.draft never errors to the subscriber).
+    // The 'parsing' phase stays visible for the round-trip; the generation guard
+    // discards a stale response if a newer build started meanwhile.
+    this.engine.draft(description, this.parseOpts()).subscribe((result) => {
       if (generation !== this.buildGeneration) return;
       this.result.set(result);
       this.parsedDescription.set(result.rule ? description : null);
       this.phase.set(result.rule ? 'idle' : 'parser-error');
-    } catch {
-      this.result.set(null);
-      this.parsedDescription.set(null);
-      this.phase.set('parser-error');
-    }
+    });
   }
 
   /* ---- Structured visual builder mutations (Phase 1.5 / 1.6) ----
@@ -2681,11 +2682,14 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
         this.revisionError.set('Choose one of the confirmed options so Sweet does not guess.');
         return;
       }
-      this.result.set(parseInstruction(this.text().trim(), this.parseOpts({ forceEvent: permitted })));
+      this.engine.draft(this.text().trim(), this.parseOpts({ forceEvent: permitted })).subscribe((reparsed) => {
+        this.result.set(reparsed);
+        this.pulseSpiral();
+      });
     } else {
       this.result.set(applyClarification(result, question.id, value));
+      this.pulseSpiral();
     }
-    this.pulseSpiral();
   }
 
   protected answerFree(event: Event, question: Clarification) {

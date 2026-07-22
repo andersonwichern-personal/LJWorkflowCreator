@@ -1,16 +1,16 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Output, signal } from '@angular/core';
-import { ParseResult, parseInstruction } from '../../../core/nlParser';
+import { ChangeDetectionStrategy, Component, EventEmitter, Output, inject, signal } from '@angular/core';
+import { ParseResult } from '../../../core/nlParser';
+import { DraftEngineService } from '../data/draft-engine.service';
 
 /**
- * Plain-English drafting via the shared deterministic parser (core/nlParser).
- * The parser exposes its confidence gaps directly:
+ * Plain-English drafting via {@link DraftEngineService}: real-AI first (the
+ * admin console's `parse-ai` endpoint, fronting the Cloudflare AI Gateway),
+ * falling back to the deterministic parser in mock mode or on model failure.
+ * Either engine returns the same contract, which exposes its confidence gaps
+ * directly:
  *   - uncovered fragments are LOUD ("the drafted rule does NOT include this"),
  *   - ambiguities render as buttons that re-parse with `forceEvent`,
  *   - unresolved slots are listed with their fuzzy suggestions.
- *
- * Remote model parsing is not wired into this standalone Angular harness, so
- * this component calls the local parser. A backend parser can implement the
- * same contract through the `draft()` seam.
  */
 @Component({
   selector: 'wf-chat-draft',
@@ -23,7 +23,9 @@ import { ParseResult, parseInstruction } from '../../../core/nlParser';
         (input)="text.set($any($event.target).value)"
         placeholder='Try: "When a loan is approved and loan amount is at least 250000, assign to Underwriting Team and notify Wael"'
       />
-      <button type="submit" class="go" [disabled]="!text().trim()">Draft rule</button>
+      <button type="submit" class="go" [disabled]="!text().trim() || pending()">
+        {{ pending() ? 'Drafting…' : 'Draft rule' }}
+      </button>
     </form>
 
     @if (result(); as r) {
@@ -102,8 +104,12 @@ export class ChatDraft {
    */
   @Output() drafted = new EventEmitter<ParseResult>();
 
+  private readonly engine = inject(DraftEngineService);
+
   protected readonly text = signal('');
   protected readonly result = signal<ParseResult | null>(null);
+  /** True while the AI engine round-trip is in flight (mock mode resolves synchronously). */
+  protected readonly pending = signal(false);
 
   protected submit(event: Event) {
     event.preventDefault();
@@ -115,9 +121,12 @@ export class ChatDraft {
   }
 
   private draft(instruction: string, forceEvent?: string) {
-    if (!instruction) return;
-    const result = parseInstruction(instruction, forceEvent ? { forceEvent } : undefined);
-    this.result.set(result);
-    if (result.rule) this.drafted.emit(result);
+    if (!instruction || this.pending()) return;
+    this.pending.set(true);
+    this.engine.draft(instruction, forceEvent ? { forceEvent } : undefined).subscribe((result) => {
+      this.pending.set(false);
+      this.result.set(result);
+      if (result.rule) this.drafted.emit(result);
+    });
   }
 }

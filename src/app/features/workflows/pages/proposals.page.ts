@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { ConfirmationDialog } from '../../../shared/confirmation-dialog';
 import { LJ_PRIMITIVES } from '../../../shared/lj/lj';
 import { UserSessionService } from '../../../core/user-session.service';
+import { WorkflowsTabs } from '../ui/workflows-tabs';
 import { WorkflowProposal, WorkflowRecord, WorkflowsService } from '../data/workflows.service';
 
 interface ReviewDecision {
@@ -18,10 +19,11 @@ interface ReviewDecision {
  */
 @Component({
   selector: 'wf-proposals-page',
-  imports: [...LJ_PRIMITIVES, DatePipe, ConfirmationDialog],
+  imports: [...LJ_PRIMITIVES, DatePipe, ConfirmationDialog, WorkflowsTabs],
   template: `
     <lj-page>
       <header header class="page-header">
+        <wf-workflows-tabs [pendingCount]="pending().length" />
         <button type="button" class="back" (click)="back()">← Workflows</button>
         <div class="masthead">
           <div>
@@ -37,6 +39,10 @@ interface ReviewDecision {
           </div>
         </div>
       </header>
+
+      @if (notice(); as message) {
+        <p class="notice" aria-live="polite">{{ message }}</p>
+      }
 
       <section class="queue-surface data-surface" aria-label="Workflow review queue">
         @if (loading()) {
@@ -134,6 +140,12 @@ interface ReviewDecision {
     .page-header {
       width: 100%; margin: 0;
       padding: var(--space-4) clamp(24px, 3vw, 40px) var(--space-3);
+    }
+    .page-header wf-workflows-tabs { margin-bottom: var(--space-4); }
+    .notice {
+      margin: 0 0 var(--space-4); padding: .75rem 1rem;
+      border-radius: var(--radius-md); background: var(--info-bg); color: var(--info);
+      font-size: var(--text-sm);
     }
     .back {
       min-height: 34px; margin: 0 0 var(--space-3); padding: 0;
@@ -245,6 +257,8 @@ export class ProposalsPage {
   protected readonly loading = signal(true);
   protected readonly rows = signal<WorkflowProposal[]>([]);
   protected readonly error = signal<string | null>(null);
+  /** Arrival context (e.g. the composer's "workflow proposed" hand-off). */
+  protected readonly notice = signal<string | null>(null);
   protected readonly openId = signal<string | null>(null);
   protected readonly processingId = signal<string | null>(null);
   protected readonly decision = signal<ReviewDecision | null>(null);
@@ -272,6 +286,13 @@ export class ProposalsPage {
   });
 
   constructor() {
+    // Read only the in-flight navigation's state (not history.state) so the
+    // banner shows on hand-off but never resurfaces on a reload, where the
+    // mock queue has already reset.
+    const handoff = this.router.currentNavigation()?.extras.state as
+      | { notice?: string }
+      | undefined;
+    if (handoff?.notice) this.notice.set(handoff.notice);
     this.reload();
   }
 

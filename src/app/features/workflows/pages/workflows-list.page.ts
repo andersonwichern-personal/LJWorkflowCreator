@@ -15,6 +15,7 @@ import {
 } from '../../../core/vocabulary';
 import { ConfirmationDialog } from '../../../shared/confirmation-dialog';
 import { LJ_PRIMITIVES } from '../../../shared/lj/lj';
+import { WorkflowsTabs } from '../ui/workflows-tabs';
 import {
   SaveOutcome,
   WorkflowRecord,
@@ -67,10 +68,11 @@ function activationBlocker(rule: WorkflowRule): string | null {
 /** Client-facing workflow index: an editorial operations view, not a rule table. */
 @Component({
   selector: 'wf-workflows-list-page',
-  imports: [...LJ_PRIMITIVES, RouterLink, DatePipe, ConfirmationDialog],
+  imports: [...LJ_PRIMITIVES, RouterLink, DatePipe, ConfirmationDialog, WorkflowsTabs],
   template: `
     <lj-page>
       <header header class="page-header">
+        <wf-workflows-tabs [pendingCount]="pendingProposals()" />
         <lj-box class="header" [padding]="0">
           <div class="header-inner">
             <div class="heading-copy">
@@ -238,6 +240,10 @@ function activationBlocker(rule: WorkflowRule): string | null {
   styles: `
     :host { display: block; }
     .page-header { display: block; padding: var(--space-6) 0 var(--space-3); }
+    .page-header wf-workflows-tabs {
+      margin-bottom: var(--space-5);
+      padding-inline: clamp(24px, 3vw, 40px);
+    }
     .header-inner {
       width: 100%; margin: 0; padding-inline: clamp(24px, 3vw, 40px);
       display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-6);

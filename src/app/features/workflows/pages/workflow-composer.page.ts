@@ -61,6 +61,7 @@ import {
 import { LJ_PRIMITIVES } from '../../../shared/lj/lj';
 import { DraftEngineService } from '../data/draft-engine.service';
 import { WorkflowsService } from '../data/workflows.service';
+import { WorkflowsTabs } from '../ui/workflows-tabs';
 import {
   SWEET_SPIRAL_STATUS,
   deriveSweetSpiralState,
@@ -308,9 +309,10 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
 
 @Component({
   selector: 'wf-workflow-composer-page',
-  imports: [...LJ_PRIMITIVES],
+  imports: [...LJ_PRIMITIVES, WorkflowsTabs],
   template: `
     <lj-page>
+      <wf-workflows-tabs />
       <div class="composer-shell">
         <button type="button" class="back" (click)="back()">
           <span aria-hidden="true">←</span> Workflows
@@ -2749,7 +2751,10 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
 
     if (this.session.mustProposeWorkflow()) {
       this.service.createProposal(write).subscribe({
-        next: () => void this.router.navigate(['/workflows/proposals']),
+        next: () =>
+          void this.router.navigate(['/workflows/proposals'], {
+            state: { notice: 'Workflow proposed! Submitted to review queue for Admin approval.' },
+          }),
         error: (error: Error) => {
           this.saving.set(false);
           this.error.set(error.message);

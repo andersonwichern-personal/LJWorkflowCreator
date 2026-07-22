@@ -1,24 +1,104 @@
-<!-- Standalone shell only. The feature still transplants beneath the admin shell. -->
+<!-- Standalone shell only. Faithful Angular port of the sweetag side-nav
+     (itself a port of LJ main-sidebar-v2): dark rail collapsed at 70px,
+     expands to 240px on hover; mark-only when collapsed, full wordmark when
+     expanded; account bar connected to the settings footer. -->
 <a class="skip-link" href="#main-content">Skip to content</a>
-<header class="topbar">
-  <div class="topbar-inner">
-    <a class="brand" routerLink="/workflows" aria-label="Sweet home">
-      <img src="/brand/sweettech_positive.svg" alt="Sweet" />
-    </a>
-    <nav class="nav" aria-label="Primary navigation">
-      <a
-        routerLink="/workflows"
-        [class.active]="workflowsActive"
-        [attr.aria-current]="workflowsActive ? 'page' : null"
-      >
-        Workflows
-      </a>
-      <a routerLink="/workflows/proposals" routerLinkActive="active" ariaCurrentWhenActive="page">Reviews</a>
-    </nav>
-    <a class="create" routerLink="/workflows/new">Create workflow <span aria-hidden="true">↗</span></a>
-  </div>
-</header>
 
-<main class="content" id="main-content">
-  <router-outlet />
-</main>
+<div class="shell">
+  <!-- Fixed 70px spacer so the hover-expansion overlays content, no reflow. -->
+  <div class="rail-spacer" aria-hidden="true"></div>
+
+  <aside class="rail" aria-label="Primary navigation">
+    <!-- Logo — the SAME SweetTech wordmark, cropped to just its spiral mark
+         when collapsed and shown in full when expanded (identical colors). -->
+    <div class="rail-logo">
+      <a class="logo-slot" routerLink="/workflows" aria-label="Sweet home">
+        <span class="logo-mark-crop">
+          <img src="/brand/sweettech_negative.svg" alt="SweetTech" />
+        </span>
+        <img class="logo-full" src="/brand/sweettech_negative.svg" alt="SweetTech" />
+      </a>
+    </div>
+
+    <!-- Search — icon button (collapsed) / field (expanded) -->
+    <div class="rail-search">
+      <button type="button" class="search-btn only-collapsed" aria-label="Search">
+        <span class="msym" aria-hidden="true">search</span>
+      </button>
+      <label class="search-field only-expanded">
+        <span class="msym search-icon" aria-hidden="true">search</span>
+        <input
+          class="search-input"
+          type="text"
+          placeholder="Search"
+          aria-label="Search navigation" />
+      </label>
+    </div>
+
+    <!-- Nav -->
+    <nav class="rail-nav">
+      <ul>
+        <li>
+          <a routerLink="/dashboard" routerLinkActive="active" ariaCurrentWhenActive="page">
+            <span class="pill" aria-hidden="true"></span>
+            <span class="msym nav-icon" aria-hidden="true">space_dashboard</span>
+            <span class="nav-label">Dashboard</span>
+          </a>
+        </li>
+        <li>
+          <a
+            routerLink="/workflows"
+            [class.active]="workflowsActive"
+            [attr.aria-current]="workflowsActive ? 'page' : null">
+            <span class="pill" aria-hidden="true"></span>
+            <span class="msym nav-icon" aria-hidden="true">account_tree</span>
+            <span class="nav-label">Workflows</span>
+          </a>
+        </li>
+        <li>
+          <a routerLink="/workflows/proposals" routerLinkActive="active" ariaCurrentWhenActive="page">
+            <span class="pill" aria-hidden="true"></span>
+            <span class="msym nav-icon" aria-hidden="true">fact_check</span>
+            <span class="nav-label">Reviews</span>
+          </a>
+        </li>
+        <li>
+          <a routerLink="/workflows/new" routerLinkActive="active" ariaCurrentWhenActive="page">
+            <span class="pill" aria-hidden="true"></span>
+            <span class="msym nav-icon" aria-hidden="true">add_circle</span>
+            <span class="nav-label">New workflow</span>
+          </a>
+        </li>
+      </ul>
+    </nav>
+
+    <!-- Account — connected to the settings footer, no gap -->
+    <div class="rail-account">
+      <div class="user-bar">
+        <a class="avatar" routerLink="/account" aria-label="Your profile">{{ initials }}</a>
+        <!-- collapsed: logout icon only -->
+        <button type="button" class="logout-compact only-collapsed" aria-label="Logout">
+          <span class="msym" aria-hidden="true">logout</span>
+        </button>
+        <!-- expanded: name + labelled logout -->
+        <div class="user-info only-expanded">
+          <a class="user-name" routerLink="/account">{{ userName }}</a>
+          <button class="logout" type="button">
+            <span class="logout-label">Logout</span>
+            <span class="msym logout-icon" aria-hidden="true">logout</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Settings footer -->
+      <a class="rail-settings" routerLink="/settings" routerLinkActive="active" aria-label="Settings">
+        <span class="msym settings-icon" aria-hidden="true">settings</span>
+        <span class="settings-label only-expanded">Settings</span>
+      </a>
+    </div>
+  </aside>
+
+  <main class="content" id="main-content">
+    <router-outlet />
+  </main>
+</div>

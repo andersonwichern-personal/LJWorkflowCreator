@@ -239,7 +239,7 @@ function activationBlocker(rule: WorkflowRule): string | null {
     :host { display: block; }
     .page-header { display: block; padding: var(--space-6) 0 var(--space-3); }
     .header-inner {
-      width: min(100%, 1440px); margin: 0 auto; padding-inline: clamp(24px, 3vw, 40px);
+      width: 100%; margin: 0; padding-inline: clamp(24px, 3vw, 40px);
       display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-6);
     }
     .heading-copy { max-width: 42rem; }

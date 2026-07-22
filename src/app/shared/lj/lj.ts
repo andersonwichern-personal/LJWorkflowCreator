@@ -25,7 +25,7 @@ import { ChangeDetectionStrategy, Component, Directive, Input, booleanAttribute 
   styles: `
     :host { display: block; min-height: 100%; }
     .lj-page-body {
-      width: min(100%, 1440px); margin: 0 auto;
+      width: 100%; max-width: none; margin: 0;
       padding: 0 clamp(24px, 3vw, 40px) var(--space-16);
     }
   `,

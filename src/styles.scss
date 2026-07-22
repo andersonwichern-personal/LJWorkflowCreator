@@ -124,6 +124,26 @@ summary { -webkit-tap-highlight-color: transparent; }
 
 ::selection { color: var(--sweet-ink); background: rgb(61 125 242 / .24); }
 
+/* Material Symbols Outlined — matches the admin console shell (weight 200,
+   FILL 0), used by the LJ main-sidebar-v2 rail. */
+.msym {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  direction: ltr;
+  font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 24;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+}
+
 .sr-only {
   position: absolute !important; width: 1px !important; height: 1px !important;
   padding: 0 !important; margin: -1px !important; overflow: hidden !important;

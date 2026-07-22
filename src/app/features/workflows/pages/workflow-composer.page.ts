@@ -59,7 +59,6 @@ import {
 } from '../../../core/vocabulary';
 import { LJ_PRIMITIVES } from '../../../shared/lj/lj';
 import { WorkflowsService } from '../data/workflows.service';
-import { SweetSpiral } from '../ui/sweet-spiral';
 import {
   SWEET_SPIRAL_STATUS,
   deriveSweetSpiralState,
@@ -307,7 +306,7 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
 
 @Component({
   selector: 'wf-workflow-composer-page',
-  imports: [...LJ_PRIMITIVES, SweetSpiral],
+  imports: [...LJ_PRIMITIVES],
   template: `
     <lj-page>
       <div class="composer-shell">
@@ -320,14 +319,6 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
           aria-labelledby="composer-title"
         >
           <div class="hero-top">
-            <div class="spiral-wrap">
-              <wf-sweet-spiral
-                [state]="spiralState()"
-                [typingPulse]="typingPulse()"
-                [spinPulse]="spinPulse()"
-              />
-            </div>
-
             <div class="invitation">
               @if (!reviewing()) {
                 <p class="eyebrow">A clearer way to work</p>

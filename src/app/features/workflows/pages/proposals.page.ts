@@ -127,7 +127,7 @@ interface ReviewDecision {
   `,
   styles: `
     .page-header {
-      width: min(100%, 1440px); margin: 0 auto;
+      width: 100%; margin: 0;
       padding: var(--space-4) clamp(24px, 3vw, 40px) var(--space-3);
     }
     .back {

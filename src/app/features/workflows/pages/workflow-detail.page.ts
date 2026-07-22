@@ -301,7 +301,7 @@ function activationBlocker(rule: WorkflowRule): string | null {
   styles: `
     :host { display: block; }
     .page-header { display: block; padding: var(--space-3) 0 0; }
-    .header-inner { width: min(100%, 1440px); margin: 0 auto; padding-inline: clamp(24px, 3vw, 40px); }
+    .header-inner { width: 100%; margin: 0; padding-inline: clamp(24px, 3vw, 40px); }
     .back-link {
       min-height: 36px; display: inline-flex; align-items: center; gap: .55rem; padding: .35rem 0;
       color: var(--text-dim); font-size: var(--text-sm); font-weight: 750; text-decoration: none;

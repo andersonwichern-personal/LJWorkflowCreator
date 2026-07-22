@@ -135,10 +135,17 @@ const DEMO_ORG = 'demo-org';
 
 /** Seeded starters, mirroring the prototype's demo rules (labels, not ids). */
 function seedRecords(): WorkflowRecord[] {
-  const now = new Date().toISOString();
+  // Spread creation/last-touched across a trailing window so the dashboard's
+  // time-based widgets (activity area, sparklines, the signal tape) render a
+  // real history instead of a single spike at "now".
+  const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
+  let seq = 0;
+  const AGES = [58, 31, 9]; // created N days ago, in seed order
+  const TOUCHED = [4, 12, 1]; // last updated N days ago
   const base = (name: string, description: string, mutate: (rule: WorkflowRule) => void) => {
     const rule = emptyRule();
     mutate(rule);
+    const i = seq++;
     return {
       id: crypto.randomUUID(),
       orgId: DEMO_ORG,
@@ -147,8 +154,8 @@ function seedRecords(): WorkflowRecord[] {
       enabled: true,
       ruleJson: rule,
       version: 1,
-      createdAt: now,
-      updatedAt: now,
+      createdAt: daysAgo(AGES[i] ?? 20),
+      updatedAt: daysAgo(TOUCHED[i] ?? 3),
     } satisfies WorkflowRecord;
   };
   return [

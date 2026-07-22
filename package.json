@@ -34,6 +34,11 @@
     "@angular/platform-browser": "^20.3.0",
     "@angular/router": "^20.3.0",
     "@fontsource-variable/inter": "^5.2.8",
+    "@types/d3": "^7.4.3",
+    "@types/d3-sankey": "^0.12.5",
+    "d3": "^7.9.0",
+    "d3-sankey": "^0.12.3",
+    "lightweight-charts": "^5.2.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
     "zone.js": "~0.15.0"

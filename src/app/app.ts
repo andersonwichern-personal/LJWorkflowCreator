@@ -1,5 +1,6 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { ROLES, UserRole, UserSessionService } from './core/user-session.service';
 
 /**
  * DEV HARNESS shell — see app.html. Not part of the transplant unit.
@@ -18,8 +19,20 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 })
 export class App {
   protected readonly router = inject(Router);
-  protected readonly userName = 'Admin User';
-  protected readonly initials = 'AU';
+  protected readonly session = inject(UserSessionService);
+  protected readonly userName = 'User Session';
+  protected readonly initials = 'US';
+  protected readonly availableRoles = Object.values(ROLES);
+  protected readonly roleDropdownOpen = signal(false);
+
+  protected toggleRoleDropdown() {
+    this.roleDropdownOpen.update((open) => !open);
+  }
+
+  protected selectRole(roleId: UserRole) {
+    this.session.setRole(roleId);
+    this.roleDropdownOpen.set(false);
+  }
 
   /** Collapsed-rail mark — a port of sweetag's LogoMark: a seed mid-bloom,
       concentric orbits of dots radiating from a lime core, larger to the
@@ -49,14 +62,7 @@ export class App {
     return dots;
   }
 
-  /** Workflows list is active for /workflows and its detail/edit children,
-      but NOT for the sibling /proposals or /new routes. */
   protected get workflowsActive(): boolean {
-    const u = this.router.url;
-    return (
-      u.startsWith('/workflows') &&
-      !u.startsWith('/workflows/proposals') &&
-      !u.startsWith('/workflows/new')
-    );
+    return this.router.url.startsWith('/workflows') || this.router.url === '/dashboard';
   }
 }

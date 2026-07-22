@@ -47,6 +47,7 @@ export abstract class WorkflowsService {
   abstract list(): Observable<WorkflowRecord[]>;
   abstract get(id: string): Observable<WorkflowRecord>;
   abstract create(write: WorkflowWrite): Observable<WorkflowRecord>;
+  abstract createProposal(write: WorkflowWrite): Observable<SaveOutcome>;
   abstract update(id: string, write: WorkflowWrite): Observable<SaveOutcome>;
   abstract remove(id: string): Observable<void>;
   abstract toggle(id: string, enabled: boolean): Observable<SaveOutcome>;
@@ -77,6 +78,11 @@ export class WorkflowsApiService extends WorkflowsService {
   }
   create(write: WorkflowWrite): Observable<WorkflowRecord> {
     return this.api.post<unknown>('workflows', '/rules', write).pipe(map(normalizeRecord));
+  }
+  createProposal(write: WorkflowWrite): Observable<SaveOutcome> {
+    return this.api
+      .post<unknown>('workflows', '/rules/proposals', write)
+      .pipe(map((row) => toSaveOutcome(row)));
   }
   update(id: string, write: WorkflowWrite): Observable<SaveOutcome> {
     return this.api
@@ -223,6 +229,32 @@ export class WorkflowsMockService extends WorkflowsService {
     };
     this.rows = [row, ...this.rows];
     return of({ ...row }).pipe(delay(LATENCY_MS));
+  }
+
+  createProposal(write: WorkflowWrite): Observable<SaveOutcome> {
+    const now = new Date().toISOString();
+    const record: WorkflowRecord = {
+      id: crypto.randomUUID(),
+      orgId: DEMO_ORG,
+      name: write.name,
+      description: write.description ?? null,
+      enabled: false,
+      ruleJson: normalizeRule(write.ruleJson),
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.rows = [record, ...this.rows];
+    const proposal = this.spawnProposal(record, {
+      proposedRule: record.ruleJson,
+      proposedEnabled: write.enabled ?? true,
+      proposedName: write.name,
+    });
+    return of<SaveOutcome>({
+      kind: 'proposed',
+      proposalId: proposal.id,
+      record: this.withProposalMarkers({ ...record }),
+    }).pipe(delay(LATENCY_MS));
   }
 
   update(id: string, write: WorkflowWrite): Observable<SaveOutcome> {

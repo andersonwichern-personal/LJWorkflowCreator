@@ -14,6 +14,7 @@ import {
   untracked,
 } from '@angular/core';
 import { Router } from '@angular/router';
+import { UserSessionService } from '../../../core/user-session.service';
 import { Clarification, applyClarification, clarificationsFor } from '../../../core/clarifications';
 import { interpretRule } from '../../../core/interpretation';
 import { ParseResult, ParseOptions, parseInstruction } from '../../../core/nlParser';
@@ -1125,7 +1126,7 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
                 <h2>{{ gaps().length ? 'Answer the open questions to continue.' : 'Start by observing what would happen.' }}</h2>
               </div>
               <button type="button" class="observe" [disabled]="gaps().length > 0 || parsedDescription() !== text().trim() || saving()" (click)="save()">
-                {{ saving() ? 'Starting…' : 'Start observing' }} <span aria-hidden="true">↗</span>
+                {{ saving() ? (session.mustProposeWorkflow() ? 'Proposing…' : 'Starting…') : (session.mustProposeWorkflow() ? 'Propose workflow' : 'Start observing') }} <span aria-hidden="true">↗</span>
               </button>
             </footer>
           </article>
@@ -1367,6 +1368,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly service = inject(WorkflowsService);
   private readonly engine = inject(DraftEngineService);
+  protected readonly session = inject(UserSessionService);
   private readonly injector = inject(Injector);
   private buildGeneration = 0;
   private spinTimer: ReturnType<typeof setTimeout> | null = null;
@@ -2743,9 +2745,19 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     this.error.set(null);
     const description = this.text().trim();
     const name = this.nameForDescription(description);
-    this.service
-      .create({ name, description, ruleJson: applyOrgPolicy(validated.rule) })
-      .subscribe({
+    const write = { name, description, ruleJson: applyOrgPolicy(validated.rule) };
+
+    if (this.session.mustProposeWorkflow()) {
+      this.service.createProposal(write).subscribe({
+        next: () => void this.router.navigate(['/workflows/proposals']),
+        error: (error: Error) => {
+          this.saving.set(false);
+          this.error.set(error.message);
+          this.phase.set('network-error');
+        },
+      });
+    } else {
+      this.service.create(write).subscribe({
         next: (record) => void this.router.navigate(['/workflows', record.id]),
         error: (error: Error) => {
           this.saving.set(false);
@@ -2753,6 +2765,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
           this.phase.set('network-error');
         },
       });
+    }
   }
 
   private nameForDescription(description: string): string {

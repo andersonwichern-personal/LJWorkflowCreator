@@ -35,17 +35,10 @@
       </label>
     </div>
 
-    <!-- Nav -->
+    <!-- Nav: Workflows Hub Consolidated -->
     <nav class="rail-nav">
       <ul>
-        <li>
-          <a routerLink="/dashboard" routerLinkActive="active" ariaCurrentWhenActive="page">
-            <span class="pill" aria-hidden="true"></span>
-            <span class="msym nav-icon" aria-hidden="true">space_dashboard</span>
-            <span class="nav-label">Dashboard</span>
-          </a>
-        </li>
-        <li>
+        <li class="nav-hub">
           <a
             routerLink="/workflows"
             [class.active]="workflowsActive"
@@ -54,26 +47,70 @@
             <span class="msym nav-icon" aria-hidden="true">account_tree</span>
             <span class="nav-label">Workflows</span>
           </a>
-        </li>
-        <li>
-          <a routerLink="/workflows/proposals" routerLinkActive="active" ariaCurrentWhenActive="page">
-            <span class="pill" aria-hidden="true"></span>
-            <span class="msym nav-icon" aria-hidden="true">fact_check</span>
-            <span class="nav-label">Reviews</span>
-          </a>
-        </li>
-        <li>
-          <a routerLink="/workflows/new" routerLinkActive="active" ariaCurrentWhenActive="page">
-            <span class="pill" aria-hidden="true"></span>
-            <span class="msym nav-icon" aria-hidden="true">add_circle</span>
-            <span class="nav-label">New workflow</span>
-          </a>
+          <ul class="rail-subnav">
+            <li>
+              <a routerLink="/dashboard" routerLinkActive="active">
+                <span class="msym sub-icon" aria-hidden="true">space_dashboard</span>
+                <span class="sub-label">Dashboard</span>
+              </a>
+            </li>
+            <li>
+              <a routerLink="/workflows" [routerLinkActiveOptions]="{exact: true}" routerLinkActive="active">
+                <span class="msym sub-icon" aria-hidden="true">list_alt</span>
+                <span class="sub-label">All Workflows</span>
+              </a>
+            </li>
+            <li>
+              <a routerLink="/workflows/proposals" routerLinkActive="active">
+                <span class="msym sub-icon" aria-hidden="true">fact_check</span>
+                <span class="sub-label">Reviews</span>
+              </a>
+            </li>
+            <li>
+              <a routerLink="/workflows/new" routerLinkActive="active">
+                <span class="msym sub-icon" aria-hidden="true">add_circle</span>
+                <span class="sub-label">
+                  {{ session.mustProposeWorkflow() ? 'Propose workflow' : 'Create workflow' }}
+                </span>
+              </a>
+            </li>
+          </ul>
         </li>
       </ul>
     </nav>
 
-    <!-- Account — connected to the settings footer, no gap -->
+    <!-- Account & Role Switcher -->
     <div class="rail-account">
+      <div class="role-switcher">
+        <button type="button" class="role-pill" (click)="toggleRoleDropdown()" aria-label="Switch role">
+          <span class="role-badge" [attr.data-tone]="session.roleDef().badgeTone">
+            {{ session.roleDef().title }}
+          </span>
+          <span class="msym arrow-icon" aria-hidden="true">expand_more</span>
+        </button>
+        @if (roleDropdownOpen()) {
+          <div class="role-dropdown" role="menu">
+            <div class="role-dropdown-header">Active Role</div>
+            @for (role of availableRoles; track role.id) {
+              <button
+                type="button"
+                class="role-option"
+                [class.selected]="session.activeRole() === role.id"
+                (click)="selectRole(role.id)"
+              >
+                <div class="role-option-title">
+                  {{ role.title }}
+                  @if (session.activeRole() === role.id) {
+                    <span class="msym check" aria-hidden="true">check</span>
+                  }
+                </div>
+                <div class="role-option-desc">{{ role.description }}</div>
+              </button>
+            }
+          </div>
+        }
+      </div>
+
       <div class="user-bar">
         <a class="avatar" routerLink="/account" aria-label="Your profile">{{ initials }}</a>
         <!-- collapsed: logout icon only -->
@@ -82,7 +119,7 @@
         </button>
         <!-- expanded: name + labelled logout -->
         <div class="user-info only-expanded">
-          <a class="user-name" routerLink="/account">{{ userName }}</a>
+          <a class="user-name" routerLink="/account">{{ session.roleDef().title }} Account</a>
           <button class="logout" type="button">
             <span class="logout-label">Logout</span>
             <span class="msym logout-icon" aria-hidden="true">logout</span>

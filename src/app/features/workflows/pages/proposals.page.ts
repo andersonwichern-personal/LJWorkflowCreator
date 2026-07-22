@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { Router } from '@angular/router';
 import { ConfirmationDialog } from '../../../shared/confirmation-dialog';
 import { LJ_PRIMITIVES } from '../../../shared/lj/lj';
+import { UserSessionService } from '../../../core/user-session.service';
 import { WorkflowProposal, WorkflowRecord, WorkflowsService } from '../data/workflows.service';
 
 interface ReviewDecision {
@@ -73,10 +74,14 @@ interface ReviewDecision {
                   >{{ statusLabel(proposal.status) }}</span>
                   <div class="decision-actions" aria-label="Review decision">
                     @if (proposal.status === 'pending') {
-                      <button type="button" lj-button class="danger" [disabled]="processingId() === proposal.id" (click)="requestDecision(proposal, 'reject')">Decline</button>
-                      <button type="button" lj-button class="primary" [disabled]="processingId() === proposal.id" (click)="requestDecision(proposal, 'approve')">
-                        {{ processingId() === proposal.id ? 'Applying…' : 'Approve change' }}
-                      </button>
+                      @if (session.canApproveProposals()) {
+                        <button type="button" lj-button class="danger" [disabled]="processingId() === proposal.id" (click)="requestDecision(proposal, 'reject')">Decline</button>
+                        <button type="button" lj-button class="primary" [disabled]="processingId() === proposal.id" (click)="requestDecision(proposal, 'approve')">
+                          {{ processingId() === proposal.id ? 'Applying…' : 'Approve change' }}
+                        </button>
+                      } @else {
+                        <span class="role-gated-badge" title="Junior Analysts cannot approve proposals">Awaiting Admin / Manager Review</span>
+                      }
                     }
                   </div>
                 </div>
@@ -181,7 +186,8 @@ interface ReviewDecision {
     .status { color: var(--warn-text); }
     .status.applied { border-color: #b9ddce; background: var(--success-bg); color: var(--success); }
     .status.rejected { color: var(--text-dim); }
-    .decision-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); min-width: 0; }
+    .decision-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
+    .role-gated-badge { font-size: var(--text-xs); font-weight: 700; color: var(--warn-text); background: var(--warn-bg); padding: 4px 8px; border-radius: var(--radius-pill); min-width: 0; }
     .expand {
       width: 100%; min-height: 36px; display: flex; align-items: center; justify-content: space-between;
       margin: 0; padding: 7px var(--space-4);
@@ -234,6 +240,7 @@ interface ReviewDecision {
 export class ProposalsPage {
   private readonly service = inject(WorkflowsService);
   private readonly router = inject(Router);
+  protected readonly session = inject(UserSessionService);
 
   protected readonly loading = signal(true);
   protected readonly rows = signal<WorkflowProposal[]>([]);

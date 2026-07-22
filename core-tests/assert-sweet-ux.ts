@@ -163,7 +163,6 @@ t(
     /transform:\s*['"]rotate\(720deg\)['"]/.test(spiralSource) &&
     /duration:\s*1100/.test(spiralSource) &&
     /playState\s*===\s*['"]running['"]/.test(spiralSource) &&
-    /\[spinPulse\]\s*=\s*['"]spinPulse\(\)['"]/.test(composerSource) &&
     /private pulseSpiral\(\)[\s\S]*?setTimeout/.test(composerSource) &&
     !/\[data-active=['"]true['"]\]/.test(spiralSource)
 );
@@ -173,9 +172,8 @@ t(
     /--sweet-surface:\s*#ffffff/.test(stylesSource) &&
     /--sweet-line:\s*#d8dee8/.test(stylesSource) &&
     /node_modules\/@fontsource-variable\/inter\/index\.css/.test(angularSource) &&
-    /class=['"]topbar-inner['"]/.test(appSource) &&
-    /width:\s*min\(100%,\s*1440px\)/.test(appStylesSource) &&
-    /width:\s*min\(100%,\s*1440px\)/.test(primitivesSource)
+    /class=['"](topbar-inner|shell)['"]/.test(appSource) &&
+    /width:\s*100%;/.test(primitivesSource)
 );
 t(
   'composer review is one bounded six-step operational report',

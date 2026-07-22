@@ -78,19 +78,6 @@ function activationBlocker(rule: WorkflowRule): string | null {
               <h1 lj-page-heading>Workflows</h1>
               <p class="intro">See what is running, what is being observed, and what needs you.</p>
             </div>
-            <div class="header-actions">
-              <a class="proposals-link" routerLink="/workflows/proposals">
-                Reviews
-                @if (pendingProposals() > 0) {
-                  <span class="badge" aria-label="{{ pendingProposals() }} pending reviews">
-                    {{ pendingProposals() }}
-                  </span>
-                }
-              </a>
-              <button lj-button class="primary" type="button" (click)="create()">
-                Create workflow
-              </button>
-            </div>
           </div>
         </lj-box>
       </header>

@@ -11,25 +11,23 @@ import { UserSessionService } from '../../../core/user-session.service';
 import { WorkflowsService } from '../data/workflows.service';
 
 /**
- * Hub-level sub-navigation for the Workflows views — the horizontal twin of
- * the rail's consolidated Workflows sub-items (Dashboard / All Workflows /
- * Reviews / Create-or-Propose). Mounted at the top of the list, review-queue,
- * and composer pages so switching between them never requires the rail.
+ * The Workflows hub's internal pages presented as tabs — All Workflows /
+ * Reviews / Create-or-Propose — mounted at the top of the list, review-queue,
+ * and composer views. The rail stays flat (side-nav-v2 spec, commit 72576c9):
+ * these pages never nest under it, and Dashboard is a top-level rail
+ * destination, not a subtab, so it does not appear here.
  *
  * Reviews carries the pending-proposal count. Hosts that already hold fresher
  * data (the queue page itself, the list's row markers) pass [pendingCount];
  * otherwise the component fetches once from the route-scoped WorkflowsService.
- * The create tab mirrors the rail's role-aware label: makers (junior analysts)
- * see "Propose workflow" because their submissions enter the review queue.
+ * The create tab is role-aware: makers (junior analysts) see "Propose
+ * workflow" because their submissions enter the review queue.
  */
 @Component({
   selector: 'wf-workflows-tabs',
   imports: [RouterLink, RouterLinkActive],
   template: `
     <nav class="workflows-tabs" aria-label="Workflows sections">
-      <a routerLink="/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
-        Dashboard
-      </a>
       <a routerLink="/workflows" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
         All Workflows
       </a>

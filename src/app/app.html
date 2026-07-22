@@ -35,10 +35,19 @@
       </label>
     </div>
 
-    <!-- Nav: Workflows Hub Consolidated -->
+    <!-- Nav — flat top-level items (side-nav-v2 spec). The Workflows hub's
+         internal pages (All Workflows / Reviews / Create) present as in-page
+         tabs on the feature's own views, never as nested rail items. -->
     <nav class="rail-nav">
       <ul>
-        <li class="nav-hub">
+        <li>
+          <a routerLink="/dashboard" routerLinkActive="active" ariaCurrentWhenActive="page">
+            <span class="pill" aria-hidden="true"></span>
+            <span class="msym nav-icon" aria-hidden="true">space_dashboard</span>
+            <span class="nav-label">Dashboard</span>
+          </a>
+        </li>
+        <li>
           <a
             routerLink="/workflows"
             [class.active]="workflowsActive"
@@ -47,64 +56,58 @@
             <span class="msym nav-icon" aria-hidden="true">account_tree</span>
             <span class="nav-label">Workflows</span>
           </a>
-          <ul class="rail-subnav">
-            <li>
-              <a routerLink="/dashboard" routerLinkActive="active">
-                <span class="msym sub-icon" aria-hidden="true">space_dashboard</span>
-                <span class="sub-label">Dashboard</span>
-              </a>
-            </li>
-            <li>
-              <a routerLink="/workflows" [routerLinkActiveOptions]="{exact: true}" routerLinkActive="active">
-                <span class="msym sub-icon" aria-hidden="true">list_alt</span>
-                <span class="sub-label">All Workflows</span>
-              </a>
-            </li>
-            <li>
-              <a routerLink="/workflows/proposals" routerLinkActive="active">
-                <span class="msym sub-icon" aria-hidden="true">fact_check</span>
-                <span class="sub-label">Reviews</span>
-              </a>
-            </li>
-            <li>
-              <a routerLink="/workflows/new" routerLinkActive="active">
-                <span class="msym sub-icon" aria-hidden="true">add_circle</span>
-                <span class="sub-label">
-                  {{ session.mustProposeWorkflow() ? 'Propose workflow' : 'Create workflow' }}
-                </span>
-              </a>
-            </li>
-          </ul>
+        </li>
+        <li>
+          <a routerLink="/workflows/proposals" routerLinkActive="active" ariaCurrentWhenActive="page">
+            <span class="pill" aria-hidden="true"></span>
+            <span class="msym nav-icon" aria-hidden="true">fact_check</span>
+            <span class="nav-label">Reviews</span>
+          </a>
+        </li>
+        <li>
+          <a routerLink="/workflows/new" routerLinkActive="active" ariaCurrentWhenActive="page">
+            <span class="pill" aria-hidden="true"></span>
+            <span class="msym nav-icon" aria-hidden="true">add_circle</span>
+            <span class="nav-label">New workflow</span>
+          </a>
         </li>
       </ul>
     </nav>
 
-    <!-- Account & Role Switcher -->
+    <!-- Account — connected to the settings footer, no gap -->
     <div class="rail-account">
-      <div class="role-switcher">
-        <button type="button" class="role-pill" (click)="toggleRoleDropdown()" aria-label="Switch role">
-          <span class="role-badge" [attr.data-tone]="session.roleDef().badgeTone">
-            {{ session.roleDef().title }}
-          </span>
-          <span class="msym arrow-icon" aria-hidden="true">expand_more</span>
+      <!-- Role switcher (runbook §3.B) — a demo-session persona control in the
+           rail's own row language: connected surface, hairline seam, tone dot
+           collapsed / dot + title + chevron expanded, upward dark menu. -->
+      <div class="rail-role">
+        <button
+          type="button"
+          class="role-toggle"
+          (click)="toggleRoleDropdown()"
+          [attr.aria-expanded]="roleDropdownOpen()"
+          aria-haspopup="menu"
+          [attr.aria-label]="'Switch role — active: ' + session.roleDef().title">
+          <span class="role-dot" [attr.data-tone]="session.roleDef().badgeTone" aria-hidden="true"></span>
+          <span class="role-title only-expanded">{{ session.roleDef().title }}</span>
+          <span class="msym role-chevron only-expanded" aria-hidden="true">unfold_more</span>
         </button>
         @if (roleDropdownOpen()) {
-          <div class="role-dropdown" role="menu">
-            <div class="role-dropdown-header">Active Role</div>
+          <div class="role-menu" role="menu" aria-label="Switch role">
             @for (role of availableRoles; track role.id) {
               <button
                 type="button"
+                role="menuitemradio"
                 class="role-option"
-                [class.selected]="session.activeRole() === role.id"
-                (click)="selectRole(role.id)"
-              >
-                <div class="role-option-title">
-                  {{ role.title }}
-                  @if (session.activeRole() === role.id) {
-                    <span class="msym check" aria-hidden="true">check</span>
-                  }
-                </div>
-                <div class="role-option-desc">{{ role.description }}</div>
+                [attr.aria-checked]="session.activeRole() === role.id"
+                (click)="selectRole(role.id)">
+                <span class="role-dot" [attr.data-tone]="role.badgeTone" aria-hidden="true"></span>
+                <span class="role-option-copy">
+                  <span class="role-option-title">{{ role.title }}</span>
+                  <span class="role-option-desc">{{ role.description }}</span>
+                </span>
+                @if (session.activeRole() === role.id) {
+                  <span class="msym role-check" aria-hidden="true">check</span>
+                }
               </button>
             }
           </div>
@@ -119,7 +122,7 @@
         </button>
         <!-- expanded: name + labelled logout -->
         <div class="user-info only-expanded">
-          <a class="user-name" routerLink="/account">{{ session.roleDef().title }} Account</a>
+          <a class="user-name" routerLink="/account">{{ userName }}</a>
           <button class="logout" type="button">
             <span class="logout-label">Logout</span>
             <span class="msym logout-icon" aria-hidden="true">logout</span>

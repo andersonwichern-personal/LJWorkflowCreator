@@ -20,8 +20,8 @@ import { ROLES, UserRole, UserSessionService } from './core/user-session.service
 export class App {
   protected readonly router = inject(Router);
   protected readonly session = inject(UserSessionService);
-  protected readonly userName = 'User Session';
-  protected readonly initials = 'US';
+  protected readonly userName = 'Admin User';
+  protected readonly initials = 'AU';
   protected readonly availableRoles = Object.values(ROLES);
   protected readonly roleDropdownOpen = signal(false);
 
@@ -62,7 +62,14 @@ export class App {
     return dots;
   }
 
+  /** Workflows list is active for /workflows and its detail/edit children,
+      but NOT for the sibling /proposals or /new routes. */
   protected get workflowsActive(): boolean {
-    return this.router.url.startsWith('/workflows') || this.router.url === '/dashboard';
+    const u = this.router.url;
+    return (
+      u.startsWith('/workflows') &&
+      !u.startsWith('/workflows/proposals') &&
+      !u.startsWith('/workflows/new')
+    );
   }
 }

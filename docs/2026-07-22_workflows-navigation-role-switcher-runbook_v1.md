@@ -8,25 +8,44 @@
 
 ## 1. Executive Summary
 
-This document serves as the authoritative specification and resource guide for the consolidated **Workflows Sub-Navigation** and **Dynamic Role Switcher** system within the LandJourney / Sweet Workflow Creator platform.
+This document serves as the authoritative specification and resource guide for the **Workflows Sub-Navigation** and **Dynamic Role Switcher** system within the LandJourney / Sweet Workflow Creator platform.
 
-The system consolidates all operational views (`Dashboard`, `All Workflows`, `Reviews`, `Create / Propose Workflow`) into the primary **Workflows** navigation hub, while enforcing role-based permissions (**Admin**, **Senior Manager**, **Junior Analyst**) for direct activation versus maker-checker proposal submission.
+The Workflows hub's operational views (`All Workflows`, `Reviews`, `Create / Propose Workflow`) present as **in-page tabs within the Workflows section** — the left rail keeps its flat side-nav-v2 structure (commit `72576c9`). `Dashboard` is a **top-level rail destination, not a subtab**. Role-based permissions (**Admin**, **Senior Manager**, **Junior Analyst**) govern direct activation versus maker-checker proposal submission.
+
+> **v1 correction (2026-07-22):** an earlier draft nested the sub-navigation
+> (including Dashboard) under the rail's Workflows entry. That consolidation is
+> reverted: the rail keeps the `72576c9` spec, and hub-internal switching lives
+> in the in-page tab bar described in §2.B.
 
 ---
 
 ## 2. Navigation Architecture
 
-### A. Left Rail Consolidated Hub (`app.html`)
-The main sidebar rail consolidates all workflow tools under a single primary `Workflows` entry. On expansion, it displays the nested sub-navigation:
+### A. Left Rail (`app.html`) — side-nav-v2 spec, per commit `72576c9`
+The main sidebar rail is **flat** — no nested sub-navigation under any entry. Its top-level items:
 
-1. **Dashboard** (`/dashboard` / `/workflows/dashboard`)
-   - Overview metrics, throughput curve, live signal tape, trigger/action volume, and activity calendar.
-2. **All Workflows** (`/workflows`)
-   - Full operational index, search by name/purpose, status filters, and active/observing metrics.
+1. **Dashboard** (`/dashboard`)
+   - Overview metrics, throughput curve, live signal tape, trigger/action volume, and activity calendar. Reached only from the rail — never rendered as a Workflows subtab.
+2. **Workflows** (`/workflows`)
+   - The hub entry: active for the list and its detail/edit children, but not for the sibling `/proposals` or `/new` routes.
 3. **Reviews** (`/workflows/proposals`)
-   - Four-eyes review queue with live pending proposal count badge.
-4. **Create / Propose Workflow** (`/workflows/new`)
-   - AI-first natural language composer & diagram builder. Button dynamically labels as **Create workflow** (for Admins/Managers) or **Propose workflow** (for Junior Analysts).
+   - Four-eyes review queue.
+4. **New workflow** (`/workflows/new`)
+   - AI-first natural language composer & diagram builder.
+
+The **role switcher** (§3.B) sits in the account stack styled in the rail's own row language — connected surface, hairline seam, role tone-dot when collapsed, dot + title + chevron when expanded, with an upward dark menu.
+
+### B. Workflows In-Page Tab Bar (`wf-workflows-tabs`)
+The hub's pages appear as **different pages within the Workflows section**, switched by a tab bar mounted at the top of each view (list, review queue, composer):
+
+1. **All Workflows** (`/workflows`)
+   - Full operational index, search by name/purpose, status filters, and active/observing metrics.
+2. **Reviews** (`/workflows/proposals`)
+   - Live pending proposal count badge (hidden at zero).
+3. **Create / Propose Workflow** (`/workflows/new`)
+   - Tab dynamically labels as **Create workflow** (for Admins/Managers) or **Propose workflow** (for Junior Analysts).
+
+Dashboard is not part of the tab bar.
 
 ---
 
@@ -41,9 +60,9 @@ The main sidebar rail consolidates all workflow tools under a single primary `Wo
 | `junior-analyst` | **Junior Analyst** | `warn` | ❌ Gated | ❌ Gated | ✅ Mandatory |
 
 ### B. Role Switcher UI Widget (`app.html` & `app.scss`)
-- Located in the sidebar account section (`.rail-account`).
-- Displays a pill button showing the active role badge.
-- Clicking opens the `.role-dropdown` allowing instant role switching.
+- Located in the sidebar account stack (`.rail-account` → `.rail-role`), styled to the rail's row language (connected surface, hairline seam) rather than as a foreign pill.
+- Collapsed rail: the role's **tone dot** only (mark-only, like the logo crop). Expanded: dot + role title + chevron (`.role-toggle`).
+- Clicking opens the upward `.role-menu` (dark rail palette; `menuitemradio` options with tone dot, title, and description) allowing instant role switching.
 - Choices are reactive and immediately persist to `localStorage` (`sweet_active_user_role`).
 
 ---

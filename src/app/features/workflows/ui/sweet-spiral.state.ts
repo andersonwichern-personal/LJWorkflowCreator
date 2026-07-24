@@ -36,14 +36,14 @@ export function deriveSweetSpiralState(context: SweetSpiralContext): SweetSpiral
 }
 
 export const SWEET_SPIRAL_STATUS: Record<SweetSpiralState, string> = {
-  idle: 'Ready for a workflow description',
-  focused: 'Listening',
-  typing: 'Organizing your description',
-  submitted: 'Description received',
-  parsing: 'Understanding your workflow',
+  idle: 'Your AI workflow assistant is ready',
+  focused: 'Listening for your instruction',
+  typing: 'Predicting your workflow as you type',
+  submitted: 'Instruction received',
+  parsing: 'Composing your workflow',
   clarification: 'A few details need clarification',
-  understood: 'Workflow understood',
+  understood: 'Workflow composed and ready to review',
   partial: 'Part of the workflow needs attention',
-  'parser-error': 'The description could not be understood yet',
+  'parser-error': 'The instruction could not be understood yet',
   'network-error': 'The connection was interrupted',
 };

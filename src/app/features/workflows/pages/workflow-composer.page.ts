@@ -59,10 +59,13 @@ import {
   walkLeaves,
 } from '../../../core/vocabulary';
 import { LJ_PRIMITIVES } from '../../../shared/lj/lj';
+import { Recommendation } from '../../../brain/recommendations';
 import { DraftEngineService } from '../data/draft-engine.service';
+import { GhostSuggestionService } from '../data/ghost-suggestion.service';
+import { WorkflowBrainService } from '../data/workflow-brain.service';
 import { WorkflowsService } from '../data/workflows.service';
 import { WorkflowsTabs } from '../ui/workflows-tabs';
-import { predictWorkflowGhost } from '../ui/ghost-prediction';
+import { WorkflowConsultant } from '../ui/workflow-consultant';
 import {
   SWEET_SPIRAL_STATUS,
   deriveSweetSpiralState,
@@ -310,7 +313,7 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
 
 @Component({
   selector: 'wf-workflow-composer-page',
-  imports: [...LJ_PRIMITIVES, WorkflowsTabs],
+  imports: [...LJ_PRIMITIVES, WorkflowsTabs, WorkflowConsultant],
   template: `
     <lj-page>
       <wf-workflows-tabs />
@@ -1126,6 +1129,19 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
               </section>
             </div>
 
+            <!-- Workflow Consultant advisory brief: deterministic turn planned by
+                 WorkflowBrainService off the same result()/rule the report shows.
+                 Accepted patches route through updateRule (the one rule-mutation
+                 path); questions reuse the existing clarification ids. -->
+            <lj-workflow-consultant
+              [turn]="brain.turn()"
+              [busy]="saving()"
+              (acceptRecommendation)="acceptConsultantRecommendation($event)"
+              (rejectRecommendation)="rejectConsultantRecommendation($event)"
+              (answerQuestion)="answerConsultantQuestion($event)"
+              (dismissQuestion)="dismissConsultantQuestion($event)"
+            />
+
             <section class="review-refine" aria-labelledby="revise-title">
               <div><h3 id="revise-title">Change it conversationally</h3></div>
               <form class="review-revise" (submit)="revise($event)">
@@ -1385,6 +1401,8 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly service = inject(WorkflowsService);
   private readonly engine = inject(DraftEngineService);
+  protected readonly brain = inject(WorkflowBrainService);
+  private readonly ghostService = inject(GhostSuggestionService);
   protected readonly session = inject(UserSessionService);
   private readonly injector = inject(Injector);
   private buildGeneration = 0;
@@ -1395,14 +1413,29 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
   protected readonly text = signal('');
 
   /**
-   * Predictive ghost text. `ghostRaw` is the raw prediction for the current
-   * text (used by acceptGhost, so a click that momentarily blurs the textarea
-   * still resolves the completion). `ghost` is the display-gated view: only
-   * shown while the operator is actively composing — focused, with text, and
-   * before a rule has been drafted (once reviewing, the assistant's attention
-   * moves to the report, not the input).
+   * Predictive ghost text, served by the Brain's ghost-autowriting engine
+   * (deterministic-only: GhostSuggestionService pins the AI capability false).
+   * `ghostSuggestion` is the full keyed suggestion (Esc dismissal needs its
+   * prefix hash); `ghostRaw` is its insertText — the raw completion for the
+   * current text (used by acceptGhost, so a click that momentarily blurs the
+   * textarea still resolves the completion). `ghost` is the display-gated
+   * view: only shown while the operator is actively composing — focused, with
+   * text, and before a rule has been drafted (once reviewing, the assistant's
+   * attention moves to the report, not the input). The cursor is pinned to the
+   * end of the text — exactly where onInput/acceptGhost leave the caret.
    */
-  protected readonly ghostRaw = computed(() => predictWorkflowGhost(this.text()));
+  private readonly ghostSuggestion = computed(() => {
+    const text = this.text();
+    return this.ghostService.suggest({
+      text,
+      cursorStart: text.length,
+      cursorEnd: text.length,
+      generation: this.buildGeneration,
+      ruleVersion: this.brain.ruleVersion(),
+      imeComposing: false,
+    });
+  });
+  protected readonly ghostRaw = computed(() => this.ghostSuggestion()?.insertText ?? '');
   protected readonly ghost = computed(() =>
     this.focused() && !this.reviewing() && this.text().trim() ? this.ghostRaw() : ''
   );
@@ -2465,6 +2498,16 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
         return;
       }
     }
+    // Esc dismisses a SHOWING ghost only — when no ghost is visible the key
+    // falls through untouched so it never hijacks other Escape behavior.
+    if (event.key === 'Escape' && this.ghost()) {
+      const suggestion = this.ghostSuggestion();
+      if (suggestion) {
+        event.preventDefault();
+        this.ghostService.dismiss(suggestion);
+        return;
+      }
+    }
     if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
       event.preventDefault();
       this.build();
@@ -2727,6 +2770,60 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     this.clearRevisionFeedback();
     this.result.set(applyClarification(result, question.id, { dismiss: true }));
     this.pulseSpiral();
+  }
+
+  /* ---- Workflow Consultant (Brain integration) ----
+   * The brain session mirrors the committed result: every result() change
+   * lands as description-changed + parse-completed (wrapped into a full
+   * envelope by the service) and a re-planned advisory turn. Accepted patches
+   * funnel through updateRule — the ONE rule-mutation path — so the composed
+   * description, gap gate, and save invariant react exactly as they do to any
+   * other edit. Purely advisory: nothing here can arm, activate, or save. */
+
+  private readonly brainSync = effect(() => {
+    const result = this.result();
+    const snapshot = this.brain.snapshot();
+    untracked(() => {
+      if (!result || !snapshot) {
+        if (!result) this.brain.clearTurn();
+        return;
+      }
+      const description = this.parsedDescription() ?? this.text().trim();
+      this.brain.onDescriptionChanged(description);
+      const envelope = this.brain.onParseCompleted(result, this.buildGeneration, description);
+      this.brain.planTurn(result.rule, envelope);
+    });
+  });
+
+  protected acceptConsultantRecommendation(rec: Recommendation) {
+    const rule = this.result()?.rule;
+    if (!rule) return;
+    const outcome = this.brain.accept(rec, rule);
+    // Patched rule → the existing single mutation path (recomposes the
+    // description and re-runs every gate). An advisory accept returns the
+    // same rule reference and must NOT rewrite the author's description.
+    if (outcome.ok && outcome.rule !== rule) {
+      this.updateRule(outcome.rule);
+    }
+  }
+
+  protected rejectConsultantRecommendation(rec: Recommendation) {
+    this.brain.reject(rec);
+  }
+
+  /** Consultant questions carry the parser's clarification ids — reuse answer(). */
+  protected answerConsultantQuestion(payload: { id: string; option: string }) {
+    const result = this.result();
+    if (!result) return;
+    const question = clarificationsFor(result).find((c) => c.id === payload.id);
+    if (question) this.answer(question, payload.option);
+  }
+
+  protected dismissConsultantQuestion(id: string) {
+    const result = this.result();
+    if (!result) return;
+    const question = clarificationsFor(result).find((c) => c.id === id);
+    if (question?.allowDismiss) this.dismiss(question);
   }
 
   protected revise(event: Event) {

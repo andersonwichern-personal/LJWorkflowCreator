@@ -1,3 +1,13 @@
+/**
+ * @deprecated SUPERSEDED by the Workflow Brain's ghost-autowriting engine
+ * (src/app/brain/ghostSuggestions.ts — deterministicGhost + ghostPolicy),
+ * consumed by the composer through GhostSuggestionService
+ * (src/app/features/workflows/data/ghost-suggestion.service.ts). Unlike this
+ * predictor's hardcoded demo names, that engine only speaks entities present
+ * in the live BrainContextSnapshot. Swap mapping and what was deliberately
+ * dropped: docs/ghost-autowriting-spec.md. This file is no longer imported by
+ * the composer and is kept only until the sunset review removes it.
+ */
 import { ACTIONS, ASSIGNEES, EVENTS, FIELDS, OPERATORS } from '../../../core/vocabulary';
 
 /**

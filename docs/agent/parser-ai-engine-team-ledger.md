@@ -119,3 +119,25 @@ Agent tool in this build exposes model override but not a per-agent literal
   to existing UI behavior (the composer still runs the d329223 predictive bar;
   the new brain/ghost/consultant modules are not yet wired into Angular).
 - Push: fast-forward of origin/main from d329223 to this branch head.
+
+### UI phase — angular-integration checkpoint (2026-07-24, final for this session)
+- Anderson (live, low on tokens) instructed: finish the UI phase only, then
+  push to main. Tasks #15 (live-transplant), #17 (fuzz/property), #18
+  (independent release review) and the final evaluation-report/transplant-
+  manifest docs are DEFERRED — explicitly not done, not claimed.
+- angular-integration-engineer (task #14) DONE: WORKFLOW_BRAIN_CONTEXT DI
+  token + StandaloneBrainContextProvider (plain class, passes the shared
+  provider contract suite), WorkflowBrainService (reducer-backed, envelope
+  wrapping, stale/tamper-safe accept), deterministic-only GhostSuggestionService
+  (aiCapability pinned false, zero network), <lj-workflow-consultant> advisory
+  brief (accessible, reduced-motion, no raw JSON), minimal composer diff
+  (+115/−9: ghost engine swap keeping Tab/ArrowRight + new Esc dismiss;
+  consultant wired through the existing updateRule path so the save invariant
+  holds; patchless accepts never rewrite the author's description),
+  assert-brain-angular-seam suite. ui/ghost-prediction.ts deprecated in place.
+- Gates at this checkpoint (lead-verified): 25-suite npm test chain green,
+  purity gates green, mirrors in sync (22 core + 13 brain), build green
+  (initial bundle 381 kB), eval 276/276, 0 fabrications.
+- In-app-browser/DevTools runtime QA was NOT performed this session (requires
+  the interactive Superset workspace); static a11y/behavior contracts are
+  pinned by assert-sweet-ux + assert-brain-angular-seam instead.

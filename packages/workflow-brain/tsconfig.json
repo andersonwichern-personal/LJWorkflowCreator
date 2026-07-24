@@ -1,0 +1,21 @@
+{
+  // WALL: no 'dom' lib and no ambient types. JSX, document, window, and
+  // framework globals fail to compile here on purpose. The only allowed
+  // outward reach is ../rule-core/src (relative imports, rewritten by
+  // scripts/sync-angular-core.ts for the vendored copy).
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": [],
+    "target": "ES2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts", "../rule-core/src/**/*.ts"]
+}

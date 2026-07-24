@@ -96,3 +96,26 @@ Agent tool in this build exposes model override but not a per-agent literal
   instance fields → live adapter must always supply tenant option lists.
 - package.json (lead): npm test chain += 5 Wave-1 suites; `npm start` honors
   `WORKFLOW_CREATOR_PORT` (default 4200) per the workspace-port requirement.
+
+### Wave 2 — integration checkpoint (2026-07-24)
+- Commits: `bf452ae` (Wave 1), `9232df3` (Wave 2). All gates green at 9232df3:
+  24-suite npm test chain, core purity (23 files), brain purity, mirrors in
+  sync (22 core + 13 brain), production build 2.7 s, eval 276/276 with 0
+  fabrications, measured parseInstruction p50 0.065 ms / p95 0.096 ms.
+- Lead reconciliation applied: orchestrator readVerdict + review-input builder
+  adapted to the landed CandidateVerdict/CandidateReviewInput contract
+  (repairs.length > 0 ⇒ engine "hybrid"); hybrid-suite stubs updated to match.
+- Deterministic-parser agent's session was killed 3× by transient
+  infrastructure errors; modules + contradictions suite were complete on disk,
+  the coverage suite was finished by the lead (transfer recorded).
+- DONE: tasks #9–#13, #16. Remaining: #14 angular-integration, #15
+  live-transplant, #17 fuzz/property, #18 independent release review, final
+  eval report + transplant manifest + architecture doc refresh.
+
+### PAUSE POINT (2026-07-24, Anderson's instruction)
+- Anderson (live) instructed: commit at a pausing point and push to main —
+  explicitly overriding the original brief's "never merge to main" for this
+  checkpoint. State pushed is purely additive engine groundwork: zero changes
+  to existing UI behavior (the composer still runs the d329223 predictive bar;
+  the new brain/ghost/consultant modules are not yet wired into Angular).
+- Push: fast-forward of origin/main from d329223 to this branch head.

@@ -1044,6 +1044,23 @@ export function reviewCandidate(input: CandidateReviewInput): CandidateVerdict {
     return reject(false, `lint:${firstBlocking?.code ?? "BLOCKING"}`);
   }
 
+  /* 10b — deterministic unresolved slots may not silently vanish. A candidate
+   * legitimately drops one only by actually grounding the heard text somewhere
+   * in its rule; every other disappearance is a model omission presenting as
+   * complete, so the slot is re-imposed and the merge recorded as a repair. */
+  const ruleJsonLower = canonicalJson(rule).toLowerCase();
+  for (const slot of input.deterministic.unresolved) {
+    const heard = normLabel(slot.heard ?? "");
+    if (!heard) continue;
+    const alreadyReported = [...sidecars.unresolved, ...conversions.unresolved].some(
+      (kept) => normLabel(kept.heard ?? "") === heard
+    );
+    if (alreadyReported) continue;
+    if (ruleJsonLower.includes(heard)) continue; // grounded in the rule — honestly resolved
+    conversions.unresolved.push(slot);
+    repairs.add("restored-deterministic-unresolved");
+  }
+
   /* 11 — assemble, dedupe, final shape guard. */
   const result = assembleResult(rule, sidecars, conversions, coverageUncovered);
   if (!isParseEnvelope(result)) return reject(true, "guard-failed");

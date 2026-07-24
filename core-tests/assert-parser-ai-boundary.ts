@@ -713,6 +713,31 @@ const hostileBytes = JSON.stringify(hostile);
 review(hostile);
 t("12: reviewCandidate never mutates its input", JSON.stringify(hostile) === hostileBytes);
 
+/* ---- 12b: deterministic unresolved slots may not silently vanish ---------- */
+{
+  const shrinkSource = "when a loan is approved, assign to Santa Claus";
+  const detShrink = parseInstruction(shrinkSource);
+  t("12b: fixture parse leaves an unresolved assignee", detShrink.unresolved.length > 0);
+  const shrunk = { ...detShrink, unresolved: [], uncovered: [] };
+  const verdict = reviewCandidate({
+    candidate: shrunk,
+    sourceText: shrinkSource,
+    vocab,
+    clauses: segmentInstruction(shrinkSource).clauses,
+    coverage: clauseCoverage,
+    deterministic: detShrink,
+  });
+  t(
+    "12b: honesty-shrink candidate does not present clean — slots re-imposed",
+    verdict.accepted === true && verdict.result.unresolved.length >= detShrink.unresolved.length,
+    JSON.stringify(verdict.accepted ? verdict.result.unresolved : verdict)
+  );
+  t(
+    "12b: the restoration is recorded as a repair (engine labels it hybrid)",
+    verdict.accepted === true && verdict.repairs.includes("restored-deterministic-unresolved")
+  );
+}
+
 /* ========================================================================== */
 /* Self-review sweep — the pipeline never mangles honest results              */
 /* ========================================================================== */

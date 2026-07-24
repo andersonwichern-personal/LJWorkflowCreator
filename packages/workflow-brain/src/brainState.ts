@@ -80,6 +80,15 @@ export type BrainEvent =
   | { type: "recommendations-issued"; refs: RecommendationRef[]; at: number }
   | { type: "recommendation-accepted"; id: string; at: number }
   | { type: "recommendation-rejected"; id: string; at: number }
+  /**
+   * An accepted recommendation's patch landed on the rule. Dispatch AFTER
+   * recommendation-accepted (the accept's freshness gate checks the pre-patch
+   * version): bumps ruleVersion so every other recommendation previewed
+   * against the pre-patch rule goes stale, and expires those still open.
+   * Without this bump, a second accept could apply ops to a rule that no
+   * longer matches its preview.
+   */
+  | { type: "patch-applied"; recommendationId: string; at: number }
   | { type: "fact-recorded"; fact: string; at: number }
   | { type: "phase-advanced"; phase: BrainPhase; at: number };
 
@@ -277,6 +286,18 @@ export function reduceBrain(state: BrainSessionState, event: BrainEvent): BrainS
         `recommendation ${event.id} ${flipped}`
       );
     }
+
+    case "patch-applied":
+      return next(
+        state,
+        {
+          ruleVersion: state.ruleVersion + 1,
+          recommendations: expireOpen(state.recommendations),
+        },
+        event.at,
+        event.type,
+        `patch ${event.recommendationId} applied — rule version ${state.ruleVersion + 1}`
+      );
 
     case "fact-recorded":
       // Facts behave as a set: recording the same fact twice keeps one copy

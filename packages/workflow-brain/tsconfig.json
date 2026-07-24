@@ -17,5 +17,10 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "../rule-core/src/**/*.ts"]
+  "include": ["src/**/*.ts", "../rule-core/src/**/*.ts"],
+  // The rule-core barrel re-exports two same-named actionPhrase helpers
+  // (interpretation.ts / ruleText.ts) — a pre-existing main-branch ambiguity.
+  // Brain sources import modules directly, never the barrel, so the check
+  // skips it rather than inheriting the unrelated TS2308.
+  "exclude": ["../rule-core/src/index.ts"]
 }

@@ -74,4 +74,9 @@ a file. Agents commit only their scoped changes; the lead integrates.
 
 ## Transfers
 
-- (none yet)
+- `packages/rule-core/src/parserProvenance.ts` → honeycomb-lead (post-handoff
+  TS2352 build fix; contract-architect had completed and signed off).
+- `core-tests/assert-parser-coverage.ts` → honeycomb-lead (deterministic-parser
+  agent's session was killed three times by transient infrastructure errors;
+  its modules and the contradictions suite were complete on disk, the coverage
+  suite was authored by the lead against the agent's implementation).

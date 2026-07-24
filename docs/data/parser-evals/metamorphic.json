@@ -1,0 +1,750 @@
+{
+  "version": 1,
+  "group": "metamorphic",
+  "cases": [
+    {
+      "id": "meta-001",
+      "category": "mutation-casing",
+      "derivedFrom": "gold-001",
+      "mutation": "casing",
+      "instruction": "WHEN A SYSTEM ERROR FIRES, NOTIFY OPERATIONS TEAM",
+      "exhaustive": true,
+      "expect": {
+        "event": "SYSTEM ERROR",
+        "conditions": [],
+        "actions": [{ "action": "notify", "param": "Operations Team" }],
+        "logic": "AND"
+      }
+    },
+    {
+      "id": "meta-002",
+      "category": "mutation-casing",
+      "derivedFrom": "gold-002",
+      "mutation": "casing",
+      "instruction": "WHEN LOAN APPROVED, NOTIFY SARA",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [],
+        "actions": [{ "action": "notify", "param": "Sara" }],
+        "logic": "AND"
+      }
+    },
+    {
+      "id": "meta-003",
+      "category": "mutation-casing",
+      "derivedFrom": "gold-015",
+      "mutation": "casing",
+      "instruction": "When Signature Completed, Close The Request",
+      "exhaustive": true,
+      "expect": {
+        "event": "SIGNATURE COMPLETED",
+        "conditions": [],
+        "actions": [{ "action": "close_request" }]
+      }
+    },
+    {
+      "id": "meta-004",
+      "category": "mutation-casing",
+      "derivedFrom": "gold-024",
+      "mutation": "casing",
+      "instruction": "When Loan Approved, Assign To Wael",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [],
+        "actions": [{ "action": "assign_user", "param": "Wael" }]
+      }
+    },
+    {
+      "id": "meta-005",
+      "category": "mutation-casing",
+      "derivedFrom": "gold-042",
+      "mutation": "casing",
+      "instruction": "When A Loan Is Approved And Underwriting Result Is Auto Approved, Notify Sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "uwstatus", "operator": "is", "value": "Auto Approved" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "meta-006",
+      "category": "mutation-casing",
+      "derivedFrom": "gold-057",
+      "mutation": "casing",
+      "instruction": "WHEN A LOAN IS APPROVED AND RISK GRADE WORSE THAN B, ESCALATE TO THE CREDIT COMMITTEE",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "risk_grade", "operator": "worse_than", "value": "B" }],
+        "actions": [{ "action": "assign_authority", "param": "Credit Committee" }]
+      }
+    },
+    {
+      "id": "meta-007",
+      "category": "mutation-casing",
+      "derivedFrom": "gold-061",
+      "mutation": "casing",
+      "instruction": "WHEN A LOAN IS APPROVED AND LOAN AMOUNT IS AT LEAST 1 MILLION, ESCALATE TO THE CREDIT COMMITTEE",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "loan_amount", "operator": "gte", "value": "1000000" }],
+        "actions": [{ "action": "assign_authority", "param": "Credit Committee" }]
+      }
+    },
+    {
+      "id": "meta-008",
+      "category": "mutation-casing",
+      "derivedFrom": "gold-082",
+      "mutation": "casing",
+      "instruction": "WHEN A LOAN IS APPROVED OR REJECTED, NOTIFY UNDERWRITING TEAM",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "extraEvents": ["LOAN REJECTED"],
+        "actions": [{ "action": "notify", "param": "Underwriting Team" }]
+      }
+    },
+    {
+      "id": "meta-009",
+      "category": "mutation-casing",
+      "derivedFrom": "gold-105",
+      "mutation": "casing",
+      "instruction": "When A Loan Is Approved For Business Customers, Notify Sara",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [
+          { "field": "custtype", "operator": "is", "value": "Business" },
+          { "field": "customer_name", "operator": "is", "value": "Business" }
+        ],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "meta-010",
+      "category": "mutation-casing",
+      "derivedFrom": "gold-146",
+      "mutation": "casing",
+      "instruction": "When a SYSTEM ERROR fires and Booking Status is ERROR, assign to Escalation Team, add tag booking-failed and notify Operations Team",
+      "exhaustive": true,
+      "expect": {
+        "event": "SYSTEM ERROR",
+        "conditions": [{ "field": "bookstatus", "operator": "is", "value": "Error" }],
+        "actions": [
+          { "action": "assign_user", "param": "Escalation Team" },
+          { "action": "notify", "param": "Operations Team" },
+          { "action": "add_tag", "param": "booking-failed" }
+        ]
+      }
+    },
+    {
+      "id": "meta-011",
+      "category": "mutation-punctuation",
+      "derivedFrom": "gold-002",
+      "mutation": "punctuation",
+      "instruction": "when loan approved notify sara",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [],
+        "actions": [{ "action": "notify", "param": "Sara" }],
+        "logic": "AND"
+      }
+    },
+    {
+      "id": "meta-012",
+      "category": "mutation-punctuation",
+      "derivedFrom": "gold-003",
+      "mutation": "punctuation",
+      "instruction": "when loan rejected add tag declined-review",
+      "expect": {
+        "event": "LOAN REJECTED",
+        "conditions": [],
+        "actions": [{ "action": "add_tag", "param": "declined-review" }]
+      }
+    },
+    {
+      "id": "meta-013",
+      "category": "mutation-punctuation",
+      "derivedFrom": "gold-031",
+      "mutation": "punctuation",
+      "instruction": "when loan approved, escalate to the credit committee.",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "assign_authority", "param": "Credit Committee" }]
+      }
+    },
+    {
+      "id": "meta-014",
+      "category": "mutation-punctuation",
+      "derivedFrom": "gold-043",
+      "mutation": "punctuation",
+      "instruction": "when a loan is approved, and request stage is not closed, notify sara.",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "stage", "operator": "is_not", "value": "Closed" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "meta-015",
+      "category": "mutation-punctuation",
+      "derivedFrom": "gold-060",
+      "mutation": "punctuation",
+      "instruction": "when a loan is approved, and loan amount over 250k, notify sara.",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "loan_amount", "operator": "gt", "value": "250000" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "meta-016",
+      "category": "mutation-punctuation",
+      "derivedFrom": "gold-090",
+      "mutation": "punctuation",
+      "instruction": "when a loan is approved, notify sara; otherwise add tag clean",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [],
+        "actions": [
+          { "action": "notify", "param": "Sara" },
+          { "action": "add_tag", "param": "clean", "lane": "else" }
+        ]
+      }
+    },
+    {
+      "id": "meta-017",
+      "category": "mutation-punctuation",
+      "derivedFrom": "gold-092",
+      "mutation": "punctuation",
+      "instruction": "when a loan is approved and loan amount over 250k, assign to wael. otherwise, do nothing.",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "loan_amount", "operator": "gt", "value": "250000" }],
+        "actions": [{ "action": "assign_user", "param": "Wael" }],
+        "notesContain": ["Otherwise → intentionally no action."]
+      }
+    },
+    {
+      "id": "meta-018",
+      "category": "mutation-punctuation",
+      "derivedFrom": "gold-094",
+      "mutation": "punctuation",
+      "instruction": "when loan rejected change stage to closed after 2 days",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN REJECTED",
+        "conditions": [],
+        "actions": [{ "action": "change_stage", "param": "Closed", "delayMinutes": 2880 }]
+      }
+    },
+    {
+      "id": "meta-019",
+      "category": "mutation-punctuation",
+      "derivedFrom": "gold-149",
+      "mutation": "punctuation",
+      "instruction": "when a loan application is approved notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "meta-020",
+      "category": "mutation-punctuation",
+      "derivedFrom": "gold-156",
+      "mutation": "punctuation",
+      "instruction": "If there is a system error and booking status is Error, assign to Wael.",
+      "exhaustive": true,
+      "expect": {
+        "event": "SYSTEM ERROR",
+        "conditions": [{ "field": "bookstatus", "operator": "is", "value": "Error" }],
+        "actions": [{ "action": "assign_user", "param": "Wael" }],
+        "controls": { "mode": "shadow", "oncePerRequest": true, "maxFiresPerHour": 25 }
+      }
+    },
+    {
+      "id": "meta-021",
+      "category": "mutation-whitespace",
+      "derivedFrom": "gold-002",
+      "mutation": "whitespace",
+      "instruction": "when  loan   approved,   notify   sara",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [],
+        "actions": [{ "action": "notify", "param": "Sara" }],
+        "logic": "AND"
+      }
+    },
+    {
+      "id": "meta-022",
+      "category": "mutation-whitespace",
+      "derivedFrom": "gold-026",
+      "mutation": "whitespace",
+      "instruction": "when loan approved,    add tag priority-review",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "add_tag", "param": "priority-review" }]
+      }
+    },
+    {
+      "id": "meta-023",
+      "category": "mutation-whitespace",
+      "derivedFrom": "gold-042",
+      "mutation": "whitespace",
+      "instruction": "when a loan is approved   and underwriting result is   auto approved, notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "uwstatus", "operator": "is", "value": "Auto Approved" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "meta-024",
+      "category": "mutation-whitespace",
+      "derivedFrom": "gold-046",
+      "mutation": "whitespace",
+      "instruction": "when a system error fires  and data status is incomplete,  assign to escalation team",
+      "expect": {
+        "event": "SYSTEM ERROR",
+        "conditions": [{ "field": "data_status", "operator": "is", "value": "Incomplete" }],
+        "actions": [{ "action": "assign_user", "param": "Escalation Team" }]
+      }
+    },
+    {
+      "id": "meta-025",
+      "category": "mutation-whitespace",
+      "derivedFrom": "gold-057",
+      "mutation": "whitespace",
+      "instruction": "when a loan is approved and risk grade  worse than  b, escalate to the credit committee",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "risk_grade", "operator": "worse_than", "value": "B" }],
+        "actions": [{ "action": "assign_authority", "param": "Credit Committee" }]
+      }
+    },
+    {
+      "id": "meta-026",
+      "category": "mutation-whitespace",
+      "derivedFrom": "gold-088",
+      "mutation": "whitespace",
+      "instruction": "when a loan is approved,   notify sara   if risk grade is a",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "risk_grade", "operator": "is", "value": "A" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "meta-027",
+      "category": "mutation-whitespace",
+      "derivedFrom": "gold-097",
+      "mutation": "whitespace",
+      "instruction": "when a loan is approved,  remind sara  5 days before  the maturity date",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [],
+        "actions": [{ "action": "notify", "param": "Sara", "delayMinutes": -7200 }]
+      }
+    },
+    {
+      "id": "meta-028",
+      "category": "mutation-whitespace",
+      "derivedFrom": "gold-152",
+      "mutation": "whitespace",
+      "instruction": "  when there is a booking error,   assign to escalation team  ",
+      "expect": {
+        "event": "SYSTEM ERROR",
+        "actions": [{ "action": "assign_user", "param": "Escalation Team" }]
+      }
+    },
+    {
+      "id": "meta-029",
+      "category": "mutation-connector",
+      "derivedFrom": "gold-060",
+      "mutation": "connector",
+      "instruction": "when a loan is approved, loan amount over 250k, notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "loan_amount", "operator": "gt", "value": "250000" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "meta-030",
+      "category": "mutation-connector",
+      "derivedFrom": "gold-086",
+      "mutation": "connector",
+      "instruction": "when a loan is approved, loan amount over 500k and risk grade worse than b, escalate to the credit committee",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [
+          { "field": "loan_amount", "operator": "gt", "value": "500000" },
+          { "field": "risk_grade", "operator": "worse_than", "value": "B" }
+        ],
+        "actions": [{ "action": "assign_authority", "param": "Credit Committee" }],
+        "logic": "AND"
+      }
+    },
+    {
+      "id": "meta-031",
+      "category": "mutation-connector",
+      "derivedFrom": "gold-146",
+      "mutation": "connector",
+      "instruction": "when a system error fires and booking status is error, assign to escalation team, add tag booking-failed, notify operations team",
+      "exhaustive": true,
+      "expect": {
+        "event": "SYSTEM ERROR",
+        "conditions": [{ "field": "bookstatus", "operator": "is", "value": "Error" }],
+        "actions": [
+          { "action": "assign_user", "param": "Escalation Team" },
+          { "action": "notify", "param": "Operations Team" },
+          { "action": "add_tag", "param": "booking-failed" }
+        ]
+      }
+    },
+    {
+      "id": "meta-032",
+      "category": "mutation-connector",
+      "derivedFrom": "gold-052",
+      "mutation": "connector",
+      "instruction": "when a loan is approved, underwriting queue is unassigned, assign to underwriting team",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "queue", "operator": "is", "value": "Unassigned" }],
+        "actions": [{ "action": "assign_user", "param": "Underwriting Team" }]
+      }
+    },
+    {
+      "id": "meta-033",
+      "category": "mutation-connector",
+      "derivedFrom": "gold-085",
+      "mutation": "connector",
+      "instruction": "when a loan over 500k is approved or rejected, escalate to the credit committee, add tag jumbo",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "extraEvents": ["LOAN REJECTED"],
+        "conditions": [{ "field": "loan_amount", "operator": "gt", "value": "500000" }],
+        "actions": [
+          { "action": "assign_authority", "param": "Credit Committee" },
+          { "action": "add_tag", "param": "jumbo" }
+        ],
+        "logic": "AND"
+      }
+    },
+    {
+      "id": "meta-034",
+      "category": "mutation-connector",
+      "derivedFrom": "gold-066",
+      "mutation": "connector",
+      "instruction": "when a loan is approved, days in stage is at least 5, notify operations team",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "days_in_stage", "operator": "gte", "value": "5" }],
+        "actions": [{ "action": "notify", "param": "Operations Team" }]
+      }
+    },
+    {
+      "id": "meta-035",
+      "category": "mutation-connector",
+      "derivedFrom": "gold-042",
+      "mutation": "connector",
+      "instruction": "when a loan is approved, underwriting result is auto approved, notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "uwstatus", "operator": "is", "value": "Auto Approved" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "meta-036",
+      "category": "mutation-connector",
+      "derivedFrom": "gold-148",
+      "mutation": "connector",
+      "instruction": "when a loan is approved and risk grade worse than c, escalate to the credit committee, add tag manual-review",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "risk_grade", "operator": "worse_than", "value": "C" }],
+        "actions": [
+          { "action": "assign_authority", "param": "Credit Committee" },
+          { "action": "add_tag", "param": "manual-review" }
+        ]
+      }
+    },
+    {
+      "id": "meta-037",
+      "category": "mutation-negation",
+      "derivedFrom": "gold-002",
+      "mutation": "negation",
+      "instruction": "when loan approved, don't notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "mustNotContainActions": ["notify"],
+        "mustNotResolveEntities": ["Sara"],
+        "notesContain": ["Ignored negated instruction: \"notify sara\""]
+      }
+    },
+    {
+      "id": "meta-038",
+      "category": "mutation-negation",
+      "derivedFrom": "gold-024",
+      "mutation": "negation",
+      "instruction": "when loan approved, don't assign to wael, notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "notify", "param": "Sara" }],
+        "mustNotContainActions": ["assign_user"],
+        "mustNotResolveEntities": ["Wael"],
+        "notesContain": ["Ignored negated instruction: \"assign to wael\""]
+      }
+    },
+    {
+      "id": "meta-039",
+      "category": "mutation-negation",
+      "derivedFrom": "gold-025",
+      "mutation": "negation",
+      "instruction": "when loan rejected, don't change stage to closed",
+      "expect": {
+        "event": "LOAN REJECTED",
+        "mustNotContainActions": ["change_stage"],
+        "notesContain": ["Ignored negated instruction: \"change"]
+      }
+    },
+    {
+      "id": "meta-040",
+      "category": "mutation-negation",
+      "derivedFrom": "gold-028",
+      "mutation": "negation",
+      "instruction": "when loan rejected, do not close the request",
+      "expect": {
+        "event": "LOAN REJECTED",
+        "mustNotContainActions": ["close_request"],
+        "notesContain": ["Ignored negated instruction: \"close"]
+      }
+    },
+    {
+      "id": "meta-041",
+      "category": "mutation-negation",
+      "derivedFrom": "gold-031",
+      "mutation": "negation",
+      "instruction": "when loan approved, never escalate to the credit committee",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "mustNotContainActions": ["assign_authority"],
+        "notesContain": ["Ignored negated instruction: \"escalate"]
+      }
+    },
+    {
+      "id": "meta-042",
+      "category": "mutation-negation",
+      "derivedFrom": "gold-037",
+      "mutation": "negation",
+      "instruction": "when loan approved, do not notify sara, assign to omar",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "assign_user", "param": "Omar" }],
+        "mustNotContainActions": ["notify"],
+        "mustNotResolveEntities": ["Sara"],
+        "notesContain": ["Ignored negated instruction: \"notify sara\""]
+      }
+    },
+    {
+      "id": "meta-043",
+      "category": "mutation-negation",
+      "derivedFrom": "gold-010",
+      "mutation": "negation",
+      "instruction": "when request assigned, don't notify wael",
+      "expect": {
+        "event": "REQUEST ASSIGNED",
+        "mustNotContainActions": ["notify"],
+        "mustNotResolveEntities": ["Wael"],
+        "notesContain": ["Ignored negated instruction: \"notify wael\""]
+      }
+    },
+    {
+      "id": "meta-044",
+      "category": "mutation-negation",
+      "derivedFrom": "gold-044",
+      "mutation": "negation",
+      "instruction": "when booking status changed, never notify booking team",
+      "expect": {
+        "event": "BOOKING STATUS CHANGED",
+        "mustNotContainActions": ["notify"],
+        "notesContain": ["Ignored negated instruction: \"notify booking team\""]
+      }
+    },
+    {
+      "id": "meta-045",
+      "category": "mutation-negation",
+      "derivedFrom": "gold-146",
+      "mutation": "negation",
+      "instruction": "when a system error fires and booking status is error, don't assign to escalation team, add tag booking-failed and notify operations team",
+      "expect": {
+        "event": "SYSTEM ERROR",
+        "conditions": [{ "field": "bookstatus", "operator": "is", "value": "Error" }],
+        "actions": [
+          { "action": "notify", "param": "Operations Team" },
+          { "action": "add_tag", "param": "booking-failed" }
+        ],
+        "mustNotContainActions": ["assign_user"],
+        "notesContain": ["Ignored negated instruction: \"assign to escalation team\""]
+      }
+    },
+    {
+      "id": "meta-046",
+      "category": "mutation-negation",
+      "derivedFrom": "gold-090",
+      "mutation": "negation",
+      "instruction": "when a loan is approved, don't notify sara otherwise add tag clean",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "add_tag", "param": "clean", "lane": "else" }],
+        "mustNotContainActions": ["notify"],
+        "notesContain": ["Ignored negated instruction"]
+      }
+    },
+    {
+      "id": "meta-047",
+      "category": "mutation-typo",
+      "derivedFrom": "gold-024",
+      "mutation": "typo",
+      "instruction": "when loan approved, assign to wale",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "assign_user" }],
+        "unresolvedMin": 1,
+        "mustNotResolveEntities": ["Wael"]
+      }
+    },
+    {
+      "id": "meta-048",
+      "category": "mutation-typo",
+      "derivedFrom": "gold-037",
+      "mutation": "typo",
+      "instruction": "when loan approved, notify saara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "notify" }],
+        "unresolvedMin": 1,
+        "mustNotResolveEntities": ["Sara"]
+      }
+    },
+    {
+      "id": "meta-049",
+      "category": "mutation-typo",
+      "derivedFrom": "gold-025",
+      "mutation": "typo",
+      "instruction": "when loan rejected, change stage to cloesd",
+      "expect": {
+        "event": "LOAN REJECTED",
+        "actions": [{ "action": "change_stage" }],
+        "unresolvedMin": 1,
+        "mustNotResolveEntities": ["Closed"]
+      }
+    },
+    {
+      "id": "meta-050",
+      "category": "mutation-typo",
+      "derivedFrom": "gold-079",
+      "mutation": "typo",
+      "instruction": "when a loan is approved and retailer is growmrak, notify sara",
+      "options": { "instanceOptions": { "retailer": ["Growmark", "FCS Financial"] } },
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "retailer", "operator": "is", "value": "" }],
+        "actions": [{ "action": "notify", "param": "Sara" }],
+        "unresolvedMin": 1,
+        "mustNotResolveEntities": ["Growmark"]
+      }
+    },
+    {
+      "id": "meta-051",
+      "category": "mutation-typo",
+      "derivedFrom": "gold-108",
+      "mutation": "typo",
+      "instruction": "when a loan is approved, assign to wael hamden",
+      "options": {
+        "assignees": ["Wael Hamdan"],
+        "instanceRegistry": { "assign_user": [{ "id": "u1", "label": "Wael Hamdan" }] }
+      },
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "assign_user" }],
+        "unresolvedMin": 1,
+        "mustNotResolveEntities": ["Wael Hamdan", "u1"]
+      }
+    },
+    {
+      "id": "meta-052",
+      "category": "mutation-typo",
+      "derivedFrom": "gold-010",
+      "mutation": "typo",
+      "instruction": "when request assigned, notify omr",
+      "expect": {
+        "event": "REQUEST ASSIGNED",
+        "actions": [{ "action": "notify" }],
+        "unresolvedMin": 1,
+        "mustNotResolveEntities": ["Omar"]
+      }
+    },
+    {
+      "id": "meta-053",
+      "category": "mutation-typo",
+      "derivedFrom": "gold-080",
+      "mutation": "typo",
+      "instruction": "when a loan is approved and team member is weal, notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "team_member", "operator": "is", "value": "" }],
+        "actions": [{ "action": "notify", "param": "Sara" }],
+        "unresolvedMin": 1,
+        "mustNotResolveEntities": ["Wael"]
+      }
+    },
+    {
+      "id": "meta-054",
+      "category": "mutation-typo",
+      "derivedFrom": "gold-030",
+      "mutation": "typo",
+      "instruction": "when loan approved, set underwriting result to auto aproved",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "set_underwriting_result" }],
+        "unresolvedMin": 1,
+        "mustNotResolveEntities": ["Auto Approved"]
+      }
+    },
+    {
+      "id": "meta-055",
+      "category": "mutation-typo",
+      "derivedFrom": "gold-031",
+      "mutation": "typo",
+      "instruction": "when loan approved, escalate to the credit comittee",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "unresolvedMin": 1,
+        "mustNotContainActions": ["assign_authority"],
+        "mustNotResolveEntities": ["Credit Committee"]
+      }
+    },
+    {
+      "id": "meta-056",
+      "category": "mutation-typo",
+      "derivedFrom": "gold-029",
+      "mutation": "typo",
+      "instruction": "when loan approved, move it into the aproved queue",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "route_to_queue" }],
+        "unresolvedMin": 1
+      }
+    }
+  ]
+}

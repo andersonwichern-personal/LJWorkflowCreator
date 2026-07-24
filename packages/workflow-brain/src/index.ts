@@ -8,5 +8,12 @@
 export * from "./ports";
 export * from "./context";
 export * from "./brainState";
-// Later Brain modules (contextCompiler, orchestrator, consultant, …) are added
-// here by the lead at integration — do not add exports in specialist branches.
+export * from "./contextCompiler";
+export * from "./aiPort";
+export * from "./orchestrator";
+export * from "./candidateNormalization";
+export * from "./proposals";
+export * from "./recommendations";
+export * from "./consultant";
+export * from "./ghostSuggestions";
+export * from "./observability";

@@ -100,6 +100,11 @@ export interface ParseResult {
    * flag each as "not backed by real data". Empty unless permissive mode is on.
    */
   unbacked?: string[];
+  /**
+   * Consumed [start,end) spans over the normalized text — additive provenance
+   * for the clause layer; absent on the empty-input path.
+   */
+  consumed?: Array<[number, number]>;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -166,6 +171,18 @@ function maskConsumed(text: string, spans: Spans): string {
     for (let i = Math.max(0, s); i < Math.min(chars.length, e); i++) chars[i] = " ";
   }
   return chars.join("");
+}
+
+/** Sorted, overlap-merged COPY of the consumed spans — the additive provenance export.
+ *  Never mutates the internal working array. */
+function mergeSpans(spans: Spans): Spans {
+  const merged: Spans = [];
+  for (const [s, e] of [...spans].sort((a, b) => a[0] - b[0] || a[1] - b[1])) {
+    const last = merged[merged.length - 1];
+    if (last && s <= last[1]) last[1] = Math.max(last[1], e);
+    else merged.push([s, e]);
+  }
+  return merged;
 }
 
 /** Words that don't count toward an "uncovered fragment" (connectors/noise). */
@@ -1304,6 +1321,7 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
     uncovered,
     ambiguities: [],
     unbacked,
+    consumed: mergeSpans(spans),
   };
 }
 

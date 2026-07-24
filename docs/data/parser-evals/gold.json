@@ -1,0 +1,1738 @@
+{
+  "version": 1,
+  "group": "gold",
+  "cases": [
+    {
+      "id": "gold-001",
+      "category": "event-coverage",
+      "instruction": "when a system error fires, notify operations team",
+      "exhaustive": true,
+      "expect": {
+        "event": "SYSTEM ERROR",
+        "conditions": [],
+        "actions": [{ "action": "notify", "param": "Operations Team" }],
+        "logic": "AND"
+      }
+    },
+    {
+      "id": "gold-002",
+      "category": "event-coverage",
+      "instruction": "when loan approved, notify sara",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [],
+        "actions": [{ "action": "notify", "param": "Sara" }],
+        "logic": "AND"
+      }
+    },
+    {
+      "id": "gold-003",
+      "category": "event-coverage",
+      "instruction": "when loan rejected, add tag declined-review",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN REJECTED",
+        "conditions": [],
+        "actions": [{ "action": "add_tag", "param": "declined-review" }]
+      }
+    },
+    {
+      "id": "gold-004",
+      "category": "event-coverage",
+      "instruction": "when offer accepted, notify booking team",
+      "exhaustive": true,
+      "expect": {
+        "event": "OFFER ACCEPTED",
+        "conditions": [],
+        "actions": [{ "action": "notify", "param": "Booking Team" }]
+      }
+    },
+    {
+      "id": "gold-005",
+      "category": "event-coverage",
+      "instruction": "when a fiserv loan books, notify booking team",
+      "exhaustive": true,
+      "expect": {
+        "event": "FISERV LOAN",
+        "conditions": [],
+        "actions": [{ "action": "notify", "param": "Booking Team" }]
+      }
+    },
+    {
+      "id": "gold-006",
+      "category": "event-coverage",
+      "instruction": "when a fmac loan books, notify booking team",
+      "exhaustive": true,
+      "expect": {
+        "event": "FMAC LOAN",
+        "conditions": [],
+        "actions": [{ "action": "notify", "param": "Booking Team" }]
+      }
+    },
+    {
+      "id": "gold-007",
+      "category": "event-coverage",
+      "instruction": "when request created, add tag new-intake",
+      "exhaustive": true,
+      "expect": {
+        "event": "REQUEST CREATED",
+        "conditions": [],
+        "actions": [{ "action": "add_tag", "param": "new-intake" }]
+      }
+    },
+    {
+      "id": "gold-008",
+      "category": "event-coverage",
+      "instruction": "when request submitted, notify underwriting team",
+      "exhaustive": true,
+      "expect": {
+        "event": "REQUEST SUBMITTED",
+        "conditions": [],
+        "actions": [{ "action": "notify", "param": "Underwriting Team" }]
+      }
+    },
+    {
+      "id": "gold-009",
+      "category": "event-coverage",
+      "instruction": "when request stage changed, add tag stage-moved",
+      "exhaustive": true,
+      "expect": {
+        "event": "REQUEST STAGE CHANGED",
+        "conditions": [],
+        "actions": [{ "action": "add_tag", "param": "stage-moved" }]
+      }
+    },
+    {
+      "id": "gold-010",
+      "category": "event-coverage",
+      "instruction": "when request assigned, notify wael",
+      "exhaustive": true,
+      "expect": {
+        "event": "REQUEST ASSIGNED",
+        "conditions": [],
+        "actions": [{ "action": "notify", "param": "Wael" }]
+      }
+    },
+    {
+      "id": "gold-011",
+      "category": "event-coverage",
+      "instruction": "when customer created, add tag new-customer",
+      "exhaustive": true,
+      "expect": {
+        "event": "CUSTOMER CREATED",
+        "conditions": [],
+        "actions": [{ "action": "add_tag", "param": "new-customer" }]
+      }
+    },
+    {
+      "id": "gold-012",
+      "category": "event-coverage",
+      "instruction": "when document uploaded, run document extraction",
+      "exhaustive": true,
+      "expect": {
+        "event": "DOCUMENT UPLOADED",
+        "conditions": [],
+        "actions": [{ "action": "run_extraction" }]
+      }
+    },
+    {
+      "id": "gold-013",
+      "category": "event-coverage",
+      "instruction": "when document approved, notify sara",
+      "exhaustive": true,
+      "expect": {
+        "event": "DOCUMENT APPROVED",
+        "conditions": [],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-014",
+      "category": "event-coverage",
+      "instruction": "when document rejected, notify omar",
+      "exhaustive": true,
+      "expect": {
+        "event": "DOCUMENT REJECTED",
+        "conditions": [],
+        "actions": [{ "action": "notify", "param": "Omar" }]
+      }
+    },
+    {
+      "id": "gold-015",
+      "category": "event-coverage",
+      "instruction": "when signature completed, close the request",
+      "exhaustive": true,
+      "expect": {
+        "event": "SIGNATURE COMPLETED",
+        "conditions": [],
+        "actions": [{ "action": "close_request" }]
+      }
+    },
+    {
+      "id": "gold-016",
+      "category": "event-coverage",
+      "instruction": "when checklist completed, notify underwriting team",
+      "expect": {
+        "event": "CHECKLIST COMPLETED",
+        "actions": [{ "action": "notify", "param": "Underwriting Team" }]
+      }
+    },
+    {
+      "id": "gold-017",
+      "category": "event-coverage",
+      "instruction": "when extraction completed, notify aisha",
+      "expect": {
+        "event": "EXTRACTION COMPLETED",
+        "actions": [{ "action": "notify", "param": "Aisha" }]
+      }
+    },
+    {
+      "id": "gold-018",
+      "category": "event-coverage",
+      "instruction": "when credit pull completed, notify layla",
+      "expect": {
+        "event": "CREDIT PULL COMPLETED",
+        "actions": [{ "action": "notify", "param": "Layla" }]
+      }
+    },
+    {
+      "id": "gold-019",
+      "category": "event-coverage",
+      "instruction": "when offer made, add tag offer-sent",
+      "expect": {
+        "event": "OFFER MADE",
+        "actions": [{ "action": "add_tag", "param": "offer-sent" }]
+      }
+    },
+    {
+      "id": "gold-020",
+      "category": "event-coverage",
+      "instruction": "when offer rejected, notify sara",
+      "expect": {
+        "event": "OFFER REJECTED",
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-021",
+      "category": "event-coverage",
+      "instruction": "when booking status changed, notify booking team",
+      "expect": {
+        "event": "BOOKING STATUS CHANGED",
+        "actions": [{ "action": "notify", "param": "Booking Team" }]
+      }
+    },
+    {
+      "id": "gold-022",
+      "category": "event-coverage",
+      "instruction": "when loan booked, add tag booked",
+      "expect": {
+        "event": "LOAN BOOKED",
+        "actions": [{ "action": "add_tag", "param": "booked" }]
+      }
+    },
+    {
+      "id": "gold-023",
+      "category": "event-coverage",
+      "instruction": "on a scheduled covenant review, notify wael",
+      "expect": {
+        "event": "SCHEDULED COVENANT REVIEW",
+        "actions": [{ "action": "notify", "param": "Wael" }]
+      }
+    },
+    {
+      "id": "gold-024",
+      "category": "action-coverage",
+      "instruction": "when loan approved, assign to wael",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [],
+        "actions": [{ "action": "assign_user", "param": "Wael" }]
+      }
+    },
+    {
+      "id": "gold-025",
+      "category": "action-coverage",
+      "instruction": "when loan rejected, change stage to closed",
+      "expect": {
+        "event": "LOAN REJECTED",
+        "actions": [{ "action": "change_stage", "param": "Closed" }]
+      }
+    },
+    {
+      "id": "gold-026",
+      "category": "action-coverage",
+      "instruction": "when loan approved, add tag priority-review",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "add_tag", "param": "priority-review" }]
+      }
+    },
+    {
+      "id": "gold-027",
+      "category": "action-coverage",
+      "instruction": "when loan approved, remove tag stale-docs",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "remove_tag", "param": "stale-docs" }]
+      }
+    },
+    {
+      "id": "gold-028",
+      "category": "action-coverage",
+      "instruction": "when loan rejected, close the request",
+      "expect": {
+        "event": "LOAN REJECTED",
+        "actions": [{ "action": "close_request" }]
+      }
+    },
+    {
+      "id": "gold-029",
+      "category": "action-coverage",
+      "instruction": "when loan approved, move it into the approved queue",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "route_to_queue", "param": "Approved" }]
+      }
+    },
+    {
+      "id": "gold-030",
+      "category": "action-coverage",
+      "instruction": "when loan approved, set underwriting result to auto approved",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "set_underwriting_result", "param": "Auto Approved" }]
+      }
+    },
+    {
+      "id": "gold-031",
+      "category": "action-coverage",
+      "instruction": "when loan approved, escalate to the credit committee",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "assign_authority", "param": "Credit Committee" }]
+      }
+    },
+    {
+      "id": "gold-032",
+      "category": "action-coverage",
+      "instruction": "when loan approved, request signature from the guarantor",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "request_signature", "param": "the guarantor" }]
+      }
+    },
+    {
+      "id": "gold-033",
+      "category": "action-coverage",
+      "instruction": "when request submitted, pull credit",
+      "expect": {
+        "event": "REQUEST SUBMITTED",
+        "actions": [{ "action": "pull_credit" }]
+      }
+    },
+    {
+      "id": "gold-034",
+      "category": "action-coverage",
+      "instruction": "when request submitted, run document extraction",
+      "expect": {
+        "event": "REQUEST SUBMITTED",
+        "actions": [{ "action": "run_extraction" }]
+      }
+    },
+    {
+      "id": "gold-035",
+      "category": "action-coverage",
+      "instruction": "when request submitted, request document tax returns",
+      "expect": {
+        "event": "REQUEST SUBMITTED",
+        "actions": [{ "action": "request_document", "param": "tax returns" }]
+      }
+    },
+    {
+      "id": "gold-036",
+      "category": "action-coverage",
+      "instruction": "when request created, assign checklist origination documents",
+      "expect": {
+        "event": "REQUEST CREATED",
+        "actions": [{ "action": "assign_checklist", "param": "origination documents" }]
+      }
+    },
+    {
+      "id": "gold-037",
+      "category": "action-coverage",
+      "instruction": "when loan approved, notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-038",
+      "category": "action-coverage",
+      "instruction": "when offer accepted, make an offer for term loan",
+      "expect": {
+        "event": "OFFER ACCEPTED",
+        "actions": [{ "action": "make_offer", "param": "term loan" }]
+      }
+    },
+    {
+      "id": "gold-039",
+      "category": "action-coverage",
+      "instruction": "when loan approved, send booking to fiserv loan",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "trigger_booking", "param": "FISERV LOAN" }]
+      }
+    },
+    {
+      "id": "gold-040",
+      "category": "action-coverage",
+      "instruction": "when a system error fires, log system event booking retry needed",
+      "expect": {
+        "event": "SYSTEM ERROR",
+        "actions": [{ "action": "log_event", "param": "booking retry needed" }]
+      }
+    },
+    {
+      "id": "gold-041",
+      "category": "action-coverage",
+      "instruction": "when a system error fires, send webhook to https://hooks.landjourney.ai/alerts",
+      "expect": {
+        "event": "SYSTEM ERROR",
+        "actions": [{ "action": "send_webhook", "param": "https://hooks.landjourney.ai/alerts" }]
+      }
+    },
+    {
+      "id": "gold-042",
+      "category": "field-enum",
+      "instruction": "when a loan is approved and underwriting result is auto approved, notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "uwstatus", "operator": "is", "value": "Auto Approved" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-043",
+      "category": "field-enum",
+      "instruction": "when a loan is approved and request stage is not closed, notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "stage", "operator": "is_not", "value": "Closed" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-044",
+      "category": "field-enum",
+      "instruction": "when booking status changed and booking status is partially confirmed, notify booking team",
+      "expect": {
+        "event": "BOOKING STATUS CHANGED",
+        "conditions": [{ "field": "bookstatus", "operator": "is", "value": "Partially Confirmed" }],
+        "actions": [{ "action": "notify", "param": "Booking Team" }]
+      }
+    },
+    {
+      "id": "gold-045",
+      "category": "field-enum",
+      "instruction": "when booking status changed and core system is fmac loan, notify booking team",
+      "expect": {
+        "event": "BOOKING STATUS CHANGED",
+        "conditions": [{ "field": "core", "operator": "is", "value": "FMAC LOAN" }],
+        "actions": [{ "action": "notify", "param": "Booking Team" }]
+      }
+    },
+    {
+      "id": "gold-046",
+      "category": "field-enum",
+      "instruction": "when a system error fires and data status is incomplete, assign to escalation team",
+      "expect": {
+        "event": "SYSTEM ERROR",
+        "conditions": [{ "field": "data_status", "operator": "is", "value": "Incomplete" }],
+        "actions": [{ "action": "assign_user", "param": "Escalation Team" }]
+      }
+    },
+    {
+      "id": "gold-047",
+      "category": "field-enum",
+      "instruction": "when a system error fires and processing status is queued, notify operations team",
+      "expect": {
+        "event": "SYSTEM ERROR",
+        "conditions": [{ "field": "processing_status", "operator": "is", "value": "Queued" }],
+        "actions": [{ "action": "notify", "param": "Operations Team" }]
+      }
+    },
+    {
+      "id": "gold-048",
+      "category": "field-enum",
+      "instruction": "when request created and intake path is staff wizard, add tag staff-entered",
+      "expect": {
+        "event": "REQUEST CREATED",
+        "conditions": [{ "field": "intake_path", "operator": "is", "value": "Staff Wizard" }],
+        "actions": [{ "action": "add_tag", "param": "staff-entered" }]
+      }
+    },
+    {
+      "id": "gold-049",
+      "category": "field-enum",
+      "instruction": "when request created and customer type is business, notify sara",
+      "expect": {
+        "event": "REQUEST CREATED",
+        "conditions": [{ "field": "custtype", "operator": "is", "value": "Business" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-050",
+      "category": "field-enum",
+      "instruction": "when customer created and customer role is guarantor, notify sara",
+      "expect": {
+        "event": "CUSTOMER CREATED",
+        "conditions": [{ "field": "role", "operator": "is", "value": "Guarantor" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-051",
+      "category": "field-enum",
+      "instruction": "when loan booked and loan product is line of credit, notify booking team",
+      "expect": {
+        "event": "LOAN BOOKED",
+        "conditions": [{ "field": "loan_product", "operator": "is", "value": "Line of Credit" }],
+        "actions": [{ "action": "notify", "param": "Booking Team" }]
+      }
+    },
+    {
+      "id": "gold-052",
+      "category": "field-enum",
+      "instruction": "when a loan is approved and underwriting queue is unassigned, assign to underwriting team",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "queue", "operator": "is", "value": "Unassigned" }],
+        "actions": [{ "action": "assign_user", "param": "Underwriting Team" }]
+      }
+    },
+    {
+      "id": "gold-053",
+      "category": "field-enum",
+      "instruction": "when document uploaded and document status is skipped, notify sara",
+      "expect": {
+        "event": "DOCUMENT UPLOADED",
+        "conditions": [{ "field": "doc_status", "operator": "is", "value": "Skipped" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-054",
+      "category": "field-enum",
+      "instruction": "when signature completed and signature status is declined, notify omar",
+      "expect": {
+        "event": "SIGNATURE COMPLETED",
+        "conditions": [{ "field": "signature_status", "operator": "is", "value": "Declined" }],
+        "actions": [{ "action": "notify", "param": "Omar" }]
+      }
+    },
+    {
+      "id": "gold-055",
+      "category": "field-enum",
+      "instruction": "on a scheduled covenant review and compliance status is in breach, notify wael",
+      "expect": {
+        "event": "SCHEDULED COVENANT REVIEW",
+        "conditions": [{ "field": "compliance_status", "operator": "is", "value": "In Breach" }],
+        "actions": [{ "action": "notify", "param": "Wael" }]
+      }
+    },
+    {
+      "id": "gold-056",
+      "category": "field-enum",
+      "instruction": "on a scheduled covenant review and covenant type is reporting, notify layla",
+      "expect": {
+        "event": "SCHEDULED COVENANT REVIEW",
+        "conditions": [{ "field": "covenant_type", "operator": "is", "value": "Reporting" }],
+        "actions": [{ "action": "notify", "param": "Layla" }]
+      }
+    },
+    {
+      "id": "gold-057",
+      "category": "field-ordered-enum",
+      "instruction": "when a loan is approved and risk grade worse than b, escalate to the credit committee",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "risk_grade", "operator": "worse_than", "value": "B" }],
+        "actions": [{ "action": "assign_authority", "param": "Credit Committee" }]
+      }
+    },
+    {
+      "id": "gold-058",
+      "category": "field-ordered-enum",
+      "instruction": "when a loan is approved and risk grade better than c, set underwriting result to auto approved",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "risk_grade", "operator": "better_than", "value": "C" }],
+        "actions": [{ "action": "set_underwriting_result", "param": "Auto Approved" }]
+      }
+    },
+    {
+      "id": "gold-059",
+      "category": "field-ordered-enum",
+      "instruction": "when a loan is approved and risk grade is d, notify underwriting team",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "risk_grade", "operator": "is", "value": "D" }],
+        "actions": [{ "action": "notify", "param": "Underwriting Team" }]
+      }
+    },
+    {
+      "id": "gold-060",
+      "category": "field-numeric",
+      "instruction": "when a loan is approved and loan amount over 250k, notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "loan_amount", "operator": "gt", "value": "250000" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-061",
+      "category": "field-numeric",
+      "instruction": "when a loan is approved and loan amount is at least 1 million, escalate to the credit committee",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "loan_amount", "operator": "gte", "value": "1000000" }],
+        "actions": [{ "action": "assign_authority", "param": "Credit Committee" }]
+      }
+    },
+    {
+      "id": "gold-062",
+      "category": "field-numeric",
+      "instruction": "when a loan is approved and loan amount under 50k, set underwriting result to auto approved",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "loan_amount", "operator": "lt", "value": "50000" }],
+        "actions": [{ "action": "set_underwriting_result", "param": "Auto Approved" }]
+      }
+    },
+    {
+      "id": "gold-063",
+      "category": "field-numeric",
+      "instruction": "when a loan is approved and loan amount at most 100,000, notify omar",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "loan_amount", "operator": "lte", "value": "100000" }],
+        "actions": [{ "action": "notify", "param": "Omar" }]
+      }
+    },
+    {
+      "id": "gold-064",
+      "category": "field-numeric",
+      "instruction": "when a loan is approved and loan amount is 750000, notify wael",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "loan_amount", "operator": "is", "value": "750000" }],
+        "actions": [{ "action": "notify", "param": "Wael" }]
+      }
+    },
+    {
+      "id": "gold-065",
+      "category": "field-numeric",
+      "instruction": "when credit pull completed and credit score under 640, escalate to the credit committee",
+      "expect": {
+        "event": "CREDIT PULL COMPLETED",
+        "conditions": [{ "field": "credit_score", "operator": "lt", "value": "640" }],
+        "actions": [{ "action": "assign_authority", "param": "Credit Committee" }]
+      }
+    },
+    {
+      "id": "gold-066",
+      "category": "field-numeric",
+      "instruction": "when a loan is approved and days in stage is at least 5, notify operations team",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "days_in_stage", "operator": "gte", "value": "5" }],
+        "actions": [{ "action": "notify", "param": "Operations Team" }]
+      }
+    },
+    {
+      "id": "gold-067",
+      "category": "field-numeric",
+      "instruction": "when offer made and offer amount over 250k, notify wael",
+      "expect": {
+        "event": "OFFER MADE",
+        "conditions": [{ "field": "offer_amount", "operator": "gt", "value": "250000" }],
+        "actions": [{ "action": "notify", "param": "Wael" }]
+      }
+    },
+    {
+      "id": "gold-068",
+      "category": "field-numeric",
+      "instruction": "on a scheduled covenant review and aggregate exposure over 2 million, escalate to the credit committee",
+      "expect": {
+        "event": "SCHEDULED COVENANT REVIEW",
+        "conditions": [{ "field": "aggregate_exposure", "operator": "gt", "value": "2000000" }],
+        "actions": [{ "action": "assign_authority", "param": "Credit Committee" }]
+      }
+    },
+    {
+      "id": "gold-069",
+      "category": "field-numeric",
+      "instruction": "when extraction completed and extraction confidence % under 80, notify aisha",
+      "expect": {
+        "event": "EXTRACTION COMPLETED",
+        "conditions": [{ "field": "extraction_confidence", "operator": "lt", "value": "80" }],
+        "actions": [{ "action": "notify", "param": "Aisha" }]
+      }
+    },
+    {
+      "id": "gold-070",
+      "category": "field-numeric",
+      "instruction": "when a loan is approved and loan-to-value % over 85, notify underwriting team",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "ltv", "operator": "gt", "value": "85" }],
+        "actions": [{ "action": "notify", "param": "Underwriting Team" }]
+      }
+    },
+    {
+      "id": "gold-071",
+      "category": "field-numeric",
+      "instruction": "when a loan is approved and collateral value under 100k, notify wael",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "collateral_value", "operator": "lt", "value": "100000" }],
+        "actions": [{ "action": "notify", "param": "Wael" }]
+      }
+    },
+    {
+      "id": "gold-072",
+      "category": "field-numeric",
+      "instruction": "when offer accepted and interest rate % over 9, notify sara",
+      "expect": {
+        "event": "OFFER ACCEPTED",
+        "conditions": [{ "field": "interest_rate", "operator": "gt", "value": "9" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-073",
+      "category": "field-numeric",
+      "instruction": "when offer accepted and term (months) over 60, notify sara",
+      "expect": {
+        "event": "OFFER ACCEPTED",
+        "conditions": [{ "field": "term_months", "operator": "gt", "value": "60" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-074",
+      "category": "field-numeric",
+      "instruction": "on a scheduled covenant review and days since financials pulled is at least 365, request document updated financials",
+      "expect": {
+        "event": "SCHEDULED COVENANT REVIEW",
+        "conditions": [{ "field": "days_since_financials_pulled", "operator": "gte", "value": "365" }],
+        "actions": [{ "action": "request_document", "param": "updated financials" }]
+      }
+    },
+    {
+      "id": "gold-075",
+      "category": "field-text",
+      "instruction": "when a loan is approved and loan purpose is equipment purchase, add tag equipment",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "loan_purpose", "operator": "is", "value": "Equipment Purchase" }],
+        "actions": [{ "action": "add_tag", "param": "equipment" }]
+      }
+    },
+    {
+      "id": "gold-076",
+      "category": "field-text",
+      "instruction": "when request submitted and crop type is winter wheat, assign to underwriting team",
+      "expect": {
+        "event": "REQUEST SUBMITTED",
+        "conditions": [{ "field": "crop_type", "operator": "is", "value": "Winter Wheat" }],
+        "actions": [{ "action": "assign_user", "param": "Underwriting Team" }]
+      }
+    },
+    {
+      "id": "gold-077",
+      "category": "field-text",
+      "instruction": "when a loan is approved and program is spring equipment, notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "program", "operator": "is", "value": "Spring Equipment" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-078",
+      "category": "field-text",
+      "instruction": "when a loan is approved and tag is priority, notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "tags", "operator": "is", "value": "Priority" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-079",
+      "category": "field-text",
+      "instruction": "when a loan is approved and retailer is growmark, notify sara",
+      "options": { "instanceOptions": { "retailer": ["Growmark", "FCS Financial"] } },
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "retailer", "operator": "is", "value": "Growmark" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-080",
+      "category": "field-text",
+      "instruction": "when a loan is approved and team member is wael, notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "team_member", "operator": "is", "value": "Wael" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-081",
+      "category": "field-text",
+      "instruction": "when a loan is approved and main borrower is prairie holdings llc, notify sara",
+      "options": { "instanceOptions": { "main_borrower": ["Prairie Holdings LLC", "Sunrise Dairy Co"] } },
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "main_borrower", "operator": "is", "value": "Prairie Holdings LLC" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-082",
+      "category": "multi-trigger",
+      "instruction": "when a loan is approved or rejected, notify underwriting team",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "extraEvents": ["LOAN REJECTED"],
+        "actions": [{ "action": "notify", "param": "Underwriting Team" }]
+      }
+    },
+    {
+      "id": "gold-083",
+      "category": "multi-trigger",
+      "instruction": "when an offer is approved or rejected, notify sara",
+      "expect": {
+        "event": "OFFER ACCEPTED",
+        "extraEvents": ["OFFER REJECTED"],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-084",
+      "category": "multi-trigger",
+      "instruction": "when a document is accepted or rejected, notify sara",
+      "expect": {
+        "event": "DOCUMENT APPROVED",
+        "extraEvents": ["DOCUMENT REJECTED"],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-085",
+      "category": "multi-trigger",
+      "instruction": "when a loan over 500k is approved or rejected, escalate to the credit committee and add tag jumbo",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "extraEvents": ["LOAN REJECTED"],
+        "conditions": [{ "field": "loan_amount", "operator": "gt", "value": "500000" }],
+        "actions": [
+          { "action": "assign_authority", "param": "Credit Committee" },
+          { "action": "add_tag", "param": "jumbo" }
+        ],
+        "logic": "AND"
+      }
+    },
+    {
+      "id": "gold-086",
+      "category": "logic",
+      "instruction": "when a loan is approved and loan amount over 500k and risk grade worse than b, escalate to the credit committee",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [
+          { "field": "loan_amount", "operator": "gt", "value": "500000" },
+          { "field": "risk_grade", "operator": "worse_than", "value": "B" }
+        ],
+        "actions": [{ "action": "assign_authority", "param": "Credit Committee" }],
+        "logic": "AND"
+      }
+    },
+    {
+      "id": "gold-087",
+      "category": "logic",
+      "instruction": "when a loan is approved and loan amount over 250k or risk grade worse than c, notify underwriting team",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [
+          { "field": "loan_amount", "operator": "gt", "value": "250000" },
+          { "field": "risk_grade", "operator": "worse_than", "value": "C" }
+        ],
+        "actions": [{ "action": "notify", "param": "Underwriting Team" }],
+        "logic": "OR"
+      }
+    },
+    {
+      "id": "gold-088",
+      "category": "action-guard",
+      "instruction": "when a loan is approved, notify sara if risk grade is a",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "risk_grade", "operator": "is", "value": "A" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-089",
+      "category": "action-guard",
+      "instruction": "when a loan is approved, assign to wael when loan amount over 500k",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "loan_amount", "operator": "gt", "value": "500000" }],
+        "actions": [{ "action": "assign_user", "param": "Wael" }]
+      }
+    },
+    {
+      "id": "gold-090",
+      "category": "else-lane",
+      "instruction": "when a loan is approved, notify sara otherwise add tag clean",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [],
+        "actions": [
+          { "action": "notify", "param": "Sara" },
+          { "action": "add_tag", "param": "clean", "lane": "else" }
+        ]
+      }
+    },
+    {
+      "id": "gold-091",
+      "category": "else-lane",
+      "instruction": "when a loan is approved, assign to wael otherwise notify omar",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [
+          { "action": "assign_user", "param": "Wael" },
+          { "action": "notify", "param": "Omar", "lane": "else" }
+        ]
+      }
+    },
+    {
+      "id": "gold-092",
+      "category": "no-op",
+      "instruction": "when a loan is approved and loan amount over 250k, assign to wael, otherwise do nothing",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "loan_amount", "operator": "gt", "value": "250000" }],
+        "actions": [{ "action": "assign_user", "param": "Wael" }],
+        "notesContain": ["Otherwise → intentionally no action."]
+      }
+    },
+    {
+      "id": "gold-093",
+      "category": "no-op",
+      "instruction": "when a loan is approved, notify sara, otherwise take no action",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "notify", "param": "Sara" }],
+        "notesContain": ["Otherwise → intentionally no action."]
+      }
+    },
+    {
+      "id": "gold-094",
+      "category": "delay",
+      "instruction": "when loan rejected, change stage to closed after 2 days",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN REJECTED",
+        "conditions": [],
+        "actions": [{ "action": "change_stage", "param": "Closed", "delayMinutes": 2880 }]
+      }
+    },
+    {
+      "id": "gold-095",
+      "category": "delay",
+      "instruction": "when checklist completed, notify underwriting team, and pull credit after 1 hour",
+      "expect": {
+        "event": "CHECKLIST COMPLETED",
+        "actions": [
+          { "action": "notify", "param": "Underwriting Team" },
+          { "action": "pull_credit", "delayMinutes": 60 }
+        ]
+      }
+    },
+    {
+      "id": "gold-096",
+      "category": "delay",
+      "instruction": "when loan rejected, change stage to processing after 1 week",
+      "expect": {
+        "event": "LOAN REJECTED",
+        "actions": [{ "action": "change_stage", "param": "Processing", "delayMinutes": 10080 }]
+      }
+    },
+    {
+      "id": "gold-097",
+      "category": "delay",
+      "instruction": "when a loan is approved, remind sara 5 days before the maturity date",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [],
+        "actions": [{ "action": "notify", "param": "Sara", "delayMinutes": -7200 }]
+      }
+    },
+    {
+      "id": "gold-098",
+      "category": "delay",
+      "instruction": "when a loan is approved, remind sara 3 days before the covenant deadline",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "notify", "param": "Sara", "delayMinutes": -4320 }]
+      }
+    },
+    {
+      "id": "gold-099",
+      "category": "delay",
+      "instruction": "when a loan is approved, request signature from guarantor and remind sara 2 days after the signature request",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [
+          { "action": "notify", "param": "Sara", "delayMinutes": 2880 },
+          { "action": "request_signature", "param": "guarantor" }
+        ]
+      }
+    },
+    {
+      "id": "gold-100",
+      "category": "controls",
+      "instruction": "when a loan is approved, assign to wael, arm this rule, once per request, and cap 10 fires per hour",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "assign_user", "param": "Wael" }],
+        "controls": { "mode": "armed", "oncePerRequest": true, "maxFiresPerHour": 10 },
+        "uncoveredContains": ["arm this rule"]
+      }
+    },
+    {
+      "id": "gold-101",
+      "category": "controls",
+      "instruction": "when a loan is approved, keep it in shadow mode and notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "notify", "param": "Sara" }],
+        "controls": { "mode": "shadow" },
+        "uncoveredContains": ["keep it in shadow mode"]
+      }
+    },
+    {
+      "id": "gold-102",
+      "category": "controls",
+      "instruction": "when a loan is approved, switch to live mode and notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "notify", "param": "Sara" }],
+        "controls": { "mode": "armed" },
+        "uncoveredContains": ["switch to live mode"]
+      }
+    },
+    {
+      "id": "gold-103",
+      "category": "controls",
+      "instruction": "when a loan is approved, cap 5/hour and notify omar",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "notify", "param": "Omar" }],
+        "controls": { "maxFiresPerHour": 5 },
+        "uncoveredContains": ["cap 5/hour"]
+      }
+    },
+    {
+      "id": "gold-104",
+      "category": "controls",
+      "instruction": "when a loan is approved, notify sara, once per request",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "notify", "param": "Sara" }],
+        "controls": { "oncePerRequest": true },
+        "uncoveredContains": ["once per request"]
+      }
+    },
+    {
+      "id": "gold-105",
+      "category": "category-scope",
+      "instruction": "when a loan is approved for business customers, notify sara",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [
+          { "field": "custtype", "operator": "is", "value": "Business" },
+          { "field": "customer_name", "operator": "is", "value": "Business" }
+        ],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-106",
+      "category": "category-scope",
+      "instruction": "when any origination request is approved, notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [
+          { "field": "reqtype", "operator": "is", "value": "Origination" },
+          { "field": "template", "operator": "is", "value": "Origination" }
+        ],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-107",
+      "category": "category-scope",
+      "instruction": "when a loan is approved for individual customers and loan amount over 100k, assign to layla",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [
+          { "field": "loan_amount", "operator": "gt", "value": "100000" },
+          { "field": "custtype", "operator": "is", "value": "Individual" },
+          { "field": "customer_name", "operator": "is", "value": "Individual" }
+        ],
+        "actions": [{ "action": "assign_user", "param": "Layla" }]
+      }
+    },
+    {
+      "id": "gold-108",
+      "category": "instance-registry",
+      "instruction": "when a loan is approved, assign to wael hamdan",
+      "options": {
+        "assignees": ["Wael Hamdan"],
+        "instanceRegistry": { "assign_user": [{ "id": "u1", "label": "Wael Hamdan" }] }
+      },
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [],
+        "actions": [{ "action": "assign_user", "param": "Wael Hamdan" }]
+      }
+    },
+    {
+      "id": "gold-109",
+      "category": "instance-registry",
+      "instruction": "when a loan is approved and retailer is growmark, notify sara",
+      "options": {
+        "instanceOptions": { "retailer": ["Growmark"] },
+        "instanceRegistry": { "retailer": [{ "id": "r9", "label": "Growmark" }] }
+      },
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "retailer", "operator": "is", "value": "Growmark" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-110",
+      "category": "instance-registry",
+      "instruction": "when a loan is approved and request template is spring equipment loan, notify sara",
+      "options": {
+        "instanceOptions": { "template": ["Spring Equipment Loan"] },
+        "instanceRegistry": { "template": [{ "id": "t3", "label": "Spring Equipment Loan" }] }
+      },
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "template", "operator": "is", "value": "Spring Equipment Loan" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-111",
+      "category": "duplicate-labels",
+      "instruction": "when a loan is approved, assign to jordan reyes",
+      "options": {
+        "assignees": ["Jordan Reyes"],
+        "instanceRegistry": {
+          "assign_user": [
+            { "id": "u1", "label": "Jordan Reyes" },
+            { "id": "u2", "label": "Jordan Reyes" }
+          ]
+        }
+      },
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "assign_user", "param": "Jordan Reyes" }]
+      }
+    },
+    {
+      "id": "gold-112",
+      "category": "ambiguity",
+      "instruction": "when a document is approved, notify sara",
+      "expect": {
+        "event": null,
+        "ruleNull": true,
+        "ambiguity": true,
+        "ambiguityOptionsInclude": ["LOAN APPROVED", "DOCUMENT APPROVED"]
+      }
+    },
+    {
+      "id": "gold-113",
+      "category": "ambiguity",
+      "instruction": "when something is approved, notify sara",
+      "expect": {
+        "event": null,
+        "ruleNull": true,
+        "ambiguity": true,
+        "ambiguityOptionsInclude": ["LOAN APPROVED", "DOCUMENT APPROVED"]
+      }
+    },
+    {
+      "id": "gold-114",
+      "category": "ambiguity",
+      "instruction": "when the offer is declined, add tag lost-deal",
+      "expect": {
+        "event": null,
+        "ruleNull": true,
+        "ambiguity": true,
+        "ambiguityOptionsInclude": ["LOAN REJECTED", "OFFER REJECTED"]
+      }
+    },
+    {
+      "id": "gold-115",
+      "category": "ambiguity",
+      "instruction": "when a loan or document is approved or rejected, assign to wael",
+      "expect": {
+        "event": null,
+        "ruleNull": true,
+        "ambiguity": true,
+        "ambiguityOptionsInclude": ["LOAN APPROVED", "DOCUMENT APPROVED"]
+      }
+    },
+    {
+      "id": "gold-116",
+      "category": "forced-event",
+      "instruction": "when a document is approved, notify sara",
+      "options": { "forceEvent": "DOCUMENT APPROVED" },
+      "expect": {
+        "event": "DOCUMENT APPROVED",
+        "actions": [{ "action": "notify", "param": "Sara" }],
+        "ambiguity": false
+      }
+    },
+    {
+      "id": "gold-117",
+      "category": "unknown-entity",
+      "instruction": "when a loan is approved, assign to santa claus",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "assign_user" }],
+        "unresolvedMin": 1,
+        "mustNotResolveEntities": ["Santa"],
+        "notesContain": ["heard \"santa claus\""]
+      }
+    },
+    {
+      "id": "gold-118",
+      "category": "unknown-entity",
+      "instruction": "when a loan is approved and team member is jake, notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "team_member", "operator": "is", "value": "" }],
+        "actions": [{ "action": "notify", "param": "Sara" }],
+        "unresolvedMin": 1,
+        "notesContain": ["heard \"jake\""]
+      }
+    },
+    {
+      "id": "gold-119",
+      "category": "unknown-entity",
+      "instruction": "when a loan is approved and retailer is growmarc, notify sara",
+      "options": { "instanceOptions": { "retailer": ["Growmark", "FCS Financial"] } },
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "retailer", "operator": "is", "value": "" }],
+        "actions": [{ "action": "notify", "param": "Sara" }],
+        "unresolvedMin": 1,
+        "notesContain": ["heard \"growmarc\""]
+      }
+    },
+    {
+      "id": "gold-120",
+      "category": "typo",
+      "instruction": "when a loan is approved, assign to waell",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "assign_user" }],
+        "unresolvedMin": 1,
+        "mustNotResolveEntities": ["Waell"],
+        "notesContain": ["heard \"waell\""]
+      }
+    },
+    {
+      "id": "gold-121",
+      "category": "typo",
+      "instruction": "when a loan is approved, change stage to close",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "change_stage" }],
+        "unresolvedMin": 1,
+        "notesContain": ["heard \"close\""]
+      }
+    },
+    {
+      "id": "gold-122",
+      "category": "typo",
+      "instruction": "when a laon is aproved, notify sara",
+      "expect": {
+        "event": null,
+        "ruleNull": true,
+        "notesContain": ["Couldn't identify a trigger event"]
+      }
+    },
+    {
+      "id": "gold-123",
+      "category": "unbacked",
+      "instruction": "when a loan is approved, assign to frodo baggins",
+      "options": { "allowUnbackedValues": true },
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "assign_user", "param": "Frodo Baggins" }],
+        "unbackedContains": ["Frodo Baggins"]
+      }
+    },
+    {
+      "id": "gold-124",
+      "category": "unbacked",
+      "instruction": "when a loan is approved and retailer is heartland acres, notify sara",
+      "options": { "allowUnbackedValues": true, "instanceOptions": { "retailer": ["Growmark"] } },
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "retailer", "operator": "is", "value": "Heartland Acres" }],
+        "actions": [{ "action": "notify", "param": "Sara" }],
+        "unbackedContains": ["Heartland Acres"]
+      }
+    },
+    {
+      "id": "gold-125",
+      "category": "unbacked",
+      "instruction": "when loan rejected, change stage to archived",
+      "options": { "allowUnbackedValues": true },
+      "expect": {
+        "event": "LOAN REJECTED",
+        "actions": [{ "action": "change_stage", "param": "Archived" }],
+        "unbackedContains": ["Archived"]
+      }
+    },
+    {
+      "id": "gold-126",
+      "category": "negation",
+      "instruction": "when a loan is rejected, don't notify omar, add tag declined",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN REJECTED",
+        "conditions": [],
+        "actions": [{ "action": "add_tag", "param": "declined" }],
+        "mustNotContainActions": ["notify"],
+        "notesContain": ["Ignored negated instruction: \"notify omar\""]
+      }
+    },
+    {
+      "id": "gold-127",
+      "category": "negation",
+      "instruction": "when a loan is approved, never assign to wael, notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "notify", "param": "Sara" }],
+        "mustNotContainActions": ["assign_user"],
+        "mustNotResolveEntities": ["Wael"],
+        "notesContain": ["Ignored negated instruction: \"assign to wael\""]
+      }
+    },
+    {
+      "id": "gold-128",
+      "category": "unless-except",
+      "instruction": "when a covenant request is approved, notify wael except for waived covenants",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [
+          { "field": "reqtype", "operator": "is", "value": "Covenant" },
+          { "field": "template", "operator": "is", "value": "Covenant" }
+        ],
+        "actions": [{ "action": "notify", "param": "Wael" }],
+        "uncoveredContains": ["except for waived covenants"]
+      }
+    },
+    {
+      "id": "gold-129",
+      "category": "known-gap",
+      "instruction": "when a loan is approved, notify sara unless the loan amount is under 25k",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "loan_amount", "operator": "lt", "value": "25000" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-130",
+      "category": "known-gap",
+      "instruction": "when a loan is approved, assign to wael unless retailer is growmark",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "retailer", "operator": "is", "value": "Growmark" }],
+        "actions": [{ "action": "assign_user", "param": "Wael" }]
+      }
+    },
+    {
+      "id": "gold-131",
+      "category": "schedule-unsupported",
+      "instruction": "every monday at 9am, notify sara",
+      "expect": {
+        "event": null,
+        "ruleNull": true,
+        "notesContain": ["Couldn't identify a trigger event"]
+      }
+    },
+    {
+      "id": "gold-132",
+      "category": "schedule-unsupported",
+      "instruction": "when a loan is rejected, notify sara, recurring daily",
+      "expect": {
+        "event": "LOAN REJECTED",
+        "actions": [{ "action": "notify", "param": "Sara" }],
+        "uncoveredContains": ["recurring daily"]
+      }
+    },
+    {
+      "id": "gold-133",
+      "category": "schedule-unsupported",
+      "instruction": "when a loan is approved, notify sara every monday morning",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "notify" }],
+        "unresolvedMin": 1,
+        "notesContain": ["heard \"sara every monday morning\""]
+      }
+    },
+    {
+      "id": "gold-134",
+      "category": "schedule-unsupported",
+      "instruction": "notify sara about stale requests each week",
+      "expect": {
+        "event": null,
+        "ruleNull": true,
+        "ambiguity": true,
+        "ambiguityOptionsInclude": ["REQUEST STAGE CHANGED"]
+      }
+    },
+    {
+      "id": "gold-135",
+      "category": "known-gap",
+      "instruction": "when loan approved, route to queue approved",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "assign_user" }],
+        "unresolvedMin": 1,
+        "mustNotContainActions": ["route_to_queue"],
+        "notesContain": ["heard \"queue approved\""]
+      }
+    },
+    {
+      "id": "gold-136",
+      "category": "known-gap",
+      "instruction": "when a loan is approved and dscr under 1.25, escalate to the credit committee",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "dscr", "operator": "lt", "value": "1" }],
+        "actions": [{ "action": "assign_authority", "param": "Credit Committee" }]
+      }
+    },
+    {
+      "id": "gold-137",
+      "category": "known-gap",
+      "instruction": "when loan booked and payment status is delinquent, notify operations team",
+      "expect": {
+        "event": "LOAN BOOKED",
+        "conditions": [],
+        "actions": [{ "action": "notify", "param": "Operations Team" }],
+        "uncoveredContains": ["payment status is delinquent"]
+      }
+    },
+    {
+      "id": "gold-138",
+      "category": "known-gap",
+      "instruction": "when a loan is approved and retailer is empty, notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "retailer", "operator": "is", "value": "Empty" }],
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-139",
+      "category": "known-gap",
+      "instruction": "when loan approved, add tag follow-up after 3 days",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "add_tag", "param": "follow-up after 3 days" }]
+      }
+    },
+    {
+      "id": "gold-140",
+      "category": "known-gap",
+      "instruction": "when a loan is approved and retailer contains east, notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [],
+        "actions": [{ "action": "notify", "param": "Sara" }],
+        "uncoveredContains": ["retailer contains east"]
+      }
+    },
+    {
+      "id": "gold-141",
+      "category": "known-gap",
+      "instruction": "when a loan is approved, notify sara or omar",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "notify" }],
+        "unresolvedMin": 1,
+        "notesContain": ["heard \"sara or omar\""]
+      }
+    },
+    {
+      "id": "gold-142",
+      "category": "known-gap",
+      "instruction": "when a loan is approved, risk grade is d or e, notify underwriting team",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "risk_grade", "operator": "is", "value": "D" }],
+        "actions": [{ "action": "notify", "param": "Underwriting Team" }],
+        "logic": "OR"
+      }
+    },
+    {
+      "id": "gold-143",
+      "category": "known-gap",
+      "instruction": "when a loan is approved, risk grade is d or risk grade is e, notify underwriting team",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "risk_grade", "operator": "is", "value": "D" }],
+        "actions": [{ "action": "notify", "param": "Underwriting Team" }],
+        "logic": "OR",
+        "uncoveredContains": ["risk grade is e"]
+      }
+    },
+    {
+      "id": "gold-144",
+      "category": "known-gap",
+      "instruction": "when an offer is accepted, send booking to fmac loan and notify booking team",
+      "expect": {
+        "event": "FMAC LOAN",
+        "actions": [{ "action": "notify", "param": "Booking Team" }],
+        "unresolvedMin": 1,
+        "uncoveredContains": ["when an offer is accepted"]
+      }
+    },
+    {
+      "id": "gold-145",
+      "category": "known-gap",
+      "instruction": "when a loan is approved, notify sara once per request",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "notify" }],
+        "controls": { "oncePerRequest": true },
+        "unresolvedMin": 1,
+        "notesContain": ["heard \"sara once per request\""]
+      }
+    },
+    {
+      "id": "gold-146",
+      "category": "multi-action",
+      "instruction": "when a system error fires and booking status is error, assign to escalation team, add tag booking-failed and notify operations team",
+      "exhaustive": true,
+      "expect": {
+        "event": "SYSTEM ERROR",
+        "conditions": [{ "field": "bookstatus", "operator": "is", "value": "Error" }],
+        "actions": [
+          { "action": "assign_user", "param": "Escalation Team" },
+          { "action": "notify", "param": "Operations Team" },
+          { "action": "add_tag", "param": "booking-failed" }
+        ]
+      }
+    },
+    {
+      "id": "gold-147",
+      "category": "multi-action",
+      "instruction": "when request submitted, pull credit and run document extraction and notify underwriting team",
+      "expect": {
+        "event": "REQUEST SUBMITTED",
+        "actions": [
+          { "action": "notify", "param": "Underwriting Team" },
+          { "action": "pull_credit" },
+          { "action": "run_extraction" }
+        ]
+      }
+    },
+    {
+      "id": "gold-148",
+      "category": "multi-action",
+      "instruction": "when a loan is approved and risk grade worse than c, escalate to the credit committee and add tag manual-review",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "risk_grade", "operator": "worse_than", "value": "C" }],
+        "actions": [
+          { "action": "assign_authority", "param": "Credit Committee" },
+          { "action": "add_tag", "param": "manual-review" }
+        ]
+      }
+    },
+    {
+      "id": "gold-149",
+      "category": "trigger-phrase",
+      "instruction": "when a loan application is approved, notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "notify", "param": "Sara" }]
+      }
+    },
+    {
+      "id": "gold-150",
+      "category": "trigger-phrase",
+      "instruction": "when a document upload is rejected, notify omar",
+      "expect": {
+        "event": "DOCUMENT REJECTED",
+        "actions": [{ "action": "notify", "param": "Omar" }]
+      }
+    },
+    {
+      "id": "gold-151",
+      "category": "trigger-phrase",
+      "instruction": "when the document checklist is complete, notify underwriting team",
+      "expect": {
+        "event": "CHECKLIST COMPLETED",
+        "actions": [{ "action": "notify", "param": "Underwriting Team" }]
+      }
+    },
+    {
+      "id": "gold-152",
+      "category": "trigger-phrase",
+      "instruction": "when there is a booking error, assign to escalation team",
+      "expect": {
+        "event": "SYSTEM ERROR",
+        "actions": [{ "action": "assign_user", "param": "Escalation Team" }]
+      }
+    },
+    {
+      "id": "gold-153",
+      "category": "trigger-phrase",
+      "instruction": "when a request is approved, notify sara",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "notify", "param": "Sara" }],
+        "ambiguity": false
+      }
+    },
+    {
+      "id": "gold-154",
+      "category": "trigger-phrase",
+      "instruction": "when the signature is completed on the guaranty, close the request",
+      "expect": {
+        "event": "SIGNATURE COMPLETED",
+        "actions": [{ "action": "close_request" }]
+      }
+    },
+    {
+      "id": "gold-155",
+      "category": "trigger-phrase",
+      "instruction": "when a fmac loan hits a booking error, assign to booking team and add tag core-retry",
+      "expect": {
+        "event": "FMAC LOAN",
+        "conditions": [{ "field": "bookstatus", "operator": "is", "value": "Error" }],
+        "actions": [
+          { "action": "assign_user", "param": "Booking Team" },
+          { "action": "add_tag", "param": "core-retry" }
+        ],
+        "uncoveredContains": ["hits a booking"]
+      }
+    },
+    {
+      "id": "gold-156",
+      "category": "baseline",
+      "instruction": "If there is a system error and booking status is Error, assign to Wael",
+      "exhaustive": true,
+      "expect": {
+        "event": "SYSTEM ERROR",
+        "conditions": [{ "field": "bookstatus", "operator": "is", "value": "Error" }],
+        "actions": [{ "action": "assign_user", "param": "Wael" }],
+        "controls": { "mode": "shadow", "oncePerRequest": true, "maxFiresPerHour": 25 }
+      }
+    },
+    {
+      "id": "gold-157",
+      "category": "baseline",
+      "instruction": "When a loan is approved and loan amount is at least 250k, assign to Underwriting Team",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN APPROVED",
+        "conditions": [{ "field": "loan_amount", "operator": "gte", "value": "250000" }],
+        "actions": [{ "action": "assign_user", "param": "Underwriting Team" }],
+        "controls": { "mode": "shadow", "oncePerRequest": true, "maxFiresPerHour": 25 }
+      }
+    },
+    {
+      "id": "gold-158",
+      "category": "baseline",
+      "instruction": "When a Fiserv loan booking status is Error, notify Booking Team and add tag booking-failed",
+      "exhaustive": true,
+      "expect": {
+        "event": "FISERV LOAN",
+        "conditions": [{ "field": "bookstatus", "operator": "is", "value": "Error" }],
+        "actions": [
+          { "action": "notify", "param": "Booking Team" },
+          { "action": "add_tag", "param": "booking-failed" }
+        ]
+      }
+    },
+    {
+      "id": "gold-159",
+      "category": "baseline",
+      "instruction": "When a loan is rejected, change stage to Closed",
+      "exhaustive": true,
+      "expect": {
+        "event": "LOAN REJECTED",
+        "conditions": [],
+        "actions": [{ "action": "change_stage", "param": "Closed" }]
+      }
+    },
+    {
+      "id": "gold-160",
+      "category": "controls",
+      "instruction": "when a loan is approved, assign to wael and add tag routine-review",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [
+          { "action": "assign_user", "param": "Wael" },
+          { "action": "add_tag", "param": "routine-review" }
+        ],
+        "controls": { "mode": "shadow", "oncePerRequest": true, "maxFiresPerHour": 25 }
+      }
+    },
+    {
+      "id": "gold-161",
+      "category": "known-gap",
+      "instruction": "when a loan is approved, add tag standard-flow",
+      "expect": {
+        "event": "LOAN APPROVED",
+        "actions": [{ "action": "add_tag", "param": "st" }]
+      }
+    }
+  ]
+}

@@ -276,6 +276,25 @@ t(
     s9b.history[s9b.history.length - 1].detail === "stale-reject-ignored"
 );
 
+/* patch-applied: an accepted patch bumps the version and stales sibling previews. */
+const sAcc = reduceBrain(s6, { type: "recommendation-accepted", id: "r1", at: 11 });
+const sPat = reduceBrain(sAcc, { type: "patch-applied", recommendationId: "r1", at: 12 });
+t(
+  "patch-applied bumps ruleVersion and appends history",
+  sPat.ruleVersion === sAcc.ruleVersion + 1 && sPat.history.length === sAcc.history.length + 1
+);
+t(
+  "patch-applied expires remaining open recommendations, keeps the accepted one",
+  sPat.recommendations.find((r) => r.id === "r1")?.status === "accepted" &&
+    sPat.recommendations.find((r) => r.id === "r4")?.status === "expired"
+);
+const sStale = reduceBrain(sPat, { type: "recommendation-accepted", id: "r4", at: 13 });
+t(
+  "post-patch accept of a pre-patch preview is ignored (consent binds to the previewed rule)",
+  sStale.recommendations.find((r) => r.id === "r4")?.status === "expired" &&
+    sStale.history[sStale.history.length - 1].detail === "stale-accept-ignored"
+);
+
 /* Context switch, same tenant, new profile: derived state dies, memory lives. */
 const s10 = reduceBrain(s9b, { type: "context-switched", snapshot: snap("snap-2", "tenant-a", "workflow-revision"), at: 12 });
 t(
@@ -327,6 +346,7 @@ const everyEvent: BrainEvent[] = [
   { type: "parse-completed", envelope: cleanEnvelope, generation: 1, at: 4 },
   { type: "recommendations-issued", refs: [{ id: "x", status: "open", snapshotId: "h-1", ruleVersion: 1 }], at: 5 },
   { type: "recommendation-accepted", id: "x", at: 6 },
+  { type: "patch-applied", recommendationId: "x", at: 6 },
   { type: "recommendation-rejected", id: "x", at: 7 },
   { type: "clarification-answered", questionId: "none", at: 8 },
   { type: "phase-advanced", phase: "verify", at: 9 },

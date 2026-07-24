@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "files": ["gold.json", "adversarial.json", "metamorphic.json"],
+  "parserVersion": "2026.07.24-1"
+}

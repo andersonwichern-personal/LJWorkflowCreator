@@ -772,16 +772,24 @@ function matchOutputs(
   unbacked: string[]
 ): RuleOutput[] {
   const outputs: RuleOutput[] = [];
-  const assigneeList = opts?.assignees?.length ? opts.assignees : ASSIGNEES;
+  // Presence-based (transplant finding): a host that PROVIDES an assignee list
+  // is authoritative even when the list is empty (degraded live registry ⇒
+  // nothing resolves, fail closed). Only an ABSENT option falls back to the
+  // static demo roster — demo names must never resolve under a live context.
+  const assigneeList = opts?.assignees ?? ASSIGNEES;
 
   // N4: exclude negated instructions before matching, and note each one.
   const excluded = new Set<string>();
   const negRe =
-    /(?:don't|do not|never|without)\s+((assign|route|escalate|notify|close|tag|change)\b[a-z0-9 ._-]*?)(?=\s*(?:,|\.|;|$|\band\b|\bthen\b))/g;
+    /(?:don't|do not|never|without)\s+((assign|route|escalate|notify|close|tag|change|add|remove)\b[a-z0-9 ._-]*?)(?=\s*(?:,|\.|;|$|\band\b|\bthen\b))/g;
   for (const m of text.matchAll(negRe)) {
     const verb = m[2] === "route" || m[2] === "escalate" ? "assign" : m[2];
     excluded.add(verb);
     excluded.add(m[2]); // raw verb too — the generic pass matches labels by first word
+    // "don't add tag …" / "don't remove tag …" must also block the dedicated
+    // tag matcher, which keys its exclusion on "tag" (review finding F1: the
+    // verb-head list missed add/remove, silently landing prohibited tags).
+    if (m[2] === "add" || m[2] === "remove") excluded.add("tag");
     consume(spans, m.index ?? 0, m[0].length);
     notes.push(`Ignored negated instruction: "${m[1].trim()}".`);
   }

@@ -59,7 +59,9 @@ import {
   walkLeaves,
 } from '../../../core/vocabulary';
 import { LJ_PRIMITIVES } from '../../../shared/lj/lj';
+import { ConversationMessage, classifyUtterance } from '../../../brain/conversation';
 import { Recommendation } from '../../../brain/recommendations';
+import { ChatService } from '../data/chat.service';
 import { DraftEngineService } from '../data/draft-engine.service';
 import { GhostSuggestionService } from '../data/ghost-suggestion.service';
 import { WorkflowBrainService } from '../data/workflow-brain.service';
@@ -339,6 +341,33 @@ const DEFAULT_CANVAS_EVENT = EVENT_PICKER_GROUPS[0]?.entries[0]?.key ?? EVENTS[0
               }
             </div>
           </div>
+
+          <!-- Conversational thread (Brain conversation lane): appears only
+               once a submission was answered as chat. Assistant text is plain
+               interpolated text — never innerHTML — and the thread announces
+               politely so screen readers hear new replies without focus theft. -->
+          @if (conversation().length) {
+            <section class="chat-thread" aria-label="Conversation with the workflow assistant">
+              <div class="chat-scroll" aria-live="polite">
+                @for (message of conversation(); track $index) {
+                  <div
+                    class="chat-bubble"
+                    [class.chat-user]="message.role === 'user'"
+                    [class.chat-assistant]="message.role === 'assistant'"
+                  >
+                    <span class="chat-role">{{ message.role === 'user' ? 'You' : 'Sweet' }}</span>
+                    <p class="chat-text">{{ message.text }}</p>
+                  </div>
+                }
+                @if (chatPending()) {
+                  <div class="chat-bubble chat-assistant chat-pending">
+                    <span class="chat-role">Sweet</span>
+                    <p class="chat-text">thinking<span class="chat-dots" aria-hidden="true">…</span></p>
+                  </div>
+                }
+              </div>
+            </section>
+          }
 
           <form class="composer" (submit)="build($event)">
             <label class="sr-only" for="workflow-description">Describe the workflow</label>
@@ -1401,6 +1430,7 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly service = inject(WorkflowsService);
   private readonly engine = inject(DraftEngineService);
+  private readonly chatService = inject(ChatService);
   protected readonly brain = inject(WorkflowBrainService);
   private readonly ghostService = inject(GhostSuggestionService);
   protected readonly session = inject(UserSessionService);
@@ -1445,6 +1475,17 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     const tail = text.slice(-42);
     return tail.length < text.length ? `…${tail}` : tail;
   });
+
+  /**
+   * Conversational lane (Brain conversation.ts): submissions the classifier
+   * reads as social/help text become chat turns instead of red parse-failure
+   * notices. The thread renders above the input; assistant text is plain
+   * interpolation only (the reply already passed the Brain's hostile-input
+   * review, and the template never uses innerHTML).
+   */
+  protected readonly conversation = signal<ConversationMessage[]>([]);
+  /** True while a conversational reply is in flight (renders "thinking…"). */
+  protected readonly chatPending = signal(false);
 
   protected readonly result = signal<ParseResult | null>(null);
   protected readonly saving = signal(false);
@@ -2585,10 +2626,57 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     // discards a stale response if a newer build started meanwhile.
     this.engine.draft(description, this.parseOpts()).subscribe((result) => {
       if (generation !== this.buildGeneration) return;
+      // Conversational lane: a failed parse whose text carries NO workflow
+      // vocabulary evidence (greetings, thanks, questions about the assistant)
+      // gets a real chat reply instead of the red parse-failure notice.
+      // Failed parses with vocabulary evidence keep the red notice EXACTLY —
+      // an imperfect instruction must keep today's honest gap reporting.
+      if (result.rule === null && classifyUtterance(description, result) === 'conversational') {
+        this.startConversationalTurn(description);
+        return;
+      }
       this.result.set(result);
       this.parsedDescription.set(result.rule ? description : null);
       this.phase.set(result.rule ? 'idle' : 'parser-error');
     });
+  }
+
+  /**
+   * One chat turn: push the user message, clear the composer input like a chat
+   * app, and answer from ChatService — Gemini-backed when the AI endpoint is
+   * configured, the Brain's deterministic reply otherwise (`send` resolves on
+   * every failure path with an honest fallback; the guard here is belt and
+   * braces so the pending indicator can never stick). The reply is appended
+   * even if the author started typing meanwhile — chat threads are additive,
+   * unlike parses there is no staleness to guard against.
+   */
+  private startConversationalTurn(description: string) {
+    this.conversation.update((thread) => [...thread, { role: 'user', text: description }]);
+    this.chatPending.set(true);
+    this.result.set(null);
+    this.parsedDescription.set(null);
+    this.phase.set('idle');
+    this.text.set('');
+    const el = this.composerInput?.nativeElement;
+    if (el) {
+      el.value = '';
+      this.syncComposerHeight();
+    }
+    this.chatService
+      .send(this.conversation())
+      .then((turn) => {
+        this.conversation.update((thread) => [...thread, { role: 'assistant', text: turn.reply }]);
+      })
+      .catch(() => {
+        this.conversation.update((thread) => [
+          ...thread,
+          {
+            role: 'assistant',
+            text: 'Something went wrong on my side — I’m still here. Ask again, or describe a workflow like “When a loan is approved, assign to Underwriting Team.”',
+          },
+        ]);
+      })
+      .finally(() => this.chatPending.set(false));
   }
 
   /* ---- Structured visual builder mutations (Phase 1.5 / 1.6) ----

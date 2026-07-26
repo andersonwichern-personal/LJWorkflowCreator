@@ -9,7 +9,9 @@ monorepo's route/nav registration exactly as the integration scan prescribes.
 ```bash
 npm install
 npm start        # http://localhost:4200/workflows — mock backend, zero config
-npm test         # rule-core regressions plus purity and sync gates
+npm test         # rule-core regressions plus purity, sync, and typecheck gates
+                 # (tsx runs tests WITHOUT typechecking, so the chain ends with
+                 # tsc --noEmit over workflow-brain and api/ to catch build breakers)
 npm run build    # production build
 ```
 

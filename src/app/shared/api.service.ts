@@ -58,6 +58,23 @@ export class ApiService {
     return this.http.post<T>(this.url(service, path), body, { headers: this.headers() });
   }
 
+  /**
+   * POST to the same-origin AI endpoints (serverless functions under
+   * `config.aiBase`, e.g. `/api/workflows/chat`), independent of `apiBase`.
+   * The standard header contract still applies — the AI functions are
+   * same-origin, so the Bearer token may legitimately be empty (they never
+   * front the Landjourney backend). This class stays the ONLY transport:
+   * feature code never hand-rolls fetch/HttpClient for these endpoints.
+   */
+  postAi<T>(path: string, body: unknown): Observable<T> {
+    const base = this.config.aiBase ?? '';
+    return this.http.post<T>(
+      `${base}/workflows${path.startsWith('/') ? path : `/${path}`}`,
+      body,
+      { headers: this.headers() },
+    );
+  }
+
   put<T>(service: string, path: string, body: unknown): Observable<T> {
     return this.http.put<T>(this.url(service, path), body, { headers: this.headers() });
   }

@@ -12,6 +12,7 @@ export * from "./contextCompiler";
 export * from "./aiPort";
 export * from "./orchestrator";
 export * from "./candidateNormalization";
+export * from "./conversation";
 export * from "./proposals";
 export * from "./recommendations";
 export * from "./consultant";

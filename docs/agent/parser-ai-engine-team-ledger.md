@@ -141,3 +141,28 @@ Agent tool in this build exposes model override but not a per-agent literal
 - In-app-browser/DevTools runtime QA was NOT performed this session (requires
   the interactive Superset workspace); static a11y/behavior contracts are
   pinned by assert-sweet-ux + assert-brain-angular-seam instead.
+
+### Wave 3 — checkpoint (2026-07-26, commit 18c2c14)
+- Anderson (live): "keep going until you run out" then "once done push to
+  main". Both remaining implementation specialists were killed mid-read by the
+  account's monthly spend limit on 07-24 and resumed cleanly on 07-26 after it
+  lifted (no partial files had reached disk).
+- fuzz-property-test-engineer (#17) DONE: 65-assert property suite (seeded
+  xorshift 0x5EED2026) + 49-assert security gate (all 59 adversarial fixtures
+  now enforced inside npm test, payload zoo, abort/concurrency, oversized/
+  unicode floors, telemetry hygiene). Findings: F1 HIGH negation bypass for
+  add/remove verb heads; F2/F3 LOW fail-closed coverage edges (allowlisted).
+- live-transplant-engineer (#15) DONE: LandjourneyBrainContextProvider over a
+  LiveContextTransport seam (52-assert parity suite incl. the shared provider
+  contract, 21-assert context-switch suite), transplant manifest with the
+  CONFIRMED vs PRESUMED endpoint table. Finding: static-ASSIGNEES fallback
+  let demo names resolve under a degraded live roster.
+- Lead fixes (both verified by the full chain): negation verb heads now
+  include add|remove with the tag-matcher exclusion (F1); ParseOptions.assignees
+  is presence-based — provided-but-empty fails closed (transplant finding).
+  F1 property pins flipped to the corrected behavior.
+- docs/parser-ai-evaluation-report.md published from measured runs (276/276,
+  0 fabrications, p50 0.065 ms / p95 0.096 ms, 15-item known-gap inventory).
+- Gates at 18c2c14: 29-suite npm test green, build green, eval 276/276,
+  mirrors in sync. Independent release review (#18) dispatched over
+  d329223..HEAD; verdict pending.

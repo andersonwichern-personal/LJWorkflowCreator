@@ -204,7 +204,7 @@ export function compileContext(
   const seen = new Set<string>();
   const deduped: ContextEntity[] = [];
   for (const entity of input.entities) {
-    const key = `${entity.registry} ${entity.id ?? ""} ${entity.label}`;
+    const key = `${entity.registry}\u0000${entity.id ?? ""}\u0000${entity.label}`;
     if (seen.has(key)) continue;
     seen.add(key);
     deduped.push(entity);
@@ -299,7 +299,7 @@ export function compileContext(
     input.identity.tenantKey,
     vocabularyHash,
     ...input.sources.map((source) => `${source.source}@${source.version}`),
-  ].join(" ");
+  ].join("\u0000");
   draft.snapshotId = `ctx-${hashHex(idMaterial)}`;
 
   let ceiling: PrivacyClass = "public-vocabulary";

@@ -121,8 +121,11 @@ function clauseIdsFor(clauses: ParsedClause[] | undefined, evidence: string[]): 
 /* Negated-clause evidence (clause layer only)                                */
 /* -------------------------------------------------------------------------- */
 
-/** The parser's own negation grammar (N4) — a clause is negated when its text leads with one. */
-const NEGATION_RE = /\b(?:don't|do not|never|without)\b/;
+/** The parser's own negation grammar (N4): prefix + verb head, mirroring
+ *  nlParser's negRe — a bare "without <noun>" is not a negated instruction
+ *  (release-review P1-1). */
+const NEGATION_RE =
+  /\b(?:don't|do not|never|without)\s+(?:assign|route|escalate|notify|close|tag|change|add|remove)\b/;
 
 /**
  * The clause compiler may mark negation explicitly; fall back to the parser's

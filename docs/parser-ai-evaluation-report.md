@@ -69,9 +69,10 @@ live provider runs; the backend budget lives in
 Severity-ordered; each is DOCUMENTED behavior with a test pinning it, not a
 silent defect. The consultant now emits a high-risk watchout for #1.
 
-1. **"unless X" inversion** — parsed as the positive condition X (gold-129/130).
-   Mitigated by the consultant's `inverted-condition-risk` watchout; a grammar
-   fix requires re-pinning the fixpoint suites.
+1. **"unless X" inversion — FIXED (2026-07-26)**: exception clauses are now
+   masked from every matcher and surface verbatim in `uncovered`, blocking
+   readiness with a rephrase-positively note (gold-129/130 re-pinned to the
+   honest behavior; the consultant watchout remains as guidance).
 2. Guard duplication — action `if` gates also land as root conditions (gold-088/089).
 3. Bare-substring terminators — captures can truncate at embedded `and`/`then` (gold-161).
 4. `add_tag` swallows a trailing delay phrase into the tag literal (gold-139).

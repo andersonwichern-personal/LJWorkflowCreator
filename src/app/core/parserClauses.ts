@@ -100,8 +100,11 @@ const STOPWORDS = new Set([
 const EVENT_KEYWORD_RE =
   /\b(?:error|failed|failure|approved|approval|rejected|denied|declined|offer|accepts?|accepted|fiserv|fmac|document|signature)\b/;
 
-/** Pinned to nlParser.ts negRe (verb list + prefixes; capture groups dropped). */
-const NEG_RE = /(?:don't|do not|never|without)\s+(?:assign|route|escalate|notify|close|tag|change)\b/;
+/** Pinned to nlParser.ts negRe (verb list + prefixes; capture groups dropped).
+ *  add|remove joined the verb heads with the F1 negation fix — must stay in
+ *  lockstep with nlParser (release-review P2-1). */
+const NEG_RE =
+  /(?:don't|do not|never|without)\s+(?:assign|route|escalate|notify|close|tag|change|add|remove)\b/;
 
 /** Pinned to nlParser.ts elseIsNoop (applied to the marker-stripped clause body). */
 const NOOP_RE =

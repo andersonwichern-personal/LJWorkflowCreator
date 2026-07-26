@@ -1205,7 +1205,29 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
     };
   }
 
-  const { event: eventKey, ambiguity, extraEvents } = matchEvent(text, spans, opts?.forceEvent);
+  /**
+   * Honest-unsupported for exception clauses (review finding): "unless X" /
+   * "except X" used to parse as the POSITIVE condition X — a rule firing
+   * exactly when the author said not to. The canonical model cannot represent
+   * the exception yet, so the clause is space-masked out of every matcher
+   * (length-preserving, span indices stay valid) and left UNCONSUMED: it
+   * surfaces verbatim in `uncovered`, the parse gate blocks, and the
+   * clarification flow asks for a positive rephrasing.
+   */
+  let matchable = text;
+  for (const mark of text.matchAll(/\b(?:unless|except)\b/g)) {
+    const at = mark.index ?? 0;
+    if (matchable[at] === " ") continue; // inside an already-masked region
+    const tail = text.slice(at);
+    const stop = /,|;|\bthen\b|\botherwise\b|\belse\b/.exec(tail.slice(mark[0].length));
+    const end = stop ? at + mark[0].length + stop.index : text.length;
+    matchable = matchable.slice(0, at) + " ".repeat(end - at) + matchable.slice(end);
+    notes.push(
+      `“${text.slice(at, end).trim()}” isn't supported yet — rephrase it as a positive condition (e.g. “risk grade is not D”).`
+    );
+  }
+
+  const { event: eventKey, ambiguity, extraEvents } = matchEvent(matchable, spans, opts?.forceEvent);
   if (ambiguity) {
     // N3: never guess between competing readings — ask.
     return { rule: null, notes: [ambiguity.question], unresolved: [], uncovered: [], ambiguities: [ambiguity] };
@@ -1230,23 +1252,25 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
   // type that appears only there ("… otherwise notify Omar") would leak into
   // the primary lane. Mask the else region (space-padded so span indices stay
   // valid) before matching main outputs; the else lane parses its own text.
-  const elseMatch = /\b(?:otherwise|else)\b[\s,]*(.+)$/.exec(text);
+  const elseMatch = /\b(?:otherwise|else)\b[\s,]*(.+)$/.exec(matchable);
   const mainText = elseMatch
-    ? text.slice(0, elseMatch.index) + " ".repeat(text.length - elseMatch.index)
-    : text;
+    ? matchable.slice(0, elseMatch.index) + " ".repeat(matchable.length - elseMatch.index)
+    : matchable;
   // Outputs BEFORE conditions: generic action phrases legitimately embed
   // field labels and option words ("set underwriting result to Auto
   // Approved"), and the action must be able to claim them first. The
   // condition scan reads the raw text and never consults spans, so its own
   // results are order-independent.
   const outputs = matchOutputs(mainText, eventKey, spans, opts, unresolved, notes, unbacked);
-  const conds = matchConditions(text, eventKey, spans, opts, unresolved, unbacked);
-  conds.push(...matchCategoryConditions(text, spans, conds));
-  const controlPatch = matchControls(text);
+  const conds = matchConditions(matchable, eventKey, spans, opts, unresolved, unbacked);
+  conds.push(...matchCategoryConditions(matchable, spans, conds));
+  const controlPatch = matchControls(matchable);
   // AND/OR is decided on the UNCONSUMED text only: the trigger's own "or"
   // ("approved or rejected") is already consumed and must not flip AND-joined
-  // conditions to OR (review finding).
-  const condLogic = matchLogic(maskConsumed(text, spans));
+  // conditions to OR (review finding). Masked exception clauses are excluded
+  // for the same reason — an "or" inside "unless A or B" is not the author's
+  // condition logic.
+  const condLogic = matchLogic(maskConsumed(matchable, spans));
   const elseText = elseMatch ? stripTrailingPunct(elseMatch[1]) : "";
   /**
    * "Otherwise, do nothing" (and variants) is an INTENTIONAL no-op — an

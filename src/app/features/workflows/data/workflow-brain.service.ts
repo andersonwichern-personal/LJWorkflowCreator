@@ -120,10 +120,13 @@ export class WorkflowBrainService {
         contextSnapshotId: snapshot?.snapshotId,
       },
     });
+    // The DERIVATION generation, not the current state's — otherwise the
+    // reducer's stale-parse guard can never fire from this host and staleness
+    // rests solely on the composer's discard (release-review P3-2).
     this.dispatch({
       type: 'parse-completed',
       envelope,
-      generation: this.stateSignal().generation,
+      generation,
       at: this.clock.now(),
     });
     return envelope;

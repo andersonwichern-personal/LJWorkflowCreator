@@ -283,7 +283,7 @@ export function deriveFacts(input: AnalyzerInput): ConsultantFact[] {
   for (const hit of invertedHits) {
     add(
       "inverted-condition-risk",
-      `The description contains an "unless/except" clause ("${hit.excerpt}") — the engine currently reads 'unless/except' as a positive condition — verify the condition direction before trusting this rule.`,
+      `The description contains an "unless/except" clause ("${hit.excerpt}") — the engine cannot represent exceptions yet, so this clause is blocked as not-yet-covered; rephrase it as a positive condition (e.g. "risk grade is not D") to proceed.`,
       ["conditions"],
       hit.clauseId ? [hit.clauseId] : [],
       "parse"

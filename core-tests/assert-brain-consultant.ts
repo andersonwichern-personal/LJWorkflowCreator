@@ -494,7 +494,8 @@ const fxInverted = analyze("inverted-sourceText", {
   });
   t(
     "inverted-condition watchout leads the turn's watchouts",
-    invertedTurn.watchouts.length > 0 && invertedTurn.watchouts[0].includes("verify the condition direction")
+    invertedTurn.watchouts.length > 0 &&
+      invertedTurn.watchouts[0].includes("rephrase it as a positive condition")
   );
 }
 {

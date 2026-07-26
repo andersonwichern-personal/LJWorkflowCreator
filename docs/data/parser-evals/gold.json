@@ -1373,22 +1373,26 @@
     },
     {
       "id": "gold-129",
-      "category": "known-gap",
+      "category": "unless-except",
       "instruction": "when a loan is approved, notify sara unless the loan amount is under 25k",
       "expect": {
         "event": "LOAN APPROVED",
-        "conditions": [{ "field": "loan_amount", "operator": "lt", "value": "25000" }],
-        "actions": [{ "action": "notify", "param": "Sara" }]
+        "conditions": [],
+        "actions": [{ "action": "notify", "param": "Sara" }],
+        "uncoveredContains": ["unless the loan amount is under 25k"],
+        "notesContain": ["isn't supported yet"]
       }
     },
     {
       "id": "gold-130",
-      "category": "known-gap",
+      "category": "unless-except",
       "instruction": "when a loan is approved, assign to wael unless retailer is growmark",
       "expect": {
         "event": "LOAN APPROVED",
-        "conditions": [{ "field": "retailer", "operator": "is", "value": "Growmark" }],
-        "actions": [{ "action": "assign_user", "param": "Wael" }]
+        "conditions": [],
+        "actions": [{ "action": "assign_user", "param": "Wael" }],
+        "uncoveredContains": ["unless retailer is growmark"],
+        "notesContain": ["isn't supported yet"]
       }
     },
     {

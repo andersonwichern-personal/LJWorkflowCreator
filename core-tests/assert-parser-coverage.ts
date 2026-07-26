@@ -197,6 +197,18 @@ const linkFor = (
   t("N: zero fabricated components across the sweep", fabricatedTotal === 0);
 }
 
+/* ---- O: bare "without <noun>" is NOT a negation (release-review P1-1) ------ */
+{
+  const { report, clauses } = cover("when a loan is approved without a cosigner, assign to Wael");
+  const trig = linkFor(report, clauses, "approved");
+  t("O: trigger clause with 'without a cosigner' still claims triggers[0]", trig?.rulePaths.includes("triggers[0]") === true);
+  t("O: honest parse reports zero fabricated components", report.fabricated.length === 0, JSON.stringify(report.fabricated));
+  t(
+    "O: the unmatched 'without a cosigner' text is accounted or honestly uncovered",
+    report.links.every((l) => l.status !== "no-op" || clauses.find((c) => c.id === l.clauseId)?.kind === "no-op")
+  );
+}
+
 if (failures > 0) {
   console.error(`\n${failures} clause-coverage assertion(s) failed.`);
   process.exit(1);

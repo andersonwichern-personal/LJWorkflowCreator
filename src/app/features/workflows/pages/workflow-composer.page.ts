@@ -2487,7 +2487,9 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
   protected onComposerKeydown(event: KeyboardEvent) {
     // Predictive accept: Tab always, → only when the caret sits at the very end
     // (so → still moves the cursor when editing mid-text). Runs before Enter.
-    if (this.ghostRaw() && !event.isComposing) {
+    // Gated on the VISIBLE ghost — Tab must never accept a suggestion the
+    // author cannot see (release-review P3-3; Esc below uses the same gate).
+    if (this.ghost() && !event.isComposing) {
       const target = event.target as HTMLTextAreaElement;
       const atEnd =
         target.selectionStart === target.value.length &&
@@ -2804,6 +2806,15 @@ export class WorkflowComposerPage implements AfterViewInit, OnDestroy {
     // same rule reference and must NOT rewrite the author's description.
     if (outcome.ok && outcome.rule !== rule) {
       this.updateRule(outcome.rule);
+    } else if (!outcome.ok) {
+      // A refused accept (stale snapshot/rule version, refused patch) must not
+      // be a silent click (release-review P3-4) — same feedback surface the
+      // clarification flow uses.
+      this.revisionError.set(
+        outcome.reason === 'stale-snapshot' || outcome.reason === 'stale-rule-version'
+          ? 'That recommendation was based on an earlier draft — Sweet has refreshed its advice.'
+          : 'That change could not be applied safely, so nothing was modified.',
+      );
     }
   }
 

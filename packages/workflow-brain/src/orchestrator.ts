@@ -389,10 +389,15 @@ export async function hybridParse(
   let second: AiParseTransportResponse;
   const repairStart = deps.clock.now();
   try {
+    // The repair races the SMALLER of the attempt budget and what remains of
+    // the total deadline — total wall time may never exceed totalDeadlineMs by
+    // an attempt budget (release-review P3-1).
+    const elapsed = deps.clock.now() - startedAt;
+    const remaining = Math.max(1, req.totalDeadlineMs - elapsed);
     second = await callWithTimeout(
       transport,
       repairRequest,
-      req.attemptTimeoutMs,
+      Math.min(req.attemptTimeoutMs, remaining),
       signal,
       "ai-parse-repair"
     );

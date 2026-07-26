@@ -378,8 +378,12 @@ function buildComponents(rule: WorkflowRule): Component[] {
 /* Status inputs from the ParseResult sidecars                                */
 /* -------------------------------------------------------------------------- */
 
-/** The parser's own negation grammar; the clause layer marks the same clauses `negated`. */
-const NEGATION_RE = /\b(?:don't|do not|never|without)\b/;
+/** The parser's own negation grammar (prefix + verb head, mirroring nlParser's
+ *  negRe): a bare "without a cosigner" inside a trigger clause is NOT a
+ *  negation — treating it as one excluded honest clauses from claiming and
+ *  falsely reported fabrication (release-review P1-1). */
+const NEGATION_RE =
+  /\b(?:don't|do not|never|without)\s+(?:assign|route|escalate|notify|close|tag|change|add|remove)\b/;
 
 function isNegatedClause(clause: ParsedClause): boolean {
   const flagged = (clause as ParsedClause & { negated?: boolean }).negated;

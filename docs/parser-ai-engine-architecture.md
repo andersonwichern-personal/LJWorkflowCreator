@@ -99,7 +99,7 @@ guesses: no evidence = `unknown` (material).
 ### packages/rule-core/src/parserProvenance.ts (owner: contract-architect)
 
 ```ts
-export const PARSER_ENGINE_VERSION = "2026.07.24-1";
+export const PARSER_ENGINE_VERSION = "2026.07.26-1";
 export type EngineMode = "deterministic" | "ai" | "hybrid" | "deterministic-fallback";
 
 export interface ParserProvenance {

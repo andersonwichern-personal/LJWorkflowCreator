@@ -265,7 +265,7 @@ function makeCounter(start = 0) {
 {
   const parts = {
     tenantKey: "organic-bank-of-america",
-    parserVersion: "2026.07.24-1",
+    parserVersion: "2026.07.26-1",
     promptVersion: "p1",
     inputHash: hashText("SECRET-CANARY"),
     optionsHash: hashText("{}"),
@@ -275,7 +275,7 @@ function makeCounter(start = 0) {
   t(
     "happy path: six parts joined with | in fixed order",
     key ===
-      `organic-bank-of-america|2026.07.24-1|p1|${parts.inputHash}|${parts.optionsHash}|h-cafe0042`,
+      `organic-bank-of-america|2026.07.26-1|p1|${parts.inputHash}|${parts.optionsHash}|h-cafe0042`,
     key
   );
 

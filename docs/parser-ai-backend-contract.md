@@ -149,7 +149,7 @@ Response (abridged):
   "notes": ["Event → LOAN APPROVED.", "Otherwise → intentionally no action."],
   "unresolved": [], "uncovered": [], "ambiguities": [],
   "suggestions": ["Consider notifying the assignee's team lead as a second action."],
-  "provenance": { "engine": "ai", "parserVersion": "2026.07.24-1",
+  "provenance": { "engine": "ai", "parserVersion": "2026.07.26-1",
     "promptVersion": "p1", "model": "gemini-3.5-flash", "generation": 1,
     "createdAt": 0, "latency": { "totalMs": 1830, "stages": { "model": 1600, "normalize": 30 } } } }
 ```

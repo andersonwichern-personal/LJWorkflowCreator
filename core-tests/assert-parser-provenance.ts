@@ -174,7 +174,7 @@ t("guard: unknown extra properties tolerated",
 /* ---- contract shapes compile + round-trip ----------------------------------- */
 const modes: EngineMode[] = ["deterministic", "ai", "hybrid", "deterministic-fallback"];
 t("shape: EngineMode enumerates all four modes", modes.length === 4);
-t("shape: PARSER_ENGINE_VERSION is the frozen constant", PARSER_ENGINE_VERSION === "2026.07.24-1");
+t("shape: PARSER_ENGINE_VERSION is the frozen constant", PARSER_ENGINE_VERSION === "2026.07.26-1");
 
 const link: ClauseRuleLink = {
   clauseId: "c-2",

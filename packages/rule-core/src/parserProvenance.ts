@@ -21,7 +21,7 @@ import type { ParseResult } from "./nlParser";
 import type { ParsedClause } from "./parserClauses";
 
 /** Bumped whenever parse semantics change — cache keys and provenance both carry it. */
-export const PARSER_ENGINE_VERSION = "2026.07.24-1";
+export const PARSER_ENGINE_VERSION = "2026.07.26-1";
 
 /** Which engine produced the result. `deterministic-fallback` = AI path failed closed. */
 export type EngineMode = "deterministic" | "ai" | "hybrid" | "deterministic-fallback";

@@ -159,7 +159,7 @@ async function main(): Promise<number> {
 
   /* ---- cache keys cannot collide across tenants --------------------------- */
   const keyParts = {
-    parserVersion: '2026.07.24-1',
+    parserVersion: '2026.07.26-1',
     promptVersion: 'p1',
     inputHash: hashText(description),
     optionsHash: hashText(JSON.stringify(snapshotToParseOptions(snapLiveSame))),

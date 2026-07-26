@@ -1,6 +1,6 @@
 # Parser AI engine — evaluation report
 
-Run date: 2026-07-24 · Parser version: `2026.07.24-1` · Engine evaluated:
+Run date: 2026-07-24 · Parser version: `2026.07.26-1` · Engine evaluated:
 **deterministic** (`parseInstruction` + the clause/coverage/grounding layers).
 No live provider calls were made in any run recorded here; the AI path is
 exercised exclusively through mock transports and the hostile-candidate

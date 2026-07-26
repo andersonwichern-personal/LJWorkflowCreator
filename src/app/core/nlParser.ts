@@ -1222,6 +1222,7 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
    * clarification flow asks for a positive rephrasing.
    */
   let matchable = text;
+  const maskedExceptions: string[] = [];
   for (const mark of text.matchAll(/\b(?:unless|except)\b/g)) {
     const at = mark.index ?? 0;
     if (matchable[at] === " ") continue; // inside an already-masked region
@@ -1229,15 +1230,39 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
     const stop = /,|;|\bthen\b|\botherwise\b|\belse\b/.exec(tail.slice(mark[0].length));
     const end = stop ? at + mark[0].length + stop.index : text.length;
     matchable = matchable.slice(0, at) + " ".repeat(end - at) + matchable.slice(end);
+    maskedExceptions.push(text.slice(at, end).trim());
     notes.push(
       `“${text.slice(at, end).trim()}” isn't supported yet — rephrase it as a positive condition (e.g. “risk grade is not D”).`
     );
   }
+  /**
+   * Masked exception clauses must reach `uncovered` on EVERY return path —
+   * an else-lane "…, otherwise notify omar unless X" is consumed wholesale by
+   * the else parse, so relying on non-consumption alone let the clause vanish
+   * from the gate's authority entirely (release re-review NEW-1). Dedupe by
+   * containment so main-lane fragments aren't double-reported.
+   */
+  const withExceptions = (uncovered: string[]): string[] => {
+    const out = [...uncovered];
+    for (const masked of maskedExceptions) {
+      if (!out.some((fragment) => fragment.includes(masked) || masked.includes(fragment))) {
+        out.push(masked);
+      }
+    }
+    return out;
+  };
 
   const { event: eventKey, ambiguity, extraEvents } = matchEvent(matchable, spans, opts?.forceEvent);
   if (ambiguity) {
-    // N3: never guess between competing readings — ask.
-    return { rule: null, notes: [ambiguity.question], unresolved: [], uncovered: [], ambiguities: [ambiguity] };
+    // N3: never guess between competing readings — ask. Exception guidance and
+    // its uncovered surfacing survive the early return (re-review NEW-4).
+    return {
+      rule: null,
+      notes: [ambiguity.question, ...notes],
+      unresolved: [],
+      uncovered: withExceptions([]),
+      ambiguities: [ambiguity],
+    };
   }
   if (!eventKey) {
     return {
@@ -1248,9 +1273,10 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
             .map((e) => e.label)
             .join(", ") +
           ".",
+        ...notes,
       ],
       unresolved: [],
-      uncovered: [],
+      uncovered: withExceptions([]),
       ambiguities: [],
     };
   }
@@ -1300,7 +1326,7 @@ export function parseInstruction(input: string, opts?: ParseOptions): ParseResul
   }
   // Coverage is computed AFTER the else clause is consumed — previously every
   // else clause (even a fully parsed one) was miscounted as uncovered.
-  const uncovered = uncoveredFragments(text, spans);
+  const uncovered = withExceptions(uncoveredFragments(text, spans));
 
   const triggers = [{ event: eventKey }];
   if (extraEvents?.length) {

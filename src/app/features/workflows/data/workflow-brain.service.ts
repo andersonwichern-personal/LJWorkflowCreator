@@ -120,13 +120,17 @@ export class WorkflowBrainService {
         contextSnapshotId: snapshot?.snapshotId,
       },
     });
-    // The DERIVATION generation, not the current state's — otherwise the
-    // reducer's stale-parse guard can never fire from this host and staleness
-    // rests solely on the composer's discard (release-review P3-2).
+    // Staleness is decided by CONTENT, not by counter: the composer's
+    // buildGeneration and the brain's generation increment on different events
+    // and can never be reconciled reliably (release re-review NEW-2). A parse
+    // of text that is no longer the current description dispatches with a
+    // deliberately stale generation so the reducer records and ignores it.
+    const current = this.stateSignal();
+    const fresh = sourceText.trim() === current.description.trim();
     this.dispatch({
       type: 'parse-completed',
       envelope,
-      generation,
+      generation: fresh ? current.generation : current.generation - 1,
       at: this.clock.now(),
     });
     return envelope;

@@ -209,6 +209,20 @@ const linkFor = (
   );
 }
 
+/* ---- Q: else-lane exception clause blocks the GATE (re-review NEW-1) ------- */
+{
+  const input = "when a loan is approved, assign to wael, otherwise notify omar unless retailer is growmark";
+  const result = parseInstruction(input);
+  t(
+    "Q: else-lane 'unless' surfaces in uncovered",
+    result.uncovered.some((f) => f.includes("unless retailer is growmark")),
+    JSON.stringify(result.uncovered)
+  );
+  const { clauses } = segmentInstruction(input);
+  const report = clauseCoverage(clauses, result);
+  t("Q: coverage agrees nothing fabricated", report.fabricated.length === 0);
+}
+
 if (failures > 0) {
   console.error(`\n${failures} clause-coverage assertion(s) failed.`);
   process.exit(1);

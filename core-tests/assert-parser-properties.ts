@@ -573,7 +573,7 @@ const snapB = compileContext(compilerInput("tenant-b", "B"), CTX_REQUEST);
   t("P10 distinct tenants produce distinct snapshotIds", snapA.snapshotId !== snapB.snapshotId);
 
   const common = {
-    parserVersion: "2026.07.24-1",
+    parserVersion: "2026.07.26-1",
     promptVersion: "p1",
     inputHash: hashText(P9_TEXT),
     optionsHash: hashText("{}"),

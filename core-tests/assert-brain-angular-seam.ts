@@ -68,6 +68,26 @@ async function main(): Promise<number> {
   const adapterSource = source('../src/app/features/workflows/data/standalone-brain-context.adapter.ts');
   const brainServiceSource = source('../src/app/features/workflows/data/workflow-brain.service.ts');
   const ghostServiceSource = source('../src/app/features/workflows/data/ghost-suggestion.service.ts');
+  const draftEngineSource = source('../src/app/features/workflows/data/draft-engine.service.ts');
+
+  /* Live Build path runs the hybrid trust pipeline: backend answers are
+   * hostile input reviewed CLIENT-SIDE; the wire contract stays ApiService. */
+  t(
+    'draft engine routes live parses through hybridParse',
+    draftEngineSource.includes('hybridParse') && draftEngineSource.includes('/parse-ai')
+  );
+  t(
+    'draft engine wires reviewCandidate as the review dep (client-side hostile review)',
+    draftEngineSource.includes('reviewCandidate')
+  );
+  t(
+    'draft engine never uses raw fetch and keeps ApiService as the only transport',
+    !draftEngineSource.includes('fetch(') && draftEngineSource.includes('ApiService')
+  );
+  t(
+    'draft engine mock mode stays the plain deterministic parser',
+    draftEngineSource.includes('isMockMode') && draftEngineSource.includes('parseInstruction(text, opts)')
+  );
   const consultantSource = source('../src/app/features/workflows/ui/workflow-consultant.ts');
   const newFiles: Array<[string, string]> = [
     ['workflow-brain-context.token.ts', tokenSource],

@@ -43,3 +43,4 @@ __screenshots__/
 Thumbs.db
 .vercel
 .env*
+.claude/worktrees/

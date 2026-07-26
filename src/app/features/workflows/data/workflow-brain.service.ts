@@ -111,7 +111,10 @@ export class WorkflowBrainService {
       negatedNoOps: clauses
         .filter((clause) => clause.negated === true)
         .map((clause) => ({ clauseId: clause.id, text: clause.text })),
-      provenance: {
+      // An ai/hybrid/fallback result arriving from the live draft engine keeps
+      // its own provenance — re-stamping it "deterministic" falsified the
+      // session ledger (focused-review P3).
+      provenance: (result as ParseEnvelope).provenance ?? {
         engine: 'deterministic',
         parserVersion: PARSER_ENGINE_VERSION,
         generation,

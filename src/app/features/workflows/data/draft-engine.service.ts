@@ -84,12 +84,19 @@ export class DraftEngineService {
     );
   }
 
-  /** One snapshot per service lifetime — the provider's versioning governs freshness. */
+  /**
+   * Memoized on SUCCESS only: a transient provider failure on the first Build
+   * must not pin every later live draft to the deterministic parser for the
+   * page's lifetime (focused-review P2 — reachable once the Landjourney live
+   * adapter is wired). Rejections clear the memo so the next draft retries.
+   */
   private snapshot(): Promise<BrainContextSnapshot> {
-    this.snapshotPromise ??= this.provider.getSnapshot({
-      profile: this.provider.profile,
-      purpose: 'parse',
-    });
+    this.snapshotPromise ??= this.provider
+      .getSnapshot({ profile: this.provider.profile, purpose: 'parse' })
+      .catch((error: unknown) => {
+        this.snapshotPromise = null;
+        throw error;
+      });
     return this.snapshotPromise;
   }
 
@@ -106,6 +113,10 @@ export class DraftEngineService {
           this.api.post<unknown>('workflows', '/parse-ai', {
             text: request.text,
             options: request.options,
+            // Present only on the single bounded structural-repair attempt —
+            // without it the repair POST was byte-identical to attempt 1
+            // (focused-review P2; backend contract §Request accepts it).
+            ...(request.repairHint ? { repairHint: request.repairHint } : {}),
           }),
         ),
       }),

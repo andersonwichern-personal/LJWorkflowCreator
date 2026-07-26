@@ -187,3 +187,27 @@ Agent tool in this build exposes model override but not a per-agent literal
   **RELEASABLE**. Residual note: provenance.generation stamps the composer's
   buildGeneration (a different counter than the brain's) — cosmetic, doc-note
   material only.
+
+### Hybrid live-path wiring + focused review (2026-07-26, final)
+- Certified state pushed to main at 04d890d; work continued per Anderson's
+  standing "keep working" instruction.
+- DraftEngineService (c1ea76d): live-mode Build now runs the full hybrid trust
+  pipeline client-side — deterministic first, parse-ai consulted only on gaps
+  over the unchanged {text, options} wire, backend answers reviewed as hostile
+  input (reviewCandidate) before reaching the composer; mock mode
+  byte-identical; snapshot via WORKFLOW_BRAIN_CONTEXT so the Landjourney
+  transplant swaps adapters, not pipeline code. Seam suite pins the wiring.
+  A stray Superset worktree gitlink was scrubbed and .claude/worktrees/
+  gitignored.
+- Focused independent review of that diff: 29/29 end-to-end probes with the
+  REAL reviewCandidate (valid/hostile/donor-era/null/timeout/abort candidates
+  all reach the composer guard-valid or degrade honestly). Verdict RELEASABLE
+  with two P2s + one P3, all fixed same-session as prescribed: repairHint now
+  forwarded on the repair POST (backend contract §Request revved to accept
+  it); a rejected snapshot promise no longer memoizes (live-adapter
+  resilience); incoming ai/hybrid provenance preserved in the brain session
+  ledger instead of being re-stamped deterministic.
+- Remaining known deferrals (unchanged, honest): interactive browser QA;
+  live backend endpoints (PRESUMED table in the transplant manifest);
+  P3-5/6/7 from review round 1; ghost AI transport (capability pinned false
+  until a workflows/suggest endpoint exists).

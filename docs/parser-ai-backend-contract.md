@@ -37,11 +37,23 @@ Reached exclusively through the admin `ApiService`. The client never uses raw
 }
 ```
 
+An optional third property is present ONLY on the client's single bounded
+structural-repair attempt:
+
+```jsonc
+{ "text": "…", "options": { }, "repairHint": "invalid-shape:notes" }
+```
+
+`repairHint` is a fixed-vocabulary structural defect slug (≤ 200 chars, single
+line, produced by client code — never model text). Servers SHOULD include it in
+the repair prompt as a structural correction instruction and MUST ignore it for
+anything else; it never carries business intent.
+
 Server-side input limits (reject with 400, never truncate silently):
 - `text` ≤ 4,000 characters after NFC normalization; control characters
   (C0/C1 except \n\t) stripped; zero-width and bidi-override code points stripped.
 - `options` lists: ≤ 200 entries per registry, ≤ 120 chars per label.
-- Unknown top-level properties rejected.
+- Unknown top-level properties beyond `text`/`options`/`repairHint` rejected.
 
 ## Response — a `ParseResult`, optionally a `ParseEnvelope`
 

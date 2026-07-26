@@ -166,3 +166,24 @@ Agent tool in this build exposes model override but not a per-agent literal
 - Gates at 18c2c14: 29-suite npm test green, build green, eval 276/276,
   mirrors in sync. Independent release review (#18) dispatched over
   d329223..HEAD; verdict pending.
+
+### Independent release review — three rounds (2026-07-26, task #18 DONE)
+- Round 1 (at 18c2c14): BLOCKED. P1-1 coverage negation-fallback false
+  fabrication (confirmed with repro), P2-1 NEG_RE replica drift, P2-2 NUL
+  bytes in contextCompiler, P3-1..7. Zero P0s; security posture certified.
+- Lead fix round (e020835): P1-1/P2-1/P2-2/P3-1/P3-2/P3-3/P3-4 fixed;
+  P3-5/6/7 deferred with recorded rationale. Same commit shipped the
+  unless/except honest-unsupported parser fix (known-gap #1).
+- Round 2: original findings CONFIRMED-FIXED, but the unless fix introduced
+  NEW-1 (P1: else-lane exception clause vanished from the gate), NEW-2 (P2:
+  wrong staleness counter), NEW-3 (P2: version not bumped), NEW-4 (P3) —
+  BLOCKED again. Honest note: the reviewer caught a real hole in the lead's
+  own fix.
+- Lead fix round 2 (f38300f): masked exceptions surfaced into `uncovered` on
+  every return path (coverage case Q), content-based parse staleness,
+  PARSER_ENGINE_VERSION → 2026.07.26-1 everywhere, early-return guidance kept.
+- Round 3 (final): all repros re-run, full regression sweep U1–U8 clean,
+  nothing new in the 14-file diff, gates 1860 PASS / 0 FAIL. Verdict:
+  **RELEASABLE**. Residual note: provenance.generation stamps the composer's
+  buildGeneration (a different counter than the brain's) — cosmetic, doc-note
+  material only.

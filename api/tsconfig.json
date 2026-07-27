@@ -1,0 +1,22 @@
+{
+  // Typecheck gate for the same-origin serverless functions:
+  //   npx tsc -p api/tsconfig.json
+  // "types": [] keeps every ambient @types package out (env.d.ts declares the
+  // one Node global used); lib DOM supplies fetch/AbortController/Response.
+  // rule-core sources are included so the relative imports typecheck as one
+  // program — Vercel's builder bundles them the same way at deploy time.
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "types": []
+  },
+  "include": ["**/*.ts", "../packages/rule-core/src/**/*.ts"],
+  // The barrel re-exports a colliding `actionPhrase` from interpretation.ts and
+  // ruleText.ts (TS2308) — a pre-existing defect in a package this project may
+  // not modify. The api functions import concrete modules, never the barrel.
+  "exclude": ["../packages/rule-core/src/index.ts"]
+}

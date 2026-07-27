@@ -14,6 +14,8 @@
  */
 
 import { ParseOptions, ParseResult } from "../../rule-core/src/nlParser";
+// Type-only sibling import — erased at runtime, so no module cycle exists.
+import type { ConversationMessage } from "./conversation";
 import {
   BrainContextSnapshot,
   ContextInvalidationEvent,
@@ -91,10 +93,52 @@ export interface AiParseTransportResponse {
   };
 }
 
+/**
+ * Provider-neutral conversational transport (the chat sibling of
+ * {@link AiParseTransport}). The host adapter is the only place that knows the
+ * wire is `POST <aiBase>/workflows/chat` through ApiService; the Brain sees
+ * this interface and a reply that it treats as UNTRUSTED INPUT
+ * (conversation.ts `reviewChatReply`).
+ *
+ * Absent transport (undefined port) = deterministic-only mode; conversation.ts
+ * `deterministicReply` must answer fully with zero provider configuration.
+ */
+export interface ConversationTransport {
+  chat(
+    request: ConversationTransportRequest,
+    signal?: AbortSignal
+  ): Promise<ConversationTransportResponse>;
+}
+
+export interface ConversationTransportRequest {
+  /** Full thread, oldest first — the backend gets multi-turn context. */
+  messages: ConversationMessage[];
+  /** Correlation id (host-generated, no customer data). */
+  requestId: string;
+  /** Snapshot the thread was grounded against — echoed back for staleness checks. */
+  contextSnapshotId?: string;
+}
+
+export interface ConversationTransportResponse {
+  /** UNTRUSTED reply. Never rendered without passing conversation.ts `reviewChatReply`. */
+  reply: unknown;
+  /** Transport metadata when the backend provides it (never secrets). */
+  meta?: {
+    provider?: string;
+    model?: string;
+    latencyMs?: number;
+  };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Capabilities (fail-closed)                                                 */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * "consultant-ai" is the capability the conversational lane (conversation.ts)
+ * begins to occupy: hosts that grant it may wire a ConversationTransport;
+ * hosts that do not stay on the deterministic replies (fail closed).
+ */
 export type BrainCapability =
   | "parse-ai"
   | "ghost-suggestions-ai"

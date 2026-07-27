@@ -20,11 +20,24 @@ export interface AppConfig {
    * org UUID — the prototype's `orgId` query/body tenancy does not carry over.
    */
   organization: string;
+  /**
+   * Same-origin base for the AI endpoints (chat / parse-ai serverless
+   * functions), independent of `apiBase` and mock mode: mock mode disables the
+   * Landjourney backend, not the AI lane — which fails closed onto its
+   * deterministic fallbacks whenever the endpoints are absent. Empty/undefined
+   * disables the AI transport entirely.
+   */
+  aiBase?: string;
 }
 
 export const APP_CONFIG = new InjectionToken<AppConfig>('APP_CONFIG', {
   providedIn: 'root',
-  factory: (): AppConfig => ({ apiBase: '', token: '', organization: 'organic-bank-of-america' }),
+  factory: (): AppConfig => ({
+    apiBase: '',
+    token: '',
+    organization: 'organic-bank-of-america',
+    aiBase: '/api',
+  }),
 });
 
 /** True when no live credentials are configured — the mock backend serves. */

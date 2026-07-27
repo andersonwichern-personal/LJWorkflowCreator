@@ -7,6 +7,14 @@ the admin-console backend must implement. The endpoint is deliberately NOT in
 this repository (doctrine: no same-origin `/api` here; the retired Next.js app
 stays retired — `vercel-track-final` is a donor, not a destination).
 
+> **Update 2026-07-26:** the "no same-origin `/api` here" doctrine above is
+> superseded on purpose: this repo now hosts serverless functions under `api/`
+> (`api/workflows/parse-ai.ts` implementing this contract, plus the
+> conversational `api/workflows/chat.ts`) so the static SPA and its AI backend
+> deploy as one Vercel project. See
+> [parser-ai-chat-endpoint.md](parser-ai-chat-endpoint.md). The contract below
+> still governs the parse endpoint wherever it is hosted.
+
 ## Endpoint
 
 ```

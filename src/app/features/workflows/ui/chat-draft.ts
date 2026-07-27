@@ -1,5 +1,7 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Output, inject, signal } from '@angular/core';
+import { ConversationMessage, classifyUtterance } from '../../../brain/conversation';
 import { ParseResult } from '../../../core/nlParser';
+import { ChatService } from '../data/chat.service';
 import { DraftEngineService } from '../data/draft-engine.service';
 
 /**
@@ -11,6 +13,11 @@ import { DraftEngineService } from '../data/draft-engine.service';
  *   - uncovered fragments are LOUD ("the drafted rule does NOT include this"),
  *   - ambiguities render as buttons that re-parse with `forceEvent`,
  *   - unresolved slots are listed with their fuzzy suggestions.
+ *
+ * Conversational lane (same as the composer): a failed parse whose text the
+ * Brain's classifier reads as social/help chat gets a real assistant reply via
+ * {@link ChatService} instead of gap banners. Replies render as plain
+ * interpolated text only.
  */
 @Component({
   selector: 'wf-chat-draft',
@@ -27,6 +34,19 @@ import { DraftEngineService } from '../data/draft-engine.service';
         {{ pending() ? 'Drafting…' : 'Draft rule' }}
       </button>
     </form>
+
+    @if (conversation().length) {
+      <div class="chat-log" aria-live="polite">
+        @for (message of conversation(); track $index) {
+          <p class="chat-line" [class.chat-line-user]="message.role === 'user'">
+            <b>{{ message.role === 'user' ? 'You' : 'Sweet' }}:</b> {{ message.text }}
+          </p>
+        }
+        @if (chatPending()) {
+          <p class="chat-line"><b>Sweet:</b> <i>thinking…</i></p>
+        }
+      </div>
+    }
 
     @if (result(); as r) {
       <div class="feedback">
@@ -92,6 +112,9 @@ import { DraftEngineService } from '../data/draft-engine.service';
     .unresolved { background: color-mix(in srgb, var(--danger) 8%, transparent); color: var(--danger); }
     .unresolved ul { margin: 4px 0 0; padding-left: 18px; }
     .note { font-size: 12px; color: var(--text-dim); padding-left: 4px; }
+    .chat-log { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+    .chat-line { margin: 0; font-size: 13px; color: var(--text); white-space: pre-wrap; }
+    .chat-line-user { color: var(--text-dim); }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -105,11 +128,15 @@ export class ChatDraft {
   @Output() drafted = new EventEmitter<ParseResult>();
 
   private readonly engine = inject(DraftEngineService);
+  private readonly chatService = inject(ChatService);
 
   protected readonly text = signal('');
   protected readonly result = signal<ParseResult | null>(null);
   /** True while the AI engine round-trip is in flight (mock mode resolves synchronously). */
   protected readonly pending = signal(false);
+  /** Conversational thread — filled only when a submission was answered as chat. */
+  protected readonly conversation = signal<ConversationMessage[]>([]);
+  protected readonly chatPending = signal(false);
 
   protected submit(event: Event) {
     event.preventDefault();
@@ -125,6 +152,33 @@ export class ChatDraft {
     this.pending.set(true);
     this.engine.draft(instruction, forceEvent ? { forceEvent } : undefined).subscribe((result) => {
       this.pending.set(false);
+      // Conversational lane: social/help text gets a chat reply, not gap
+      // banners. Vocabulary-bearing failures keep the honest gap reporting.
+      if (result.rule === null && classifyUtterance(instruction, result) === 'conversational') {
+        this.result.set(null);
+        this.text.set('');
+        this.conversation.update((thread) => [...thread, { role: 'user', text: instruction }]);
+        this.chatPending.set(true);
+        this.chatService
+          .send(this.conversation())
+          .then((turn) => {
+            this.conversation.update((thread) => [
+              ...thread,
+              { role: 'assistant', text: turn.reply },
+            ]);
+          })
+          // `send` resolves on every transport failure; this guard covers the
+          // truly unexpected (mirrors the composer) so a rejection can neither
+          // go unhandled nor leave the thread without an assistant turn.
+          .catch(() => {
+            this.conversation.update((thread) => [
+              ...thread,
+              { role: 'assistant', text: 'Something went wrong on my side — ask again?' },
+            ]);
+          })
+          .finally(() => this.chatPending.set(false));
+        return;
+      }
       this.result.set(result);
       if (result.rule) this.drafted.emit(result);
     });

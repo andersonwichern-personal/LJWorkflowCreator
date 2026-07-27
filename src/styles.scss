@@ -652,3 +652,45 @@ summary { -webkit-tap-highlight-color: transparent; }
   background: var(--warn-text); color: #fff;
   font-size: 9px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
 }
+
+/* ---- Composer conversational thread ----
+   Page-scoped partial (unique .chat- prefix), kept out of the composer's
+   component styles so they stay under the anyComponentStyle budget — same
+   precedent as the predictive-bar rules above. Rendered only when the
+   conversational lane has answered at least one submission. */
+.chat-thread {
+  margin-top: var(--space-4); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+.chat-scroll {
+  display: flex; flex-direction: column; gap: var(--space-3);
+  max-height: 320px; overflow-y: auto; padding: var(--space-4);
+}
+.chat-bubble {
+  max-width: min(85%, 560px); padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md); font-size: var(--text-sm); line-height: 1.5;
+}
+.chat-user {
+  align-self: flex-end; background: var(--brand); color: #fff;
+  border-bottom-right-radius: var(--radius-sm);
+}
+.chat-assistant {
+  align-self: flex-start; background: var(--surface-inset); color: var(--text);
+  border: 1px solid var(--border); border-bottom-left-radius: var(--radius-sm);
+}
+.chat-role {
+  display: block; margin-bottom: 2px;
+  font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  opacity: .7;
+}
+.chat-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-pending .chat-text { color: var(--text-dim); font-style: italic; }
+.chat-dots { display: inline-block; animation: chat-dots-pulse 1.2s ease-in-out infinite; }
+@keyframes chat-dots-pulse {
+  0%, 100% { opacity: .25; }
+  50% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-dots { animation: none !important; }
+}
